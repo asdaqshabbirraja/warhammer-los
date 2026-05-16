@@ -7,11 +7,18 @@ export default function InteractiveLOSTool() {
   const draggingRef = useRef(false);
   const panningRef = useRef(false);
   const panLastRef = useRef(null);
+  const objectDragRef = useRef(null);
 
   const [mode, setMode] = useState("light");
   const [status, setStatus] = useState("Upload a map image, then drag the LOS point. Draw footprints, walls, and enemies.");
   const [imageReady, setImageReady] = useState(false);
-  const [losSize, setLosSize] = useState(1);
+  const [baseShape, setBaseShape] = useState("circle");
+  const [baseLengthMm, setBaseLengthMm] = useState(40);
+  const [baseWidthMm, setBaseWidthMm] = useState(40);
+  const [baseRotation, setBaseRotation] = useState(0);
+  const [scaleInches, setScaleInches] = useState(6);
+  const [rangeInches, setRangeInches] = useState("unlimited");
+  const [pixelsPerInch, setPixelsPerInch] = useState(null);
 
   const state = useRef({
     W: 900,
@@ -20,6 +27,8 @@ export default function InteractiveLOSTool() {
     camera: { scale: 1, x: 0, y: 0 },
     light: { x: 450, y: 300 },
     losSize: 1,
+    scaleStart: null,
+    scalePreview: null,
     blockers: [],
     walls: [],
     enemies: [],
@@ -32,10 +41,17 @@ export default function InteractiveLOSTool() {
   useEffect(() => {
     resize();
     window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("resize", resize);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
-  useEffect(() => draw(), [mode, imageReady, losSize]);
+  useEffect(() => {
+    updateVisibility();
+    draw();
+  }, [mode, imageReady, baseShape, baseLengthMm, baseWidthMm, baseRotation, scaleInches, rangeInches, pixelsPerInch]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -84,6 +100,8 @@ export default function InteractiveLOSTool() {
         state.current.wallPath = [];
         state.current.wallPreview = null;
         state.current.camera = { scale: 1, x: 0, y: 0 };
+        state.current.scaleStart = null;
+        state.current.scalePreview = null;
         calculateFit();
         state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
         updateVisibility();
@@ -108,6 +126,15 @@ export default function InteractiveLOSTool() {
   }
 
   function pointerDown(e) {
+    const p = screenToWorld(e);
+    const draggable = findDraggableObject(p);
+    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale") {
+      objectDragRef.current = draggable;
+      if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
+      setStatus(draggable.type === "light" ? "Moving LOS point. Release to drop." : "Moving enemy. Release to drop.");
+      return;
+    }
+
     if (mode === "pan") {
       panningRef.current = true;
       panLastRef.current = screenPos(e);
@@ -115,7 +142,14 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    const p = screenToWorld(e);
+    if (mode === "scale") {
+      state.current.scaleStart = p;
+      state.current.scalePreview = { a: p, b: p };
+      setStatus(`Drag a known ${scaleInches}" distance, then release to set scale.`);
+      draw();
+      return;
+    }
+
     if (mode === "light") {
       draggingRef.current = true;
       state.current.light = p;
@@ -168,6 +202,21 @@ export default function InteractiveLOSTool() {
   }
 
   function pointerMove(e) {
+    const p = screenToWorld(e);
+
+    if (objectDragRef.current) {
+      if (objectDragRef.current.type === "light") {
+        state.current.light = p;
+        updateVisibility();
+      } else if (objectDragRef.current.type === "enemy") {
+        state.current.enemies[objectDragRef.current.index] = p;
+      }
+      draw();
+      return;
+    }
+
+    updateHoverCursor(p);
+
     if (mode === "pan" && panningRef.current) {
       const now = screenPos(e);
       const last = panLastRef.current || now;
@@ -178,8 +227,10 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    const p = screenToWorld(e);
-    if (mode === "light" && draggingRef.current) {
+    if (mode === "scale" && state.current.scaleStart) {
+      state.current.scalePreview = { a: state.current.scaleStart, b: p };
+      draw();
+    } else if (mode === "light" && draggingRef.current) {
       state.current.light = p;
       updateVisibility();
       draw();
@@ -190,9 +241,66 @@ export default function InteractiveLOSTool() {
   }
 
   function pointerUp() {
+    if (objectDragRef.current) {
+      objectDragRef.current = null;
+      if (canvasRef.current) canvasRef.current.style.cursor = "grab";
+    }
+
+    if (mode === "scale" && state.current.scaleStart && state.current.scalePreview) {
+      const { a, b } = state.current.scalePreview;
+      const lengthPx = dist(a, b);
+      if (lengthPx > 5) {
+        const ppi = lengthPx / scaleInches;
+        setPixelsPerInch(ppi);
+        setStatus(`Scale set: ${scaleInches}" = ${Math.round(lengthPx)} px, so 1" = ${ppi.toFixed(1)} px.`);
+      } else {
+        setStatus("Scale line was too short. Try again.");
+      }
+      state.current.scaleStart = null;
+      state.current.scalePreview = null;
+      draw();
+    }
+
     draggingRef.current = false;
     panningRef.current = false;
     panLastRef.current = null;
+  }
+
+  function findDraggableObject(p) {
+    const cam = state.current.camera;
+    const enemyHitRadius = 18 / cam.scale;
+
+    for (let i = state.current.enemies.length - 1; i >= 0; i--) {
+      if (dist(p, state.current.enemies[i]) <= enemyHitRadius) {
+        return { type: "enemy", index: i };
+      }
+    }
+
+    const base = getBaseRadii(cam.scale);
+    const offsetX = p.x - state.current.light.x;
+    const offsetY = p.y - state.current.light.y;
+    const local = rotatePoint(offsetX, offsetY, -baseRotation);
+    const dx = local.x / base.rx;
+    const dy = local.y / base.ry;
+    if (dx * dx + dy * dy <= 1) {
+      return { type: "light" };
+    }
+
+    return null;
+  }
+
+  function updateHoverCursor(p) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (objectDragRef.current) {
+      canvas.style.cursor = "grabbing";
+    } else if (findDraggableObject(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale") {
+      canvas.style.cursor = "grab";
+    } else if (mode === "pan") {
+      canvas.style.cursor = panningRef.current ? "grabbing" : "grab";
+    } else {
+      canvas.style.cursor = "crosshair";
+    }
   }
 
   function finishWall(e) {
@@ -220,16 +328,49 @@ export default function InteractiveLOSTool() {
     draw();
   }
 
-  function zoomBy(factor) {
+  function zoomBy(factor, anchorScreen = null) {
     const cam = state.current.camera;
     const { W, H } = state.current;
-    const centre = { x: W / 2, y: H / 2 };
-    const before = { x: (centre.x - cam.x) / cam.scale, y: (centre.y - cam.y) / cam.scale };
+    const anchor = anchorScreen || { x: W / 2, y: H / 2 };
+    const before = { x: (anchor.x - cam.x) / cam.scale, y: (anchor.y - cam.y) / cam.scale };
     const nextScale = Math.max(0.6, Math.min(4, cam.scale * factor));
     cam.scale = nextScale;
-    cam.x = centre.x - before.x * nextScale;
-    cam.y = centre.y - before.y * nextScale;
+    cam.x = anchor.x - before.x * nextScale;
+    cam.y = anchor.y - before.y * nextScale;
     draw();
+  }
+
+  function handleWheel(e) {
+    e.preventDefault();
+
+    if (objectDragRef.current?.type === "light") {
+      const delta = e.deltaY < 0 ? Math.PI / 36 : -Math.PI / 36;
+      setBaseRotation((current) => current + delta);
+      setStatus("Rotating LOS base. Mouse wheel up = clockwise, down = anticlockwise.");
+      return;
+    }
+
+    const p = screenPos(e);
+    zoomBy(e.deltaY < 0 ? 1.12 : 0.89, p);
+  }
+
+  function handleKeyDown(e) {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+
+    const key = e.key.toLowerCase();
+    if (["l", "p", "f", "w", "e", "x", "z", "+", "=", "-"].includes(key)) e.preventDefault();
+
+    if (key === "l") setMode("light");
+    else if (key === "p") setMode("pan");
+    else if (key === "f") setMode("block");
+    else if (key === "w") setMode("wall");
+    else if (key === "e") setMode("enemy");
+    else if (key === "x") setMode("erase");
+    else if (key === "z") undo();
+    else if (key === "+" || key === "=") zoomBy(1.25);
+    else if (key === "-") zoomBy(0.8);
+    
   }
 
   function resetZoom() {
@@ -237,20 +378,36 @@ export default function InteractiveLOSTool() {
     draw();
   }
 
-  function setLOSSize(multiplier) {
-    state.current.losSize = multiplier;
-    setLosSize(multiplier);
-    setStatus(`LOS circle size set to ${Math.round(multiplier * 100)}%.`);
-    draw();
+  function getBaseRadii(cameraScale = 1) {
+    if (!pixelsPerInch) {
+      const fallback = 15 / cameraScale;
+      return { rx: fallback, ry: fallback };
+    }
+    const pxPerMm = pixelsPerInch / 25.4;
+    if (baseShape === "circle") {
+      const r = Math.max(1, (Number(baseLengthMm) || 25) * pxPerMm / 2);
+      return { rx: r, ry: r };
+    }
+    return {
+      rx: Math.max(1, (Number(baseLengthMm) || 60) * pxPerMm / 2),
+      ry: Math.max(1, (Number(baseWidthMm) || 35) * pxPerMm / 2),
+    };
   }
 
-  function adjustLOSSize(direction) {
-    const sizes = [0.25, 0.5, 0.75, 1, 1.5];
-    const current = state.current.losSize;
-    const index = sizes.findIndex((s) => s === current);
-    const safeIndex = index >= 0 ? index : 3;
-    const nextIndex = Math.max(0, Math.min(sizes.length - 1, safeIndex + direction));
-    setLOSSize(sizes[nextIndex]);
+  function getLOSOrigins() {
+    const { light } = state.current;
+    if (!pixelsPerInch) return [light];
+    const { rx, ry } = getBaseRadii(1);
+    const samples = baseShape === "circle" ? 20 : 28;
+    const points = [light];
+    for (let i = 0; i < samples; i++) {
+      const a = (Math.PI * 2 * i) / samples;
+      const localX = Math.cos(a) * rx;
+      const localY = Math.sin(a) * ry;
+      const rotated = rotatePoint(localX, localY, baseRotation);
+      points.push({ x: light.x + rotated.x, y: light.y + rotated.y });
+    }
+    return points;
   }
 
   function undo() {
@@ -298,9 +455,12 @@ export default function InteractiveLOSTool() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const { W, H, fit, camera, light, losSize, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility } = state.current;
-    const clearPoly = visibility.clear || [];
-    const oneWallPoly = visibility.oneWall || [];
+    const { W, H, fit, camera, light, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility, scalePreview } = state.current;
+    const clearZones = visibility.clearZones || [];
+    const oneWallZones = visibility.oneWallZones || [];
+    const clearPoly = clearZones[0] || [];
+    const oneWallPoly = oneWallZones[0] || [];
+    const rangeRadius = rangeInches === "unlimited" || !pixelsPerInch ? Infinity : Number(rangeInches) * pixelsPerInch;
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "#151515";
@@ -333,50 +493,25 @@ export default function InteractiveLOSTool() {
       ctx.moveTo(oneWallPoly[0].x, oneWallPoly[0].y);
       for (const p of oneWallPoly.slice(1)) ctx.lineTo(p.x, p.y);
       ctx.closePath();
-      ctx.fillStyle = "rgba(0,0,0,.60)";
+      ctx.fillStyle = "rgba(0,0,0,.45)";
       ctx.fill("evenodd");
       ctx.restore();
     }
 
-    if (oneWallPoly.length) {
+    drawZoneMask(ctx, oneWallZones, W, H, "rgba(245, 190, 55, .16)");
+    drawZoneMask(ctx, clearZones, W, H, "rgba(255,255,255,.09)");
+
+    if (Number.isFinite(rangeRadius)) {
+      drawRangeZoneMask(ctx, [...oneWallZones, ...clearZones], W, H, light, rangeRadius, "rgba(34,197,94,.18)");
+
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(oneWallPoly[0].x, oneWallPoly[0].y);
-      for (const p of oneWallPoly.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.closePath();
-      ctx.clip();
-      ctx.fillStyle = "rgba(245, 190, 55, .30)";
-      ctx.fillRect(0, 0, W, H);
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(oneWallPoly[0].x, oneWallPoly[0].y);
-      for (const p of oneWallPoly.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(245, 190, 55, .55)";
+      ctx.setLineDash([8 / camera.scale, 8 / camera.scale]);
       ctx.lineWidth = 2 / camera.scale;
-      ctx.stroke();
-    }
-
-    if (clearPoly.length) {
-      ctx.save();
+      ctx.strokeStyle = "rgba(34,197,94,.90)";
       ctx.beginPath();
-      ctx.moveTo(clearPoly[0].x, clearPoly[0].y);
-      for (const p of clearPoly.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.closePath();
-      ctx.clip();
-      ctx.globalCompositeOperation = "screen";
-      ctx.fillStyle = "rgba(255,255,255,.30)";
-      ctx.fillRect(0, 0, W, H);
+      ctx.arc(light.x, light.y, rangeRadius, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
-
-      ctx.beginPath();
-      ctx.moveTo(clearPoly[0].x, clearPoly[0].y);
-      for (const p of clearPoly.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.closePath();
-      ctx.strokeStyle = "rgba(255,255,255,.50)";
-      ctx.lineWidth = 2 / camera.scale;
-      ctx.stroke();
     }
 
     // Footprints are drawn after the LOS overlays with a near-solid fill.
@@ -400,12 +535,13 @@ export default function InteractiveLOSTool() {
         ctx.save();
         clipPoly(ctx, poly);
         clipPoly(ctx, clearPoly);
-        ctx.globalCompositeOperation = "screen";
+        ctx.globalCompositeOperation = "source-over";
         ctx.fillStyle = "rgba(255,255,255,.36)";
         ctx.fillRect(0, 0, W, H);
         ctx.restore();
       }
     });
+    if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
     if (currentPoly.length) drawPoly(ctx, currentPoly, "rgba(255,255,255,.10)", "#fff", false, camera.scale);
 
     walls.forEach((wall) => drawWall(ctx, wall, camera.scale));
@@ -418,27 +554,37 @@ export default function InteractiveLOSTool() {
       }
     }
 
-    enemies.forEach((enemy, index) => drawEnemy(ctx, enemy, enemyLOSState(enemy, visibility), index + 1, camera.scale));
+    enemies.forEach((enemy, index) => {
+      const losState = enemyLOSState(enemy, visibility);
+      const rangeActive = Number.isFinite(rangeRadius);
+      const inRange = enemyInRange(enemy, light, rangeRadius);
+      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale);
+    });
 
-    const losRadius = (15 * losSize) / camera.scale;
+    const base = getBaseRadii(camera.scale);
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(light.x, light.y, losRadius, 0, Math.PI * 2);
+    ctx.ellipse(light.x, light.y, base.rx, base.ry, baseRotation, 0, Math.PI * 2);
     ctx.fillStyle = "#f5f7fa";
     ctx.fill();
     ctx.lineWidth = 4 / camera.scale;
     ctx.strokeStyle = "#2563eb";
     ctx.stroke();
     ctx.fillStyle = "#111";
-    ctx.font = `bold ${Math.max(7, (10 * losSize) / camera.scale)}px system-ui`;
+    ctx.font = `bold ${Math.max(7, 10 / camera.scale)}px system-ui`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("LOS", light.x, light.y);
+    ctx.restore();
 
     ctx.restore();
   }
 
   function updateVisibility() {
-    state.current.visibility = computeVisibilityZones(state.current.light, state.current.blockers, state.current.walls, state.current.W, state.current.H);
+    const origins = getLOSOrigins();
+    const clearZones = origins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0));
+    const oneWallZones = origins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1));
+    state.current.visibility = { clearZones, oneWallZones };
   }
 
   return (
@@ -446,19 +592,48 @@ export default function InteractiveLOSTool() {
       <div style={styles.toolbar}>
         <button onClick={() => fileRef.current?.click()} style={styles.uploadButton}>Upload map</button>
         <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
-        <ToolButton active={mode === "light"} onClick={() => setMode("light")}>Drag LOS point</ToolButton>
-        <ToolButton active={mode === "pan"} onClick={() => setMode("pan")}>Pan map</ToolButton>
-        <ToolButton active={mode === "block"} onClick={() => setMode("block")}>Draw footprint</ToolButton>
-        <ToolButton active={mode === "wall"} onClick={() => setMode("wall")}>Draw wall</ToolButton>
-        <ToolButton active={mode === "enemy"} onClick={() => setMode("enemy")}>Add enemy</ToolButton>
-        <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase</ToolButton>
+        <ToolButton active={mode === "light"} onClick={() => setMode("light")}>Drag LOS (L)</ToolButton>
+        <ToolButton active={baseShape === "circle"} onClick={() => { setBaseShape("circle"); setBaseWidthMm(baseLengthMm); }}>○</ToolButton>
+        <ToolButton active={baseShape === "oval"} onClick={() => setBaseShape("oval")}>⬭</ToolButton>
+        <input
+          type="number"
+          min="1"
+          value={baseLengthMm}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setBaseLengthMm(v);
+            if (baseShape === "circle") setBaseWidthMm(v);
+          }}
+          style={styles.baseInput}
+          title={baseShape === "circle" ? "Base diameter in mm" : "Base length in mm"}
+        />
+        <input
+          type="number"
+          min="1"
+          value={baseShape === "circle" ? baseLengthMm : baseWidthMm}
+          disabled={baseShape === "circle"}
+          onChange={(e) => setBaseWidthMm(Number(e.target.value))}
+          style={{ ...styles.baseInput, opacity: baseShape === "circle" ? 0.45 : 1 }}
+          title="Base width in mm"
+        />
+        <ToolButton active={mode === "pan"} onClick={() => setMode("pan")}>Pan map (P)</ToolButton>
+        <ToolButton active={mode === "block"} onClick={() => setMode("block")}>Draw footprint (F)</ToolButton>
+        <ToolButton active={mode === "wall"} onClick={() => setMode("wall")}>Draw wall (W)</ToolButton>
+        <ToolButton active={mode === "enemy"} onClick={() => setMode("enemy")}>Add enemy (E)</ToolButton>
+        <select value={scaleInches} onChange={(e) => setScaleInches(Number(e.target.value))} style={styles.select}>
+          {[1,2,3,4,5,6,7,8,9,10,11,12].map((n) => <option key={n} value={n}>{n}" scale</option>)}
+        </select>
+        <ToolButton active={mode === "scale"} onClick={() => setMode("scale")}>Set scale</ToolButton>
+        <select value={rangeInches} onChange={(e) => setRangeInches(e.target.value)} style={styles.select}>
+          <option value="unlimited">Unlimited range</option>
+          {[6,9,12,18,24,30,36,48,60].map((n) => <option key={n} value={n}>{n}" range</option>)}
+        </select>
+        <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase (X)</ToolButton>
         <span style={styles.label}>Zoom</span>
         <ToolButton onClick={() => zoomBy(0.8)}>−</ToolButton>
         <ToolButton onClick={() => zoomBy(1.25)}>+</ToolButton>
-        <span style={styles.label}>LOS {Math.round(losSize * 100)}%</span>
-        <ToolButton onClick={() => adjustLOSSize(-1)}>−</ToolButton>
-        <ToolButton onClick={() => adjustLOSSize(1)}>+</ToolButton>
-        <ToolButton onClick={undo}>Undo</ToolButton>
+        
+        <ToolButton onClick={undo}>Undo (Z)</ToolButton>
         <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
         <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
         <ToolButton onClick={clearEnemies}>Clear enemies</ToolButton>
@@ -466,7 +641,7 @@ export default function InteractiveLOSTool() {
       </div>
 
       <div style={styles.status}>{status}</div>
-      <div style={styles.legend}>White = clear LOS · Yellow = crossed one footprint wall · Dark = second footprint wall or wall line · Use Pan map after zooming</div>
+      <div style={styles.legend}>White = clear LOS · Green = visible within selected range · Yellow = visible beyond range / crossed one footprint wall · Dark = blocked · Use Pan map after zooming</div>
 
       <div style={styles.canvasWrap}>
         <canvas
@@ -477,6 +652,7 @@ export default function InteractiveLOSTool() {
           onPointerUp={pointerUp}
           onPointerCancel={pointerUp}
           onDoubleClick={finishWall}
+          onWheel={handleWheel}
         />
       </div>
     </div>
@@ -500,8 +676,9 @@ const styles = {
     gap: 6,
     padding: 6,
     background: "rgba(0,0,0,.92)",
-    borderBottom: "1px solid rgba(255,255,255,.10)",
+    borderBottom: "1px solid rgba(255,255,255,.12)",
     overflowX: "auto",
+    overflowY: "hidden",
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
@@ -520,6 +697,24 @@ const styles = {
     fontSize: 12,
     color: "#cbd5e1",
     whiteSpace: "nowrap",
+  },
+  select: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "#111827",
+    color: "white",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  baseInput: {
+    width: 62,
+    padding: "8px 8px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "#111827",
+    color: "white",
+    fontWeight: 700,
   },
   status: {
     padding: "7px 10px",
@@ -573,6 +768,7 @@ function ToolButton({ active, onClick, children }) {
     </button>
   );
 }
+
 function computeVisibilityZones(source, blockers, walls, W, H) {
   return {
     clear: computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, 0),
@@ -643,11 +839,17 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
 }
 
 function enemyLOSState(enemy, visibility) {
-  const clear = visibility.clear || [];
-  const oneWall = visibility.oneWall || [];
-  if (enemyTouchedByPoly(enemy, clear)) return "clear";
-  if (enemyTouchedByPoly(enemy, oneWall)) return "oneWall";
+  const clearZones = visibility.clearZones || [];
+  const oneWallZones = visibility.oneWallZones || [];
+  if (clearZones.some((poly) => enemyTouchedByPoly(enemy, poly))) return "clear";
+  if (oneWallZones.some((poly) => enemyTouchedByPoly(enemy, poly))) return "oneWall";
   return "blocked";
+}
+
+function enemyInRange(enemy, light, rangeRadius) {
+  if (!Number.isFinite(rangeRadius)) return true;
+  const enemyRadius = 13;
+  return dist(enemy, light) <= rangeRadius + enemyRadius;
 }
 
 function enemyTouchedByPoly(enemy, poly) {
@@ -692,6 +894,70 @@ function drawPoly(ctx, poly, fill, stroke, closed, scale = 1) {
   ctx.stroke();
   poly.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 5 / scale, 0, Math.PI * 2); ctx.fillStyle = stroke; ctx.fill(); });
 }
+function strokePoly(ctx, poly, stroke, width) {
+  if (!poly.length) return;
+  ctx.beginPath();
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+  ctx.closePath();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+function drawZoneMask(ctx, zones, W, H, fillStyle) {
+  const goodZones = zones.filter((poly) => poly?.length);
+  if (!goodZones.length) return;
+
+  const mask = document.createElement("canvas");
+  mask.width = W;
+  mask.height = H;
+  const m = mask.getContext("2d");
+
+  m.fillStyle = "#fff";
+  goodZones.forEach((poly) => {
+    m.beginPath();
+    m.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) m.lineTo(poly[i].x, poly[i].y);
+    m.closePath();
+    m.fill();
+  });
+
+  m.globalCompositeOperation = "source-in";
+  m.fillStyle = fillStyle;
+  m.fillRect(0, 0, W, H);
+  ctx.drawImage(mask, 0, 0);
+}
+
+function drawRangeZoneMask(ctx, zones, W, H, light, rangeRadius, fillStyle) {
+  const goodZones = zones.filter((poly) => poly?.length);
+  if (!goodZones.length || !Number.isFinite(rangeRadius)) return;
+
+  const mask = document.createElement("canvas");
+  mask.width = W;
+  mask.height = H;
+  const m = mask.getContext("2d");
+
+  m.save();
+  m.beginPath();
+  m.arc(light.x, light.y, rangeRadius, 0, Math.PI * 2);
+  m.clip();
+  m.fillStyle = "#fff";
+  goodZones.forEach((poly) => {
+    m.beginPath();
+    m.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) m.lineTo(poly[i].x, poly[i].y);
+    m.closePath();
+    m.fill();
+  });
+  m.restore();
+
+  m.globalCompositeOperation = "source-in";
+  m.fillStyle = fillStyle;
+  m.fillRect(0, 0, W, H);
+  ctx.drawImage(mask, 0, 0);
+}
+
 function clipPoly(ctx, poly) {
   if (!poly.length) return;
   ctx.beginPath();
@@ -700,6 +966,26 @@ function clipPoly(ctx, poly) {
   ctx.closePath();
   ctx.clip();
 }
+function drawMeasurementLine(ctx, a, b, label, scale = 1) {
+  ctx.save();
+  ctx.lineWidth = 3 / scale;
+  ctx.strokeStyle = "rgba(34,197,94,.95)";
+  ctx.fillStyle = "rgba(34,197,94,.95)";
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(a.x, a.y, 5 / scale, 0, Math.PI * 2);
+  ctx.arc(b.x, b.y, 5 / scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = `${14 / scale}px system-ui`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(label, (a.x + b.x) / 2 + 8 / scale, (a.y + b.y) / 2 - 8 / scale);
+  ctx.restore();
+}
+
 function drawWall(ctx, wall, scale = 1, preview = false) {
   if (!wall?.a || !wall?.b) return;
   ctx.save();
@@ -718,19 +1004,46 @@ function drawWall(ctx, wall, scale = 1, preview = false) {
   ctx.stroke();
   ctx.restore();
 }
-function drawEnemy(ctx, enemy, state, number, scale = 1) {
+function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1) {
   const r = 13 / scale;
   const visible = state === "clear";
   const oneWall = state === "oneWall";
+  const blocked = state === "blocked";
+  const rangeIsActive = rangeActive;
+
   ctx.save();
   ctx.beginPath();
   ctx.arc(enemy.x, enemy.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = visible ? "#ef4444" : oneWall ? "#f5c542" : "#8b8b8b";
-  ctx.fill();
+
+  if (blocked) {
+    ctx.fillStyle = "#8b8b8b";
+    ctx.fill();
+  } else if (!rangeIsActive) {
+    // Unlimited range: use original visibility colours.
+    ctx.fillStyle = visible ? "#ef4444" : "#f5c542";
+    ctx.fill();
+  } else if (inRange && visible) {
+    // Eligible target with clear LOS and selected range.
+    ctx.fillStyle = "#22c55e";
+    ctx.fill();
+  } else if (inRange && oneWall) {
+    // Eligible target, but through one footprint wall / cover.
+    ctx.fillStyle = "#22c55e";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, r * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = "#f5c542";
+    ctx.fill();
+  } else {
+    // Visible but outside selected range.
+    ctx.fillStyle = visible ? "#ef4444" : "#f5c542";
+    ctx.fill();
+  }
+
   ctx.lineWidth = 3 / scale;
-  ctx.strokeStyle = visible || oneWall ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.45)";
+  ctx.strokeStyle = blocked ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.95)";
   ctx.stroke();
-  ctx.fillStyle = visible ? "#fff" : "#222";
+  ctx.fillStyle = blocked ? "#222" : "#fff";
   ctx.font = `bold ${Math.max(8, 10 / scale)}px system-ui`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -762,3 +1075,8 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke) {
 }
 function cross(a, b) { return a.x * b.y - a.y * b.x; }
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function rotatePoint(x, y, angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return { x: x * c - y * s, y: x * s + y * c };
+}
