@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import BASE_DATABASE from "./baseSizes.json";
 
 export default function InteractiveLOSTool() {
   const canvasRef = useRef(null);
@@ -26,9 +27,12 @@ export default function InteractiveLOSTool() {
   const [activeLosId, setActiveLosId] = useState("los-1");
   const [losName, setLosName] = useState("LOS");
   const [losVersion, setLosVersion] = useState(0);
+  const [armyListText, setArmyListText] = useState("");
+  const [armyResults, setArmyResults] = useState([]);
   const [editingSaveName, setEditingSaveName] = useState(false);
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
+    army: true,
     scale: true,
     range: true,
     markers: true,
@@ -577,6 +581,218 @@ export default function InteractiveLOSTool() {
     draw();
     scheduleBrowserSave();
     setStatus(`Deleted ${old?.name || "LOS marker"}.`);
+  }
+
+
+  function cleanArmyLine(line) {
+    return line
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/\[[^\]]*\]/g, " ")
+      .replace(/^\s*\d+\s*x?\s*/i, "")
+      .replace(/^\s*[•◦\-*]+\s*/, "")
+      .replace(/\b\d+\s*(pts?|points?|pl)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isArmyBulletLine(line) {
+    return /^\s*[•◦\-*]/.test(line);
+  }
+
+  function extractWarhammerAppUnits(text) {
+    return text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => !isArmyBulletLine(line))
+      .map((line) => {
+        const match = line.match(/^(.+?)\s*\((\d+)\s*Points?\)\s*$/i);
+        return match ? match[1].trim() : null;
+      })
+      .filter(Boolean);
+  }
+
+  function normaliseName(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/['’`]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\b(unit|models?|model|squad|team)\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function scoreUnitMatch(line, unitName) {
+    const search = normaliseName(line);
+    const unit = normaliseName(unitName);
+    if (!search || !unit) return 0;
+    if (search === unit) return 1000;
+    if (search.includes(unit)) return 800 + unit.length;
+    if (unit.includes(search)) return 650 + search.length;
+
+    const searchWords = new Set(search.split(" ").filter(Boolean));
+    const unitWords = unit.split(" ").filter(Boolean);
+    const hits = unitWords.filter((word) => searchWords.has(word));
+    if (!hits.length) return 0;
+    return hits.length * 100 + hits.join("").length;
+  }
+
+  function findBestBaseMatch(unitName) {
+  const search = normaliseName(unitName);
+  const entries = Object.entries(BASE_DATABASE);
+
+  for (const [name, base] of entries) {
+    if (normaliseName(name) === search) return { name, base };
+  }
+
+  for (const [name, base] of entries) {
+    const n = normaliseName(name);
+    if (singularise(n) === singularise(search)) return { name, base };
+  }
+
+  for (const [name, base] of entries) {
+    const n = normaliseName(name);
+    if (search.includes(n) || n.includes(search)) return { name, base };
+  }
+
+  let best = null;
+  let bestScore = Infinity;
+
+  for (const [name, base] of entries) {
+    const score = levenshtein(singularise(search), singularise(normaliseName(name)));
+    if (score < bestScore) {
+      bestScore = score;
+      best = { name, base };
+    }
+  }
+
+  return bestScore <= 3 ? best : null;
+}
+
+  function formatBase(result) {
+  const shape = result.baseShape || "circle";
+
+  if (shape === "oval") {
+    return `Oval • ${result.baseLengthMm}mm × ${result.baseWidthMm}mm`;
+  }
+
+  if (shape === "pill") {
+    return `Pill • ${result.baseLengthMm}mm × ${result.baseWidthMm}mm`;
+  }
+
+  return `Circle • ${result.baseLengthMm}mm`;
+}
+
+  function parseArmyList() {
+    const seen = new Set();
+
+    const warhammerAppUnits = extractWarhammerAppUnits(armyListText);
+    const lines = (warhammerAppUnits.length ? warhammerAppUnits : armyListText.split(/\n|\r|;/))
+      .map(cleanArmyLine)
+      .filter((line) => line.length >= 3)
+      .filter((line) => !/^\d+$/.test(line));
+
+    const results = [];
+    lines.forEach((line, index) => {
+      const match = findBestBaseMatch(line);
+      const key = normaliseName(match?.name || line);
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const base = match?.base || { shape: "circle", diameter: 40 };
+      results.push({
+        id: `army-result-${Date.now()}-${index}`,
+        original: line,
+        unit: match?.name || line,
+        matched: Boolean(match),
+        accepted: Boolean(match),
+        editing: !match,
+        baseShape: base.shape || "circle",
+        baseLengthMm: base.shape === "circle" ? base.diameter : base.length,
+        baseWidthMm: base.shape === "circle" ? base.diameter : base.width,
+      });
+    });
+
+    setArmyResults(results);
+    setStatus(
+      warhammerAppUnits.length
+        ? `Warhammer app format detected. Matched ${results.filter((r) => r.matched).length} of ${results.length} unit entries.`
+        : `Matched ${results.filter((r) => r.matched).length} of ${results.length} army-list entries.`
+    );
+  }
+
+  function updateArmyResult(id, patch) {
+    setArmyResults((current) => current.map((result) => result.id === id ? { ...result, ...patch } : result));
+  }
+
+  function createLosMarkersFromArmy() {
+    const accepted = armyResults.filter((result) => result.accepted);
+    if (!accepted.length) {
+      setStatus("No accepted army-list entries to create LOS markers from.");
+      return;
+    }
+
+    const spacing = 34;
+    const startX = state.current.W / 2 - ((accepted.length - 1) * spacing) / 2;
+    const startY = state.current.H / 2;
+
+    const newMarkers = accepted.map((result, index) => ({
+      id: `army-los-${Date.now()}-${index}`,
+      name: result.unit || result.original || `Unit ${index + 1}`,
+      x: startX + index * spacing,
+      y: startY + (index % 2) * spacing,
+      baseShape: result.baseShape || "circle",
+      baseLengthMm: Number(result.baseLengthMm) || 40,
+      baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
+      baseRotation: 0,
+      visible: true,
+    }));
+
+    state.current.losMarkers.push(...newMarkers);
+    const first = newMarkers[0];
+    setActiveLosId(first.id);
+    setLosName(first.name);
+    setBaseShape(first.baseShape);
+    setBaseLengthMm(first.baseLengthMm);
+    setBaseWidthMm(first.baseWidthMm);
+    setBaseRotation(0);
+    state.current.light = { x: first.x, y: first.y };
+    setLosVersion((v) => v + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`Created ${newMarkers.length} LOS marker${newMarkers.length === 1 ? "" : "s"} from army list.`);
+  }
+
+  function clearArmyGeneratedLosMarkers() {
+    const before = state.current.losMarkers.length;
+    const remaining = state.current.losMarkers.filter((marker) => !String(marker.id || "").startsWith("army-los-"));
+
+    if (remaining.length === before) {
+      setStatus("No army-generated LOS markers to remove.");
+      return;
+    }
+
+    if (!remaining.length) {
+      remaining.push(createLosMarker("los-1", "LOS", state.current.W / 2, state.current.H / 2));
+    }
+
+    state.current.losMarkers = remaining;
+    const activeStillExists = remaining.some((marker) => marker.id === activeLosId);
+    const nextActive = activeStillExists ? getActiveLosMarker() : remaining[0];
+
+    setActiveLosId(nextActive.id);
+    setLosName(nextActive.name);
+    setBaseShape(nextActive.baseShape);
+    setBaseLengthMm(nextActive.baseLengthMm);
+    setBaseWidthMm(nextActive.baseWidthMm);
+    setBaseRotation(nextActive.baseRotation || 0);
+    state.current.light = { x: nextActive.x, y: nextActive.y };
+    setLosVersion((v) => v + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`Removed ${before - remaining.length} army-generated LOS marker${before - remaining.length === 1 ? "" : "s"}.`);
   }
 
   function screenPos(e) {
@@ -1360,6 +1576,95 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={styles.sidebarSection}>
+            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("army")}>
+              <span style={styles.sectionTriangle}>{sectionOpen.army ? "▾" : "▸"}</span>
+              <span>Army List</span>
+            </button>
+            {sectionOpen.army && (
+              <div style={styles.sectionContent}>
+                <textarea
+                  value={armyListText}
+                  onChange={(e) => setArmyListText(e.target.value)}
+                  placeholder={"Paste Warhammer app army list here...\n\nUnit lines should look like:\nTyrannofex (200 Points)\n  • 1x Rupture cannon"}
+                  style={styles.armyTextArea}
+                />
+                <div style={styles.sidebarRow}>
+                  <ToolButton onClick={parseArmyList}>Match units</ToolButton>
+                  <ToolButton onClick={createLosMarkersFromArmy}>Create LOS</ToolButton>
+                </div>
+                <ToolButton onClick={clearArmyGeneratedLosMarkers}>Remove generated LOS</ToolButton>
+
+                {armyResults.length > 0 && (
+                  <div style={styles.armyResultList}>
+                    {armyResults.map((result) => (
+                      <div key={result.id} style={styles.armyResultItem}>
+                        <input
+                          value={result.unit}
+                          onChange={(e) => updateArmyResult(result.id, { unit: e.target.value })}
+                          style={styles.armyUnitInput}
+                          title={`Original text: ${result.original}`}
+                        />
+                        <div style={styles.armyBaseLine}>{formatBase(result)}</div>
+                        <div style={styles.sidebarRow}>
+                          <button
+                            type="button"
+                            onClick={() => updateArmyResult(result.id, { accepted: true, editing: false })}
+                            style={{ ...styles.iconChoiceButton, background: result.accepted ? "rgba(34,197,94,.35)" : "rgba(255,255,255,.08)" }}
+                            title="Base size is correct"
+                          >✓</button>
+                          <button
+                            type="button"
+                            onClick={() => updateArmyResult(result.id, { accepted: false, editing: true })}
+                            style={{ ...styles.iconChoiceButton, background: result.editing ? "rgba(239,68,68,.35)" : "rgba(255,255,255,.08)" }}
+                            title="Correct base size manually"
+                          >✕</button>
+                          <span style={styles.armyMatchLabel}>{result.matched ? "matched" : "manual"}</span>
+                        </div>
+                        {result.editing && (
+                          <div style={styles.armyManualGrid}>
+                            <select
+                              value={result.baseShape}
+                              onChange={(e) => {
+                                const shape = e.target.value;
+                                updateArmyResult(result.id, {
+                                  baseShape: shape,
+                                  baseWidthMm: shape === "circle" ? result.baseLengthMm : result.baseWidthMm,
+                                  accepted: true,
+                                });
+                              }}
+                              style={styles.select}
+                            >
+                              <option value="circle">Circle</option>
+                              <option value="oval">Oval</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="1"
+                              value={result.baseLengthMm}
+                              onChange={(e) => updateArmyResult(result.id, { baseLengthMm: Number(e.target.value), baseWidthMm: result.baseShape === "circle" ? Number(e.target.value) : result.baseWidthMm, accepted: true })}
+                              style={styles.smallInput}
+                              title={result.baseShape === "circle" ? "Diameter mm" : "Length mm"}
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              value={result.baseShape === "circle" ? result.baseLengthMm : result.baseWidthMm}
+                              disabled={result.baseShape === "circle"}
+                              onChange={(e) => updateArmyResult(result.id, { baseWidthMm: Number(e.target.value), accepted: true })}
+                              style={{ ...styles.smallInput, opacity: result.baseShape === "circle" ? 0.45 : 1 }}
+                              title="Width mm"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={styles.sidebarSection}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("markers")}>
               <span style={styles.sectionTriangle}>{sectionOpen.markers ? "▾" : "▸"}</span>
               <span>LOS Markers</span>
@@ -1574,6 +1879,67 @@ const styles = {
     background: "#111827",
     color: "white",
     fontWeight: 700,
+  },
+  armyTextArea: {
+    width: "100%",
+    minHeight: 160,
+    boxSizing: "border-box",
+    padding: "10px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "#111827",
+    color: "white",
+    resize: "vertical",
+    fontFamily: "inherit",
+  },
+  armyResultList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    maxHeight: 300,
+    overflowY: "auto",
+    paddingRight: 2,
+  },
+  armyResultItem: {
+    padding: 8,
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.12)",
+    background: "rgba(255,255,255,.05)",
+  },
+  armyUnitInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "7px 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,.12)",
+    background: "#111827",
+    color: "white",
+    fontWeight: 700,
+  },
+  armyBaseLine: {
+    marginTop: 5,
+    marginBottom: 6,
+    fontSize: 12,
+    color: "#cbd5e1",
+  },
+  armyMatchLabel: {
+    fontSize: 11,
+    color: "#94a3b8",
+  },
+  armyManualGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 76px 76px",
+    gap: 6,
+    alignItems: "center",
+  },
+  iconChoiceButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,.18)",
+    color: "white",
+    cursor: "pointer",
+    fontWeight: 900,
   },
   fullInput: {
     width: "100%",
@@ -2074,6 +2440,33 @@ function pointNearSegment(p, a, b, threshold) {
   const t = Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y) / len2));
   const closest = { x: a.x + ab.x * t, y: a.y + ab.y * t };
   return dist(p, closest) <= threshold;
+}
+
+function singularise(text) {
+  return text
+    .replace(/ies$/i, "y")
+    .replace(/ves$/i, "f")
+    .replace(/s$/i, "");
+}
+
+function levenshtein(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () =>
+    Array(b.length + 1).fill(0)
+  );
+
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]) + 1;
+    }
+  }
+
+  return dp[a.length][b.length];
 }
 
 function cross(a, b) {

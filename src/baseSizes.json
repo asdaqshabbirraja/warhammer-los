@@ -1,0 +1,3401 @@
+{
+  "Unaugmented humans in sub-flak and flak armour": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Arco-flagellant": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Autosavant": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Skitarii Ranger": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Vanguard": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Secutarii Hoplite": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Peltast": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Ratling": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Servitor": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Technomedic Servitor": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Breacher Servitor": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Auto-Proxy Servitor": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Tech-thrall": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Tech-thrall Certus": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Servo-automata": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "CORV": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "E-COG": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Servo skull": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Tome-skull": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Teleport Homer": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Cherubim": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Dog": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Aximillion": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Cyber-Mastiff": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Macula": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Rantal-class Venatus Reclamator": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "R-VR": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Cawdor Bomb Delivery Rat": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Techmite Oculi": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Techmite Autoveyer": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Mole grenade": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Blue Horror": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Brimstone Horrors": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Poxwalker": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Vox-Shambler": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Mutoid Vermin": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Daemonette": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Herald of Slaanesh": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "The Masque": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Daemonhost": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Hamadrya": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Accursed Cultist Mutant": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Kabalite Warrior": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Wych": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Wrack": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Harlequin Player": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Aspect shrine token": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Gretchin": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Grot Oiler": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Grot Orderly": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Grot Ammo Runt": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Attack": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Bomb Squig": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Neurogaunt": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Spore Mine": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Neuroloid": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Genestealer Familiar": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Tau Fire Warrior": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Breacher": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Pathfinder": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Oversight drone": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Jokaero": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Caryatid": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Caryatid Prime": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Watcher in the Dark": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Spindle Drone": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Phelynx": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Psychoterric Wyrm": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Borewyrm infestation": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Arthromite Spinewyrm": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Sheen Bird": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Malstrain Tyramite": {
+    "shape": "circle",
+    "diameter": 25
+  },
+  "Sister Repentia": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Sister Novitiate": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Astartes Scout": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Primaris Neophyte": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Gaunt's Ghosts": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Cadian Command Squad": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Kasrkin": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Tempestus Aquilon": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Adeptus Arbites": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Imperial Navy Navis Gunner": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Endurant": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Sha'dar Hunter": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Cenobyte Servitor": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Skitarii Battle-Pilgrym": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Hearthkyn Warrior": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Cthonian Beserk": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Ironkin Assistant": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Ironhead Squat Prospector": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Techmite Exovator 078b": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Dark Commune Blessed Blade": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Jakhal cultist": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Guardian Defender": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Storm Guardian": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Howling Banshee": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Dark Reaper": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Dire Avenger": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Striking Scorpion": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Fire Dragon": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Shadow Spectre": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Warp Spider": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Ranger": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Corsair Reaver": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Voidscarred": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Incubus": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Klaivex": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Mandrake": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Flayed One": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Canoptek Plasmacyte": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Termagaunt": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Hormagaunt": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Neurogaunt Nodebeast": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Kroot Carnivore": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Long-quill": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Farstalker": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Kroot Hound": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Vespid Stingwing": {
+    "shape": "circle",
+    "diameter": 28
+  },
+  "Humans in power": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "artificer armour": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Electro-Priest Fulgurite": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Corpuscarii": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Gun Servitor": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "X-101": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Skitarii Battle-Pilgrym Marshal": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Hastarii Exterminator": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Fusilier": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Van Saar Neotek on grav-cutter": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Brôkhyr Iron-master": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Einhyr Hearthguard": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Spyrer in Yeld": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Malcadon": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Jakara": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Sovereign hunting rig": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Astartes Firstborn Tactical": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Assault": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Devastator Marine": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Astartes Firstborn Sternguard": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Vanguard Veteran": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Astartes Pimaris Intercessor": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Assault Intercessor": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Sternguard Veteran": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Hellblaster": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Reiver": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Infiltrator": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Incursor": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Desolation Marine": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Infernus Marine": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ironhead Squat Exo-kyn": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Memnyr Strategist": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Arkanyst Evaluator": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Chaos Astartes": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Negavolt Cultist": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Goremonger": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Bloodletter": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Herald of Khorne": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Flamer of Tzeench": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Screamer of Tzeentch": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Pink Horror": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Herald of Tzeench": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Beastman": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Tzaangor": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Plaguebearer": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Herald of Nurgle": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Fury": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ruinstorm Daemon Chosen": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ruinstorm Lesser Daemon": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ruinstorm Possessed Legionary": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Swooping Hawk": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Windrider": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Skyrunner": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Corsair Cloud Dancer": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Reaver": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Hellion": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Beastmaster": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Scourge": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "The Visarch Sword of Ynnead": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Lelith Hesperax": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Painboy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Wurrboy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Mek": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Runtherd": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Boss Nob": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ork Boy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Beast Snagga Boy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Stormboy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Loota Boy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Burna Boy": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Kommando": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Tankbusta": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Wrecka": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Genestealer": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Gargoyle": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Acolyte Genestealer Hybrid": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Hybrid Metamorph": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Kellermorph": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Genestealer Aberrant": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Hypermorph": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Royal Warden": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Plasmancer": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Cryptothrall": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Necron Warrior": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Immortal": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Deathmark": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Lychguard": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Triarch Praetorian": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Tomb Blade": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "XV25 Stealth armour": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "most drones": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Kroot Kill-broker": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Kroot War Shaper": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Flesh Shaper": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Trail Shaper": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Man of Iron": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "UR-025": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Phyrr Cat": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Millisaur": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Cyberarachnid": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Ripperjack": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "macro-grapplehawk": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Terror's Shadow": {
+    "shape": "circle",
+    "diameter": 32
+  },
+  "Abaddon the Despoiler": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Abominant": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Accursed Cultist Torment": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Aegis Terminator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Aggressor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Allarus Custodians": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ambull": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Anchorite": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Annihilation Barge": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Apothecary Biologis": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Aquilon Servo-Sentry": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Archmagos": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Archmagos Draykavac": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Archmagos Draykavac on Abeyant": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Archmagos on Abeyant": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Archmagos Prime": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ash Wastes Arachni-rig": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Asmodai": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Astartes Terminator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Astra Militarum Heavy Weapon Team": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Astra Militarum Scanner": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Asurmen": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Asuryani Heavy Weapons Platform": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Atalan Wolfquad": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Baharroth": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Barbgaunt": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Beast of Nurgle": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Beastboss": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Belial": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Big Mek": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Big Mek in Mega-Armour": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Bladeguard Ancient": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Bladeguard Veteran": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Boss Snikrot": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Brôkhyr Thunderkyn": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Bullgryn": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Buri Aegnirssen": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "C'Tan Shard of the Deceiver": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Canoptek Acanthrite": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Canoptek Reanimator": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Canoptek Scarab Swarm": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Canoptek Spyder": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Canoptek Wraith": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Captain in Terminator Armour": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Captain-General Trajann Valoris": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Carnifex": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Castellax": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Castraferrum Dreadnought": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Catacomb Command Barge": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Cataphractii Terminator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Celestian in Paragon Warsuit": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Celestine the Living Saint": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Centurion Assault Squad": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Centurion Devastator Squad": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Chaos Lord": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Chaos Spawn": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Chronomancer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Chronos": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Clawed Fiend": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Commander Farsight": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Commander Shadowsun": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Contemptor Dreadnought": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Contemptor-Achillus Dreadnought": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Contemptor-Galatus Dreadnought": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Cthonian Beserk with Mole Grenade Launcher": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Custodes Aquilon Terminator": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Custodian Guard": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Custodian Venatari": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Custodian Wardens": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Cyberwolf": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Da Red Gobbo on Bounca": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Daemon Prince": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Death Guard Lord of Contagion in Terminator Armour": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Deathleaper": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Decimator": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Deff Dread": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Devilfish": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Domitar": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Domitar-Ferrum": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Doomsday Ark": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Drazhar": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Drop Sentinel": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "DS8 Tactical Support Turret": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "DX-6 Remora": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Eightbound": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Einhyr Champion": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Eliminator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Epidemius": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Eradicator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ethereal on Hover Drone": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Exalted Eightbound": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Exalted Sorcerer on Disc of Tzeentch": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Falcon": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Fenrisian Wolf": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Fire Prism": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Fire Wasp Drone": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Flash Git": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Flawless Blade": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Fluxmaster": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Foetid Bloat-Drone": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Fuegan": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Gal Vorbak": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ghost Ark": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Gnasher-Screamer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Goaded Great Knarloc": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Great Knarloc": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Greater Blight Drone": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Greater Possessed": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Grimnyr": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Grotesque": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Guardian Drone": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Haarken Worldclaimer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Hammerhead": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Havoc": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Heavy Intercessor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Helbrute": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Herald on Disc of Tzeentch": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Hermes Light Sentinel": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Hexmark Destroyer": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "High Marshal Helbrecht": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Hive Guard": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Hive Tyrant": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Hornet": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Horus Ascended": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Hospitaller": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Human in Terminator armour": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Inceptor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Inquisitor Kroyle on Garralisk Steed": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Intranzia Fraye on Throne of Blame": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ironclad Dreadnought": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ironkin Steeljack": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Jackal Dishonoured": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Jain Zar": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Javelin Attack Speeder": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Judicar": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Junith Eruita on Pulpit of Saint Holline's Basilica": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Kastellan Robot": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Kataphron Breacher": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Kataphron Destroyer": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Khimerix": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Khymerae": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Killa Kan": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Krieg Death Rider": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Krieg Engineers with Mole Launcher": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Krieg Remote Mine": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Krieg Weapon Team with Heavy Flamer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Kroot Knarloc Rider": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Krootox": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Krootox Rampager": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Krootox Rider": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Kâhl": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Lady Haera": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Lady Haera Helmawr in Sthenian Hunting Rig": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Land Speeder Storm": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Land Speeder Tempest": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Land Speeder Tornado": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Land Speeder Typhoon": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Land Speeder Vengeance": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Lhykhis": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Librarian in Indomitus Terminator Armour": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Lictor": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Lokhust Destroyer": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Lokhust Destroyer Lord": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Lokhust Heavy Destroyer": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Lord of Poxes": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Luther Pattern Excavation Automata Ambot": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Magos on Abeyant": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Malanthrope": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Malstrain Genestealer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Marneus Calgar": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Master of Possession": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Maugan Ra": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Mechanicum Magos Dominus": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Meganob": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Mieotic Spore Sack": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Mortifier": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Morvenn Vahl": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Mucolid Spore": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Mutilator": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Myrmidon Destructor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Myrmidon Secutor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Necron Overlord": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Neurolictor": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Neurothrope": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Neurotyrant": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Night Spinner": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Nightmare Hulk": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Noise Marine": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Noxious Blightbringer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Nurglings": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Obliterator": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Ogryn": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ophydian Destroyer": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Painboss": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Parasite of Mortrex": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Patriarch": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Penitent Engine": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Piranha": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Piranha TX-42": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Piscean Spektor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Plague Drone of Nurgle": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Possessed": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Ancient": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Apothecary": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Captain": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Chaplain": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Lieutenant": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Primaris Techmarine": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Proteus Pattern Land Speeder": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Psychomancer": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Pteraxii Skystalker": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Pteraxii Sterylizor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Raider": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ravager": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ravener": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ravenwing Darkshroud": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Razorwing Flock": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Reaper": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Rippers": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Roboute Guilliman": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ruinstorm Daemon Beast": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Ruinstorm Daemon Brute": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Ruinstorm Daemon Shrike": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Ruinstorm Daemon Swarm": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sagittarum Guard": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sammael on Corvex": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Sanctioner Pattern Automata": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Saturnine Terminator": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Scimitar Jetbike": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Scyllax": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sekhetar Robot": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sentinel Powerlifter": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Servant of the Silent Ones": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Shas'o R'alai": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Shield-Captain": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Shield-Captain in Allarus Terminator Armour": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Shining Spear": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Shroud Runner": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Sicaran Infiltrator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sicaran Ruststalker": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Skorpekh Destroyer": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Skorpekh Lord": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Skulltaker": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sky Ray": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Sky Slashers": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Skyweaver": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Slaughterbound": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Snotling Swarm": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Spyrer in Orrus Hunting Rig": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sslyth": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Starweaver": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Stig-shambler": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sumpkroc": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Support Sentinel": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Suppressor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Sydonian Skatros": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Syll'Esske": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tallarn Mukaali Rider": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Talos": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Tartaros Terminator": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Tau Sniper Drone Controller": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Tech-Priest Dominus": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tech-Priest Manipulus": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Technomancer on Canoptek Scarab": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tesseract Ark": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Tetra": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Thallax": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "The Blue Scribes": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "The Changeling": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "The Swarmlord": {
+    "shape": "circle",
+    "diameter":60
+  },
+  "Throne of Judgement": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Thunderwolf Cavalry": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Transcendent C'Tan": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Triarchal Menhir": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tyranid Warrior": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tyrant Guard": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Ufthak Blackhawk": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Ursarax": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Van Saar Arachni-rig": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Vartijan Exo-Driller": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Veletaris Sentinel": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Venom": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Venomthrope": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Vexilus Praetor": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Vexilus Praetor in Allarus Terminator Armour": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Victrix Guard": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Voidweaver": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Von Ryan's Leaper": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Vorax Battle-Automata": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Vulgrar Thrice-Cursed": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Vyper": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "War Walker": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Warboss": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Warboss in Mega Armour": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Wasp Assault Walker": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Wasteland Giant Rat": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Wave Serpent": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Weirdboy": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Winged Tyranid Prime": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Tyranid Prime with Lash Whip": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Wraithblade": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Wraithguard": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Wraithlord": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Wraithseer": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Wrecka Boss Nob": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Wulfen": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "XV8 Crisis Battlesuit": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "XV85 Enforcer Battlesuit": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "XV86 Coldstar Battlesuit": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "XV88 Broadside Battlesuit": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "XV9 Hazard Battlesuit": {
+    "shape": "circle",
+    "diameter": 65
+  },
+  "Zoanthrope": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Zoat": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Zodgrod Wortsnagga": {
+    "shape": "circle",
+    "diameter": 50
+  },
+  "Ûthar the Destined": {
+    "shape": "circle",
+    "diameter": 40
+  },
+  "Armoured Sentinel": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Scout Sentinel": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Aethon Heavy Sentinel": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Deredeo Dreadnought": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Leviathan Dreadnought": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Firestrike Servo-turret": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Lord Solar Arcadian Leontus": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Thulia Ghuld": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Cthonian Earthshaker": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Myphitic Blight-hauler": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Vashtorr the Arkifane": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Avatar of Khaine": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "The Yncarne": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Ghazghkull Thraka": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Mozrog Skragbad": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Beastboss on Squigosaur": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Illuminor Szeras": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Nekrosor Ammentar": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "C'tan Shard of the Void Dragon": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Biovore": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Pyrovore": {
+    "shape": "circle",
+    "diameter": 80
+  },
+  "Redemptor Dreadnought": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Brutalis Dreadnought": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Ballistus Dreadnought": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Invictor Tactical Warsuit": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Storm Speeder Hammerstrike": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Storm Speeder Hailstrike": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Storm Speeder Thunderstrike": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Canoptek Doomstalker": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "C'Tan Shard of the Nightbringer": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Screamer-Killer": {
+    "shape": "circle",
+    "diameter": 90
+  },
+  "Field Ordnance Battery": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Knight Armiger Warglaive": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Knight Armiger Helverin": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Knight Armiger Moirax": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Repulsor": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Repulsor Executioner": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Impulsor": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Gladiator Valiant": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Gladiator Lancer": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Gladiator Reaper": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Saturnine Dreadnought": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Telemon Heavy Dreadnought": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Anacharis Scoria": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Vultarax Stratos-Automata": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Lord of Change": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Kairos Fateweaver": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Keeper of Secrets": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Shalaxi Helbane": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Skarbrand": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Be'lakor": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "War Dog Karnivore": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "War Dog Brigand": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "War Dog Huntsman": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Venomcrawler": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Gigantic Chaos Spawn": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Magnus the Red": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Mortarion": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Angron": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Fulgrim Transfigured": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Norn Emissary": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Norn Assimilator": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Sporocyst": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "The Red Terror": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Szarekh the Silent King": {
+    "shape": "circle",
+    "diameter": 100
+  },
+  "Barbed Hierodule": {
+    "shape": "circle",
+    "diameter": 127
+  },
+  "Scythed Hierodule": {
+    "shape": "circle",
+    "diameter": 127
+  },
+  "Artillery Team": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Onager Dunecrawler": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Great Unclean One": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Rotigus": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Bloodthirster": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Fulgrim": {
+    "shape": "circle",
+    "diameter": 130
+  },
+  "Astraeus Super-heavy Tank": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Orion Assault Dropship": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Ares Gunship": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Monolith": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "KX139 Ta'unar Supremacy Armour": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Tiger Shark AX-1-0": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Tiger Shark AX-2-2": {
+    "shape": "circle",
+    "diameter": 160
+  },
+  "Astra Militarum Rough Rider": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Death Rider": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Serberys Raider": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Sulphurhound": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Skitarii Ranger": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Vanguard with transuranic arquebus": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Atalan Jackal": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Jackal Alphus": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Escher Cutter": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Cawdor Ridge Walker": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Warpsmith": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Flesh Hound of Khorne": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Seeker of Slaanesh": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Infernal Enrapturess": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Yvraine Emissary of Ynnead": {
+    "shape": "oval",
+    "length": 60,
+    "width": 35
+  },
+  "Lord Marshal Dreir on ES819": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Firstborn Space Marine on a bike": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Vertus Praetors": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Shield-Captain on Dawneagle Jetbike": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Custodian on Agamatus jetbike": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Dustback Helamite": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Wy'tari Stormcaller": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Chaos Space Marine Biker": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Karanak the Hound of Khorne": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Exalted Flamer of Tzeentch": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Fiend of Slaanesh": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "The Contorted Epitome": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Ork Warbiker": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Nob on Warbike": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Squighog Boy": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Deffkopta": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Broodlord": {
+    "shape": "oval",
+    "length": 75,
+    "width": 42
+  },
+  "Outrider": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Astartes Primaris character on Raider-pattern bike": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Hernkyn Pioneer on Magna-Coil Bike": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Goliath Mauler": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Svenotar Scout Trike": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Juggernaut": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Bloodcrusher": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Skullmaster": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Lord Invocatus": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Heretic Astartes on Juggernaut": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Nob on Smasha Squig": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Kroot Lone-spear on a Kalamandra": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Freki and Geri the wolf-kin of Russ": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Arthromite Duneskuttler": {
+    "shape": "oval",
+    "length": 90,
+    "width": 52
+  },
+  "Ironstrider Ballistarius": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Cydonian Dragoon": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Belisarius Cawl": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Old One Eye": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Pallas Grav-attack": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Kapricus Defender": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Carrier": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Keeper of Secrets": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Horticulous Slimux on Mulch": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "XV95 Ghostkeel": {
+    "shape": "oval",
+    "length": 105,
+    "width": 70
+  },
+  "Thanatar-Cavas": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Thanatar-Calix": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Thanatar-Cynis": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Dreadknight": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Logan Grimnar on Stormrider": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "The Triumph of Saint Katherine": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Achilles Ridgerunner": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Arvus Lighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Aquila Lander": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Valkyrie Assault Carrier": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Valkyrie Sky Talon": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Vendetta Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Vulture Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Lightning": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Lightning Strike": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Voss pattern Lightning Strike Fighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Avenger Strike Fighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Thunderbolt Heavy Fighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Stormtalon Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Stormhawk Interceptor": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Xiphon pattern Interceptor": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Caestus Assault Ram": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Stormraven Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Storm Eagle": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Fire Raptor Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Corvus Blackstar": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Ravenwing Dark Talon": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Nephilim Jetfighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Stormwolf Assault Craft": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Stormfang Gunship": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Bloodthirster": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Forgefiend": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Maulerfiend": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Lord Discordant on Helstalker": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Corbax Utterblight": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Slaughterbrute": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Mutalith Vortex Beast": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Bloodthrone": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Skull Cannon of Khorne": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Burning Chariot of Tzeentch": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Seeker Chariot of Slaanesh": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Dreadclaw Assault Pod": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Anvillus pattern Dreadclaw Drop Pod": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Heldrake": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Hell Blade Fighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Hell Talon Fighter-Bomber": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Wraithknight": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Skathach Wraithknight": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Tantalus": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Hemlock Wraithfighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Crimson Hunter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Nightwing Interceptor": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Phoenix Bomber": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Razorwing Jetfighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Voidraven Bomber": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Dark Eldar Raven": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Dakkajet": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Blitza-Bommer": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Burna-Bommer": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Wazbom Blastajet": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Fighta": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Fighta-Bommer": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Warkopta": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Wazdakka Gutsmek on Big Revva warbike": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Trygon": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Mawlock": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Tyrannofex": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Tervigon": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Exocrine": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Haruspex": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Toxicrene": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Maleceptor": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Psychophage": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Dimachaeron": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Harpy": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Hive Crone": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Canoptek Tomb Stalker": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Sentinel": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Night Scythe": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Doom Scythe": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Night Shroud Bomber": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Tesseract Vault": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Obelisk": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "XV104 Riptide": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "XV107 R'Varna": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "XV109 Y'Vahra": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "AX3 Razorshark Strike Fighter": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "AX39 Sun Shark Bomber": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Barracuda": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Barracuda AX-5-2": {
+    "shape": "oval",
+    "length": 120,
+    "width": 92
+  },
+  "Bellatus Knight Destrier": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Kustom Boosta-Blasta": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Shokkjump Dragsta": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Boomdakka Snazzwagon": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Megatrakk Scrapjet": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Rukkatrukk Squigbuggy": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Warboss on a Deffkilla Wartrike": {
+    "shape": "oval",
+    "length": 150,
+    "width": 95
+  },
+  "Questoris Knight Paladin": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Errant": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Preceptor": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Crusader": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Warden": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Gallant": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Magaera": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Styrix": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Cerastus Knight Lancer": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Acheron": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Atrapos": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Castigator": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Dominus Knight Castellan": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Valiant": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Archaeopter Stratoraptor": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Transvector": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Fusilave": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Caladius Grav-tank": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Caladius Grav-tank Annihilator": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Coronus Grav-carrier": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Kharon Pattern Acquisitor": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Questoris Knight Abominant": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Desecrator": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Despoiler": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Rampager": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Dominus Knight Tyrant": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Kytan Daemon Engine": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Ka'bandha": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Ruinstorm Daemon Behemoth": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Gorkanaut": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Morkanaut": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Kill Rig": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "Hunta Rig": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  },
+  "KV128 Stormsurge": {
+    "shape": "oval",
+    "length": 170,
+    "width": 109
+  }
+}
