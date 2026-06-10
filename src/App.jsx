@@ -1,5 +1,50 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BASE_DATABASE from "./baseSizes.json";
+
+const MAP_DB_NAME = "warhammer-los-maps";
+const MAP_STORE_NAME = "maps";
+
+function openMapDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(MAP_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(MAP_STORE_NAME)) db.createObjectStore(MAP_STORE_NAME);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function writeStoredMap(key, imageSrc) {
+  const db = await openMapDatabase();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(MAP_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(MAP_STORE_NAME);
+    if (imageSrc) store.put(imageSrc, key);
+    else store.delete(key);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function readStoredMap(key) {
+  if (!key) return null;
+  const db = await openMapDatabase();
+  const imageSrc = await new Promise((resolve, reject) => {
+    const request = db.transaction(MAP_STORE_NAME, "readonly").objectStore(MAP_STORE_NAME).get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return imageSrc;
+}
+
+async function deleteStoredMap(key) {
+  if (!key) return;
+  await writeStoredMap(key, null);
+}
 
 export default function InteractiveLOSTool() {
   const canvasRef = useRef(null);
@@ -10,6 +55,7 @@ export default function InteractiveLOSTool() {
   const panLastRef = useRef(null);
   const objectDragRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const storedMapSourcesRef = useRef(new Map());
 
   const [mode, setMode] = useState("pan");
   const [status, setStatus] = useState("Upload a map image, then drag the LOS point. Draw footprints, walls, and enemies.");
@@ -20,6 +66,10 @@ export default function InteractiveLOSTool() {
   const [baseRotation, setBaseRotation] = useState(0);
   const [scaleInches, setScaleInches] = useState(6);
   const [rangeInches, setRangeInches] = useState("unlimited");
+  const [homeDeploymentRangeInches, setHomeDeploymentRangeInches] = useState("unlimited");
+  const [enemyDeploymentRangeInches, setEnemyDeploymentRangeInches] = useState("unlimited");
+  const [deepstrikeRangeInches, setDeepstrikeRangeInches] = useState(8);
+  const [deepstrikeVisible, setDeepstrikeVisible] = useState(false);
   const [pixelsPerInch, setPixelsPerInch] = useState(null);
   const [saveName, setSaveName] = useState("Game 1");
   const [saveSlots, setSaveSlots] = useState([]);
@@ -29,14 +79,17 @@ export default function InteractiveLOSTool() {
   const [losVersion, setLosVersion] = useState(0);
   const [armyListText, setArmyListText] = useState("");
   const [armyResults, setArmyResults] = useState([]);
+  const [armyPresetName, setArmyPresetName] = useState("Army 1");
+  const [armyPresetNames, setArmyPresetNames] = useState([]);
+  const [selectedArmyPreset, setSelectedArmyPreset] = useState("");
   const [editingSaveName, setEditingSaveName] = useState(false);
+  const [showNewGamePrompt, setShowNewGamePrompt] = useState(false);
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
     army: true,
     scale: true,
-    range: true,
     markers: true,
-    base: true,
+    draw: true,
   });
 
   const state = useRef({
@@ -45,28 +98,25 @@ export default function InteractiveLOSTool() {
     fit: { x: 0, y: 0, w: 0, h: 0 },
     camera: { scale: 1, x: 0, y: 0 },
     light: { x: 450, y: 300 },
-    losMarkers: [
-      {
-        id: "los-1",
-        name: "LOS",
-        x: 450,
-        y: 300,
-        baseShape: "circle",
-        baseLengthMm: 40,
-        baseWidthMm: 40,
-        baseRotation: 0,
-        visible: true,
-      },
-    ],
+    losMarkers: [],
     losSize: 1,
     scaleStart: null,
     scalePreview: null,
+    rulerStart: null,
+    rulerPreview: null,
+    rulers: [],
     deploymentLine: null,
     deploymentPath: [],
     deploymentDraft: [],
     deploymentPreview: null,
     deploymentVisible: true,
     deploymentVisibility: { clearZones: [], oneWallZones: [] },
+    enemyDeploymentLine: null,
+    enemyDeploymentPath: [],
+    enemyDeploymentDraft: [],
+    enemyDeploymentPreview: null,
+    enemyDeploymentVisible: true,
+    enemyDeploymentVisibility: { clearZones: [], oneWallZones: [] },
     blockers: [],
     walls: [],
     enemies: [],
@@ -78,6 +128,7 @@ export default function InteractiveLOSTool() {
 
   useEffect(() => {
     refreshSaveSlots();
+    refreshArmyPresets();
     loadBrowserSave();
     resize();
     window.addEventListener("resize", resize);
@@ -96,6 +147,7 @@ export default function InteractiveLOSTool() {
     setBaseLengthMm(marker.baseLengthMm || 40);
     setBaseWidthMm(marker.baseWidthMm || marker.baseLengthMm || 40);
     setBaseRotation(marker.baseRotation || 0);
+    setRangeInches(marker.rangeInches ?? "unlimited");
     state.current.light = { x: marker.x, y: marker.y };
     updateVisibility();
     draw();
@@ -105,7 +157,7 @@ export default function InteractiveLOSTool() {
     updateVisibility();
     draw();
     scheduleBrowserSave();
-  }, [mode, imageReady, baseShape, baseLengthMm, baseWidthMm, baseRotation, activeLosId, losVersion, scaleInches, rangeInches, pixelsPerInch]);
+  }, [mode, imageReady, baseShape, baseLengthMm, baseWidthMm, baseRotation, activeLosId, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, pixelsPerInch]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -154,23 +206,32 @@ export default function InteractiveLOSTool() {
         state.current.wallPath = [];
         state.current.wallPreview = null;
         state.current.camera = { scale: 1, x: 0, y: 0 };
-        const defaultLos = createLosMarker("los-1", "LOS", state.current.W / 2, state.current.H / 2);
-        state.current.losMarkers = [defaultLos];
-        state.current.light = { x: defaultLos.x, y: defaultLos.y };
-        setActiveLosId(defaultLos.id);
-        setLosName(defaultLos.name);
-        setBaseShape(defaultLos.baseShape);
-        setBaseLengthMm(defaultLos.baseLengthMm);
-        setBaseWidthMm(defaultLos.baseWidthMm);
-        setBaseRotation(defaultLos.baseRotation);
+        state.current.losMarkers = [];
+        state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
+        setActiveLosId("");
+        setRangeInches("unlimited");
         setLosVersion((v) => v + 1);
         state.current.scaleStart = null;
         state.current.scalePreview = null;
+        state.current.rulerStart = null;
+        state.current.rulerPreview = null;
+        state.current.rulers = [];
         state.current.deploymentLine = null;
         state.current.deploymentPath = [];
         state.current.deploymentDraft = [];
         state.current.deploymentPreview = null;
+        state.current.deploymentVisible = true;
         state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
+        state.current.enemyDeploymentLine = null;
+        state.current.enemyDeploymentPath = [];
+        state.current.enemyDeploymentDraft = [];
+        state.current.enemyDeploymentPreview = null;
+        state.current.enemyDeploymentVisible = true;
+        state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
+        setHomeDeploymentRangeInches("unlimited");
+        setEnemyDeploymentRangeInches("unlimited");
+        setDeepstrikeRangeInches(8);
+        setDeepstrikeVisible(false);
         calculateFit();
         state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
         updateVisibility();
@@ -185,9 +246,9 @@ export default function InteractiveLOSTool() {
 
   function buildSaveData() {
     return {
-      version: 1,
+      version: 4,
       savedAt: new Date().toISOString(),
-      savedImageSrc: state.current.savedImageSrc || null,
+      mapStorageKey: null,
       light: getActiveLosPoint(),
       losMarkers: state.current.losMarkers,
       activeLosId,
@@ -198,6 +259,14 @@ export default function InteractiveLOSTool() {
       deploymentLine: state.current.deploymentLine,
       deploymentPath: state.current.deploymentPath,
       deploymentVisible: state.current.deploymentVisible,
+      enemyDeploymentLine: state.current.enemyDeploymentLine,
+      enemyDeploymentPath: state.current.enemyDeploymentPath,
+      enemyDeploymentVisible: state.current.enemyDeploymentVisible,
+      homeDeploymentRangeInches,
+      enemyDeploymentRangeInches,
+      deepstrikeRangeInches,
+      deepstrikeVisible,
+      rulers: state.current.rulers,
       baseShape,
       baseLengthMm,
       baseWidthMm,
@@ -208,22 +277,28 @@ export default function InteractiveLOSTool() {
     };
   }
 
-  function applySaveData(data, message = "Browser save restored.") {
+  async function applySaveData(data, message = "Browser save restored.") {
     if (!data) return;
 
-    if (Array.isArray(data.losMarkers) && data.losMarkers.length) {
-      state.current.losMarkers = data.losMarkers.map((marker, index) => normalizeLosMarker(marker, index));
+    if (Array.isArray(data.losMarkers)) {
+      state.current.losMarkers = data.losMarkers.map((marker, index) => normalizeLosMarker(marker, index, data.rangeInches));
       const nextActive = data.activeLosId && state.current.losMarkers.some((m) => m.id === data.activeLosId)
         ? data.activeLosId
-        : state.current.losMarkers[0].id;
+        : state.current.losMarkers[0]?.id || "";
       setActiveLosId(nextActive);
-      const active = state.current.losMarkers.find((m) => m.id === nextActive) || state.current.losMarkers[0];
-      state.current.light = { x: active.x, y: active.y };
-      setLosName(active.name);
-      setBaseShape(active.baseShape);
-      setBaseLengthMm(active.baseLengthMm);
-      setBaseWidthMm(active.baseWidthMm);
-      setBaseRotation(active.baseRotation);
+      const active = state.current.losMarkers.find((m) => m.id === nextActive);
+      if (active) {
+        state.current.light = { x: active.x, y: active.y };
+        setLosName(active.name);
+        setBaseShape(active.baseShape);
+        setBaseLengthMm(active.baseLengthMm);
+        setBaseWidthMm(active.baseWidthMm);
+        setBaseRotation(active.baseRotation);
+        setRangeInches(active.rangeInches ?? data.rangeInches ?? "unlimited");
+      } else {
+        state.current.light = data.light || { x: state.current.W / 2, y: state.current.H / 2 };
+        setRangeInches("unlimited");
+      }
       setLosVersion((v) => v + 1);
     } else if (data.light) {
       const legacy = createLosMarker("los-1", "LOS", data.light.x, data.light.y);
@@ -231,6 +306,7 @@ export default function InteractiveLOSTool() {
       legacy.baseLengthMm = data.baseLengthMm || 40;
       legacy.baseWidthMm = data.baseWidthMm || legacy.baseLengthMm;
       legacy.baseRotation = data.baseRotation || 0;
+      legacy.rangeInches = data.rangeInches ?? "unlimited";
       state.current.losMarkers = [legacy];
       state.current.light = { x: legacy.x, y: legacy.y };
       setActiveLosId(legacy.id);
@@ -246,27 +322,53 @@ export default function InteractiveLOSTool() {
     state.current.deploymentVisible = data.deploymentVisible !== false;
     state.current.deploymentDraft = [];
     state.current.deploymentPreview = null;
+    state.current.enemyDeploymentLine = data.enemyDeploymentLine || null;
+    state.current.enemyDeploymentPath = Array.isArray(data.enemyDeploymentPath)
+      ? data.enemyDeploymentPath
+      : (data.enemyDeploymentLine ? [data.enemyDeploymentLine.a, data.enemyDeploymentLine.b] : []);
+    state.current.enemyDeploymentVisible = data.enemyDeploymentVisible !== false;
+    state.current.enemyDeploymentDraft = [];
+    state.current.enemyDeploymentPreview = null;
+    state.current.rulerStart = null;
+    state.current.rulerPreview = null;
+    state.current.rulers = Array.isArray(data.rulers) ? data.rulers : [];
+    setHomeDeploymentRangeInches(data.homeDeploymentRangeInches ?? "unlimited");
+    setEnemyDeploymentRangeInches(data.enemyDeploymentRangeInches ?? "unlimited");
+    setDeepstrikeRangeInches(data.deepstrikeRangeInches ?? 8);
+    setDeepstrikeVisible(data.deepstrikeVisible === true);
 
     if (data.baseShape) setBaseShape(data.baseShape);
     if (data.baseLengthMm) setBaseLengthMm(data.baseLengthMm);
     if (data.baseWidthMm) setBaseWidthMm(data.baseWidthMm);
     if (typeof data.baseRotation === "number") setBaseRotation(data.baseRotation);
     if (data.scaleInches) setScaleInches(data.scaleInches);
-    if (data.rangeInches) setRangeInches(data.rangeInches);
     if (data.pixelsPerInch) setPixelsPerInch(data.pixelsPerInch);
 
-    if (data.savedImageSrc) {
+    let savedImageSrc = data.savedImageSrc || null;
+    if (!savedImageSrc && data.mapStorageKey) {
+      try {
+        savedImageSrc = await readStoredMap(data.mapStorageKey);
+        if (savedImageSrc) storedMapSourcesRef.current.set(data.mapStorageKey, savedImageSrc);
+      } catch (err) {
+        console.warn("Could not load stored map", err);
+      }
+    }
+
+    if (savedImageSrc) {
       const img = new Image();
       img.onload = () => {
         imgRef.current = img;
-        state.current.savedImageSrc = data.savedImageSrc;
+        state.current.savedImageSrc = savedImageSrc;
         calculateFit();
         updateVisibility();
         setImageReady(true);
         setStatus(message);
         draw();
       };
-      img.src = data.savedImageSrc;
+      img.onerror = () => {
+        setStatus(`${message} The saved map image could not be opened.`);
+      };
+      img.src = savedImageSrc;
     } else {
       imgRef.current = null;
       state.current.savedImageSrc = null;
@@ -282,26 +384,43 @@ export default function InteractiveLOSTool() {
     saveTimerRef.current = setTimeout(saveBrowserState, 250);
   }
 
-  function saveBrowserState() {
+  async function persistGame(storageKey, mapStorageKey) {
+    const data = buildSaveData();
+    const imageSrc = state.current.savedImageSrc || null;
+    data.mapStorageKey = imageSrc ? mapStorageKey : null;
+    if (storedMapSourcesRef.current.get(mapStorageKey) !== imageSrc) {
+      await writeStoredMap(mapStorageKey, imageSrc);
+      storedMapSourcesRef.current.set(mapStorageKey, imageSrc);
+    }
+    localStorage.setItem(storageKey, JSON.stringify(data));
+  }
+
+  async function saveBrowserState() {
     try {
-      localStorage.setItem("warhammer-los-save", JSON.stringify(buildSaveData()));
+      await persistGame("warhammer-los-save", "autosave");
     } catch (err) {
       console.warn("Autosave failed", err);
     }
   }
 
-  function loadBrowserSave() {
+  async function loadBrowserSave() {
     try {
       const raw = localStorage.getItem("warhammer-los-save");
       if (!raw) return;
-      applySaveData(JSON.parse(raw), "Browser autosave restored.");
+      await applySaveData(JSON.parse(raw), "Browser autosave restored.");
     } catch (err) {
       console.warn("Load save failed", err);
     }
   }
 
-  function clearBrowserSave() {
+  async function clearBrowserSave() {
     localStorage.removeItem("warhammer-los-save");
+    try {
+      await deleteStoredMap("autosave");
+      storedMapSourcesRef.current.delete("autosave");
+    } catch (err) {
+      console.warn("Could not clear autosaved map", err);
+    }
     setStatus("Browser autosave cleared. Named save slots are unchanged.");
   }
 
@@ -315,7 +434,7 @@ export default function InteractiveLOSTool() {
     }
   }
 
-  function saveNamedSlot() {
+  async function saveNamedSlot() {
     const name = saveName.trim();
     if (!name) {
       setStatus("Enter a save name first.");
@@ -323,7 +442,7 @@ export default function InteractiveLOSTool() {
     }
 
     try {
-      localStorage.setItem(`warhammer-los-slot:${name}`, JSON.stringify(buildSaveData()));
+      await persistGame(`warhammer-los-slot:${name}`, `slot:${name}`);
       const index = JSON.parse(localStorage.getItem("warhammer-los-slots-index") || "[]");
       const next = index.includes(name) ? index : [...index, name].sort((a, b) => a.localeCompare(b));
       localStorage.setItem("warhammer-los-slots-index", JSON.stringify(next));
@@ -336,7 +455,7 @@ export default function InteractiveLOSTool() {
     }
   }
 
-  function loadNamedSlot() {
+  async function loadNamedSlot() {
     if (!selectedSave) {
       setStatus("Choose a save slot first.");
       return;
@@ -349,7 +468,7 @@ export default function InteractiveLOSTool() {
         refreshSaveSlots();
         return;
       }
-      applySaveData(JSON.parse(raw), `Loaded slot: ${selectedSave}`);
+      await applySaveData(JSON.parse(raw), `Loaded slot: ${selectedSave}`);
       setSaveName(selectedSave);
     } catch (err) {
       console.warn("Load slot failed", err);
@@ -357,13 +476,19 @@ export default function InteractiveLOSTool() {
     }
   }
 
-  function deleteNamedSlot() {
+  async function deleteNamedSlot() {
     if (!selectedSave) {
       setStatus("Choose a save slot to delete.");
       return;
     }
 
     localStorage.removeItem(`warhammer-los-slot:${selectedSave}`);
+    try {
+      await deleteStoredMap(`slot:${selectedSave}`);
+      storedMapSourcesRef.current.delete(`slot:${selectedSave}`);
+    } catch (err) {
+      console.warn("Could not delete saved map", err);
+    }
     const next = saveSlots.filter((name) => name !== selectedSave);
     localStorage.setItem("warhammer-los-slots-index", JSON.stringify(next));
     setSaveSlots(next);
@@ -373,15 +498,84 @@ export default function InteractiveLOSTool() {
   }
 
   function handleSelectedSaveChange(value) {
+    if (value === "__new_game__") {
+      setShowNewGamePrompt(true);
+      return;
+    }
     setSelectedSave(value);
     if (value) setSaveName(value);
+  }
+
+  function nextGameSaveName() {
+    let number = 1;
+    while (saveSlots.includes(`Game ${number}`)) number += 1;
+    return `Game ${number}`;
+  }
+
+  function createNewGame() {
+    imgRef.current = null;
+    state.current.savedImageSrc = null;
+    state.current.fit = { x: 0, y: 0, w: 0, h: 0 };
+    state.current.camera = { scale: 1, x: 0, y: 0 };
+    state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
+    state.current.losMarkers = [];
+    state.current.scaleStart = null;
+    state.current.scalePreview = null;
+    state.current.rulerStart = null;
+    state.current.rulerPreview = null;
+    state.current.rulers = [];
+    state.current.deploymentLine = null;
+    state.current.deploymentPath = [];
+    state.current.deploymentDraft = [];
+    state.current.deploymentPreview = null;
+    state.current.deploymentVisible = true;
+    state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
+    state.current.enemyDeploymentLine = null;
+    state.current.enemyDeploymentPath = [];
+    state.current.enemyDeploymentDraft = [];
+    state.current.enemyDeploymentPreview = null;
+    state.current.enemyDeploymentVisible = true;
+    state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
+    state.current.blockers = [];
+    state.current.walls = [];
+    state.current.enemies = [];
+    state.current.currentPoly = [];
+    state.current.wallPath = [];
+    state.current.wallPreview = null;
+    state.current.visibility = { clear: [], oneWall: [] };
+
+    setSelectedSave("");
+    setSaveName(nextGameSaveName());
+    setEditingSaveName(false);
+    setActiveLosId("");
+    setLosName("LOS");
+    setBaseShape("circle");
+    setBaseLengthMm(40);
+    setBaseWidthMm(40);
+    setBaseRotation(0);
+    setScaleInches(6);
+    setRangeInches("unlimited");
+    setHomeDeploymentRangeInches("unlimited");
+    setEnemyDeploymentRangeInches("unlimited");
+    setDeepstrikeRangeInches(8);
+    setDeepstrikeVisible(false);
+    setPixelsPerInch(null);
+    setMode("pan");
+    setImageReady(false);
+    setLosVersion((version) => version + 1);
+    setShowNewGamePrompt(false);
+    if (fileRef.current) fileRef.current.value = "";
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus("New game ready. Upload a map to begin.");
   }
 
   function handleSaveNameChange(value) {
     setSaveName(value);
   }
 
-  function commitSaveNameRename() {
+  async function commitSaveNameRename() {
     const nextName = saveName.trim();
     setEditingSaveName(false);
 
@@ -398,12 +592,27 @@ export default function InteractiveLOSTool() {
 
     if (nextName === selectedSave) return;
 
+    if (saveSlots.includes(nextName)) {
+      setSaveName(selectedSave);
+      setStatus(`A save named ${nextName} already exists.`);
+      return;
+    }
+
     try {
       const oldKey = `warhammer-los-slot:${selectedSave}`;
       const newKey = `warhammer-los-slot:${nextName}`;
       const existing = localStorage.getItem(oldKey);
       const data = existing ? JSON.parse(existing) : buildSaveData();
       data.savedAt = new Date().toISOString();
+      const oldMapKey = data.mapStorageKey || `slot:${selectedSave}`;
+      const nextMapKey = `slot:${nextName}`;
+      const savedMap = data.savedImageSrc || await readStoredMap(oldMapKey);
+      if (savedMap) await writeStoredMap(nextMapKey, savedMap);
+      await deleteStoredMap(oldMapKey);
+      storedMapSourcesRef.current.delete(oldMapKey);
+      if (savedMap) storedMapSourcesRef.current.set(nextMapKey, savedMap);
+      delete data.savedImageSrc;
+      data.mapStorageKey = savedMap ? nextMapKey : null;
       localStorage.setItem(newKey, JSON.stringify(data));
       localStorage.removeItem(oldKey);
 
@@ -432,6 +641,89 @@ export default function InteractiveLOSTool() {
     setSectionOpen((current) => ({ ...current, [key]: !current[key] }));
   }
 
+  function refreshArmyPresets() {
+    try {
+      const names = JSON.parse(localStorage.getItem("warhammer-los-armies-index") || "[]");
+      setArmyPresetNames(names);
+      if (names.length) {
+        setSelectedArmyPreset((current) => current || names[0]);
+        setArmyPresetName((current) => current === "Army 1" ? names[0] : current);
+      }
+    } catch (err) {
+      console.warn("Could not load army preset list", err);
+    }
+  }
+
+  function saveArmyPreset() {
+    const name = armyPresetName.trim();
+    if (!name) {
+      setStatus("Enter an army preset name first.");
+      return;
+    }
+    if (!armyListText.trim() && !armyResults.length) {
+      setStatus("Paste or match an army list before saving a preset.");
+      return;
+    }
+
+    try {
+      const data = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        armyListText,
+        armyResults,
+      };
+      localStorage.setItem(`warhammer-los-army:${name}`, JSON.stringify(data));
+      const next = armyPresetNames.includes(name)
+        ? armyPresetNames
+        : [...armyPresetNames, name].sort((a, b) => a.localeCompare(b));
+      localStorage.setItem("warhammer-los-armies-index", JSON.stringify(next));
+      setArmyPresetNames(next);
+      setSelectedArmyPreset(name);
+      setArmyPresetName(name);
+      setStatus(`Saved army preset: ${name}`);
+    } catch (err) {
+      console.warn("Army preset save failed", err);
+      setStatus("Could not save that army preset.");
+    }
+  }
+
+  function loadArmyPreset() {
+    if (!selectedArmyPreset) {
+      setStatus("Choose an army preset first.");
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(`warhammer-los-army:${selectedArmyPreset}`);
+      if (!raw) {
+        refreshArmyPresets();
+        setStatus("That army preset was not found.");
+        return;
+      }
+      const data = JSON.parse(raw);
+      setArmyListText(data.armyListText || "");
+      setArmyResults(Array.isArray(data.armyResults) ? data.armyResults : []);
+      setArmyPresetName(selectedArmyPreset);
+      setStatus(`Loaded army preset: ${selectedArmyPreset}`);
+    } catch (err) {
+      console.warn("Army preset load failed", err);
+      setStatus("Could not load that army preset.");
+    }
+  }
+
+  function deleteArmyPreset() {
+    if (!selectedArmyPreset) {
+      setStatus("Choose an army preset to delete.");
+      return;
+    }
+    localStorage.removeItem(`warhammer-los-army:${selectedArmyPreset}`);
+    const next = armyPresetNames.filter((name) => name !== selectedArmyPreset);
+    localStorage.setItem("warhammer-los-armies-index", JSON.stringify(next));
+    setArmyPresetNames(next);
+    setSelectedArmyPreset(next[0] || "");
+    setArmyPresetName(next[0] || "Army 1");
+    setStatus(`Deleted army preset: ${selectedArmyPreset}`);
+  }
+
 
   function createLosMarker(id, name, x, y) {
     return {
@@ -443,11 +735,12 @@ export default function InteractiveLOSTool() {
       baseLengthMm: 40,
       baseWidthMm: 40,
       baseRotation: 0,
+      rangeInches: "unlimited",
       visible: true,
     };
   }
 
-  function normalizeLosMarker(marker, index = 0) {
+  function normalizeLosMarker(marker, index = 0, fallbackRange = "unlimited") {
     const id = marker.id || `los-${Date.now()}-${index}`;
     const baseLength = Number(marker.baseLengthMm) || 40;
     return {
@@ -459,6 +752,7 @@ export default function InteractiveLOSTool() {
       baseLengthMm: baseLength,
       baseWidthMm: Number(marker.baseWidthMm) || baseLength,
       baseRotation: Number(marker.baseRotation) || 0,
+      rangeInches: marker.rangeInches ?? fallbackRange ?? "unlimited",
       visible: marker.visible !== false,
     };
   }
@@ -485,6 +779,7 @@ export default function InteractiveLOSTool() {
     if ("baseLengthMm" in patch) setBaseLengthMm(active.baseLengthMm);
     if ("baseWidthMm" in patch) setBaseWidthMm(active.baseWidthMm);
     if ("baseRotation" in patch) setBaseRotation(active.baseRotation);
+    if ("rangeInches" in patch) setRangeInches(active.rangeInches ?? "unlimited");
 
     setLosVersion((v) => v + 1);
     updateVisibility();
@@ -503,6 +798,7 @@ export default function InteractiveLOSTool() {
       setBaseLengthMm(marker.baseLengthMm || 40);
       setBaseWidthMm(marker.baseWidthMm || marker.baseLengthMm || 40);
       setBaseRotation(marker.baseRotation || 0);
+      setRangeInches(marker.rangeInches ?? "unlimited");
       state.current.light = { x: marker.x, y: marker.y };
     }
     setLosVersion((v) => v + 1);
@@ -513,6 +809,13 @@ export default function InteractiveLOSTool() {
 
   function renameLosMarker(id, name) {
     updateLosMarkerById(id, { name });
+  }
+
+  function setLosMarkerVisibility(id, visible) {
+    const marker = state.current.losMarkers.find((item) => item.id === id);
+    if (!marker || marker.visible === visible) return;
+    updateLosMarkerById(id, { visible });
+    setStatus(`${marker.name || "LOS"} LOS ${visible ? "enabled" : "disabled"}.`);
   }
 
   function sortedLosMarkers() {
@@ -528,6 +831,7 @@ export default function InteractiveLOSTool() {
     setBaseLengthMm(marker.baseLengthMm);
     setBaseWidthMm(marker.baseWidthMm);
     setBaseRotation(marker.baseRotation);
+    setRangeInches(marker.rangeInches ?? "unlimited");
     state.current.light = { x: marker.x, y: marker.y };
     setStatus(`Selected ${marker.name}.`);
   }
@@ -540,6 +844,7 @@ export default function InteractiveLOSTool() {
     marker.baseLengthMm = baseLengthMm;
     marker.baseWidthMm = baseShape === "circle" ? baseLengthMm : baseWidthMm;
     marker.baseRotation = baseRotation;
+    marker.rangeInches = "unlimited";
     state.current.losMarkers.push(marker);
     setActiveLosId(id);
     setLosName(marker.name);
@@ -562,20 +867,23 @@ export default function InteractiveLOSTool() {
   }
 
   function deleteActiveLosMarker() {
-    if (state.current.losMarkers.length <= 1) {
-      setStatus("You need at least one LOS marker.");
-      return;
-    }
     const old = getActiveLosMarker();
+    if (!old) return;
     state.current.losMarkers = state.current.losMarkers.filter((marker) => marker.id !== activeLosId);
     const next = state.current.losMarkers[0];
-    setActiveLosId(next.id);
-    setLosName(next.name);
-    setBaseShape(next.baseShape);
-    setBaseLengthMm(next.baseLengthMm);
-    setBaseWidthMm(next.baseWidthMm);
-    setBaseRotation(next.baseRotation);
-    state.current.light = { x: next.x, y: next.y };
+    setActiveLosId(next?.id || "");
+    if (next) {
+      setLosName(next.name);
+      setBaseShape(next.baseShape);
+      setBaseLengthMm(next.baseLengthMm);
+      setBaseWidthMm(next.baseWidthMm);
+      setBaseRotation(next.baseRotation);
+      setRangeInches(next.rangeInches ?? "unlimited");
+      state.current.light = { x: next.x, y: next.y };
+    } else {
+      setRangeInches("unlimited");
+      state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
+    }
     setLosVersion((v) => v + 1);
     updateVisibility();
     draw();
@@ -745,7 +1053,8 @@ export default function InteractiveLOSTool() {
       baseLengthMm: Number(result.baseLengthMm) || 40,
       baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
       baseRotation: 0,
-      visible: true,
+      rangeInches: "unlimited",
+      visible: false,
     }));
 
     state.current.losMarkers.push(...newMarkers);
@@ -756,12 +1065,13 @@ export default function InteractiveLOSTool() {
     setBaseLengthMm(first.baseLengthMm);
     setBaseWidthMm(first.baseWidthMm);
     setBaseRotation(0);
+    setRangeInches(first.rangeInches ?? "unlimited");
     state.current.light = { x: first.x, y: first.y };
     setLosVersion((v) => v + 1);
     updateVisibility();
     draw();
     scheduleBrowserSave();
-    setStatus(`Created ${newMarkers.length} LOS marker${newMarkers.length === 1 ? "" : "s"} from army list.`);
+    setStatus(`Created ${newMarkers.length} LOS marker${newMarkers.length === 1 ? "" : "s"} from army list with LOS disabled.`);
   }
 
   function clearArmyGeneratedLosMarkers() {
@@ -773,21 +1083,23 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    if (!remaining.length) {
-      remaining.push(createLosMarker("los-1", "LOS", state.current.W / 2, state.current.H / 2));
-    }
-
     state.current.losMarkers = remaining;
     const activeStillExists = remaining.some((marker) => marker.id === activeLosId);
     const nextActive = activeStillExists ? getActiveLosMarker() : remaining[0];
 
-    setActiveLosId(nextActive.id);
-    setLosName(nextActive.name);
-    setBaseShape(nextActive.baseShape);
-    setBaseLengthMm(nextActive.baseLengthMm);
-    setBaseWidthMm(nextActive.baseWidthMm);
-    setBaseRotation(nextActive.baseRotation || 0);
-    state.current.light = { x: nextActive.x, y: nextActive.y };
+    setActiveLosId(nextActive?.id || "");
+    if (nextActive) {
+      setLosName(nextActive.name);
+      setBaseShape(nextActive.baseShape);
+      setBaseLengthMm(nextActive.baseLengthMm);
+      setBaseWidthMm(nextActive.baseWidthMm);
+      setBaseRotation(nextActive.baseRotation || 0);
+      setRangeInches(nextActive.rangeInches ?? "unlimited");
+      state.current.light = { x: nextActive.x, y: nextActive.y };
+    } else {
+      setRangeInches("unlimited");
+      state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
+    }
     setLosVersion((v) => v + 1);
     updateVisibility();
     draw();
@@ -806,11 +1118,24 @@ export default function InteractiveLOSTool() {
     return { x: (p.x - cam.x) / cam.scale, y: (p.y - cam.y) / cam.scale };
   }
 
+  function isDeploymentMode() {
+    return mode === "deployHome" || mode === "deployEnemy";
+  }
+
+  function activeDeploymentDraft() {
+    return mode === "deployEnemy" ? state.current.enemyDeploymentDraft : state.current.deploymentDraft;
+  }
+
+  function setActiveDeploymentPreview(point) {
+    if (mode === "deployEnemy") state.current.enemyDeploymentPreview = point;
+    else state.current.deploymentPreview = point;
+  }
+
   function pointerDown(e) {
     const p = screenToWorld(e);
 
     const visibilityButton = findLosVisibilityButton(p);
-    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "deploy") {
+    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && !isDeploymentMode()) {
       updateLosMarkerById(visibilityButton.id, { visible: visibilityButton.visible });
       const marker = state.current.losMarkers.find((m) => m.id === visibilityButton.id);
       setStatus(`${marker?.name || "LOS"} LOS ${visibilityButton.visible ? "shown" : "hidden"}.`);
@@ -818,7 +1143,7 @@ export default function InteractiveLOSTool() {
     }
 
     const draggable = findDraggableObject(p);
-    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale") {
+    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler") {
       if (draggable.type === "light") selectLosMarker(draggable.id);
       objectDragRef.current = draggable;
       if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
@@ -834,12 +1159,14 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    if (mode === "deploy") {
-      state.current.deploymentDraft.push(p);
-      state.current.deploymentPreview = p;
-      setStatus(state.current.deploymentDraft.length === 1
-        ? "Deployment LOS started. Click to add bends/corners; double-click to finish."
-        : `Deployment LOS point ${state.current.deploymentDraft.length} added. Double-click to finish.`);
+    if (isDeploymentMode()) {
+      const draft = activeDeploymentDraft();
+      draft.push(p);
+      setActiveDeploymentPreview(p);
+      const label = mode === "deployEnemy" ? "Enemy deployment LOS" : "Home deployment LOS";
+      setStatus(draft.length === 1
+        ? `${label} started. Click to add bends/corners; double-click to finish.`
+        : `${label} point ${draft.length} added. Double-click to finish.`);
       draw();
       return;
     }
@@ -848,6 +1175,18 @@ export default function InteractiveLOSTool() {
       state.current.scaleStart = p;
       state.current.scalePreview = { a: p, b: p };
       setStatus(`Drag a known ${scaleInches}" distance, then release to set scale.`);
+      draw();
+      return;
+    }
+
+    if (mode === "ruler") {
+      if (!pixelsPerInch) {
+        setStatus("Set the map scale before using the ruler.");
+        return;
+      }
+      state.current.rulerStart = p;
+      state.current.rulerPreview = { a: p, b: p };
+      setStatus("Drag between two points to add a ruler line.");
       draw();
       return;
     }
@@ -937,11 +1276,14 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    if (mode === "deploy" && state.current.deploymentDraft.length) {
-      state.current.deploymentPreview = p;
+    if (isDeploymentMode() && activeDeploymentDraft().length) {
+      setActiveDeploymentPreview(p);
       draw();
     } else if (mode === "scale" && state.current.scaleStart) {
       state.current.scalePreview = { a: state.current.scaleStart, b: p };
+      draw();
+    } else if (mode === "ruler" && state.current.rulerStart) {
+      state.current.rulerPreview = { a: state.current.rulerStart, b: p };
       draw();
     } else if (mode === "light" && draggingRef.current) {
       updateActiveLosMarker({ x: p.x, y: p.y });
@@ -972,6 +1314,21 @@ export default function InteractiveLOSTool() {
       }
       state.current.scaleStart = null;
       state.current.scalePreview = null;
+      draw();
+    }
+
+    if (mode === "ruler" && state.current.rulerStart && state.current.rulerPreview) {
+      const { a, b } = state.current.rulerPreview;
+      const lengthPx = dist(a, b);
+      if (lengthPx > 5 && pixelsPerInch) {
+        state.current.rulers.push({ id: `ruler-${Date.now()}`, a, b });
+        setStatus(`Ruler added: ${(lengthPx / pixelsPerInch).toFixed(1)}". Drag again to add another.`);
+        scheduleBrowserSave();
+      } else {
+        setStatus("Ruler line was too short. Try again.");
+      }
+      state.current.rulerStart = null;
+      state.current.rulerPreview = null;
       draw();
     }
 
@@ -1026,7 +1383,7 @@ export default function InteractiveLOSTool() {
     if (!canvas) return;
     if (objectDragRef.current) {
       canvas.style.cursor = "grabbing";
-    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "deploy") {
+    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && !isDeploymentMode()) {
       canvas.style.cursor = "pointer";
     } else if (findDraggableObject(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale") {
       canvas.style.cursor = "grab";
@@ -1082,25 +1439,39 @@ export default function InteractiveLOSTool() {
 
 
   function finishDeploymentLOS(e) {
-    if (mode !== "deploy") return;
+    if (!isDeploymentMode()) return;
     e.preventDefault();
 
-    const path = state.current.deploymentDraft;
+    const isEnemy = mode === "deployEnemy";
+    const path = isEnemy ? state.current.enemyDeploymentDraft : state.current.deploymentDraft;
     if (path.length < 2) {
-      state.current.deploymentDraft = [];
-      state.current.deploymentPreview = null;
+      if (isEnemy) {
+        state.current.enemyDeploymentDraft = [];
+        state.current.enemyDeploymentPreview = null;
+      } else {
+        state.current.deploymentDraft = [];
+        state.current.deploymentPreview = null;
+      }
       setStatus("Deployment LOS cancelled. Need at least 2 points.");
       draw();
       return;
     }
 
-    state.current.deploymentPath = [...path];
-    state.current.deploymentLine = { a: path[0], b: path[path.length - 1] };
-    state.current.deploymentDraft = [];
-    state.current.deploymentPreview = null;
-    state.current.deploymentVisible = true;
+    if (isEnemy) {
+      state.current.enemyDeploymentPath = [...path];
+      state.current.enemyDeploymentLine = { a: path[0], b: path[path.length - 1] };
+      state.current.enemyDeploymentDraft = [];
+      state.current.enemyDeploymentPreview = null;
+      state.current.enemyDeploymentVisible = true;
+    } else {
+      state.current.deploymentPath = [...path];
+      state.current.deploymentLine = { a: path[0], b: path[path.length - 1] };
+      state.current.deploymentDraft = [];
+      state.current.deploymentPreview = null;
+      state.current.deploymentVisible = true;
+    }
     updateVisibility();
-    setStatus("Deployment LOS path set. Blue overlay shows visibility from the whole deployment line.");
+    setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS path set.`);
     draw();
     scheduleBrowserSave();
   }
@@ -1145,13 +1516,14 @@ export default function InteractiveLOSTool() {
     if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
 
     const key = e.key.toLowerCase();
-    if (["l", "p", "f", "w", "e", "x", "z", "d", "+", "=", "-"].includes(key)) e.preventDefault();
+    if (["l", "p", "f", "w", "e", "x", "z", "d", "q", "+", "=", "-"].includes(key)) e.preventDefault();
 
     if (key === "p") setMode("pan");
     else if (key === "f") setMode("block");
     else if (key === "w") setMode("wall");
     else if (key === "e") setMode("enemy");
-    else if (key === "d") setMode("deploy");
+    else if (key === "d") setMode("deployHome");
+    else if (key === "q") setMode("deployEnemy");
     else if (key === "x") setMode("erase");
     else if (key === "z") undo();
     else if (key === "+" || key === "=") zoomBy(1.25);
@@ -1212,7 +1584,11 @@ export default function InteractiveLOSTool() {
   }
 
   function undo() {
-    if (state.current.wallPath.length) {
+    if (state.current.rulerPreview) {
+      state.current.rulerStart = null;
+      state.current.rulerPreview = null;
+    } else if (state.current.rulers.length) state.current.rulers.pop();
+    else if (state.current.wallPath.length) {
       state.current.wallPath = [];
       state.current.wallPreview = null;
     } else if (state.current.currentPoly.length) state.current.currentPoly.pop();
@@ -1250,28 +1626,58 @@ export default function InteractiveLOSTool() {
     scheduleBrowserSave();
   }
 
-  function toggleDeploymentLOS() {
-    if (!state.current.deploymentLine) {
-      setStatus("Draw a deployment LOS line first.");
-      return;
-    }
-    state.current.deploymentVisible = !state.current.deploymentVisible;
-    updateVisibility();
+  function clearRulers() {
+    state.current.rulerStart = null;
+    state.current.rulerPreview = null;
+    state.current.rulers = [];
+    setStatus("Ruler lines cleared.");
     draw();
     scheduleBrowserSave();
-    setStatus(`Deployment LOS ${state.current.deploymentVisible ? "shown" : "hidden"}.`);
   }
 
-  function clearDeploymentLOS() {
-    state.current.deploymentLine = null;
-    state.current.deploymentPath = [];
-    state.current.deploymentDraft = [];
-    state.current.deploymentPreview = null;
-    state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
+  function setDeepstrikeOverlayVisibility(visible) {
+    if (visible && !pixelsPerInch) {
+      setStatus("Set the map scale before enabling the deepstrike overlay.");
+      return;
+    }
+    setDeepstrikeVisible(visible);
+    setStatus(`Deepstrike overlay ${visible ? "enabled" : "disabled"}.`);
+  }
+
+  function setDeploymentVisibility(kind, visible) {
+    const isEnemy = kind === "enemy";
+    const line = isEnemy ? state.current.enemyDeploymentLine : state.current.deploymentLine;
+    if (!line) {
+      setStatus(`Draw a ${isEnemy ? "enemy" : "home"} deployment LOS line first.`);
+      return;
+    }
+    if (isEnemy) state.current.enemyDeploymentVisible = visible;
+    else state.current.deploymentVisible = visible;
     updateVisibility();
     draw();
     scheduleBrowserSave();
-    setStatus("Deployment LOS cleared.");
+    setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS ${visible ? "enabled" : "disabled"}.`);
+  }
+
+  function clearDeploymentLOS(kind) {
+    const isEnemy = kind === "enemy";
+    if (isEnemy) {
+      state.current.enemyDeploymentLine = null;
+      state.current.enemyDeploymentPath = [];
+      state.current.enemyDeploymentDraft = [];
+      state.current.enemyDeploymentPreview = null;
+      state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
+    } else {
+      state.current.deploymentLine = null;
+      state.current.deploymentPath = [];
+      state.current.deploymentDraft = [];
+      state.current.deploymentPreview = null;
+      state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
+    }
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS cleared.`);
   }
 
   function resetPoint() {
@@ -1282,7 +1688,7 @@ export default function InteractiveLOSTool() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const { W, H, fit, camera, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility, scalePreview, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentVisibility } = state.current;
+    const { W, H, fit, camera, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentVisibility } = state.current;
     const light = getActiveLosPoint();
     const clearZones = visibility.clearZones || [];
     const oneWallZones = visibility.oneWallZones || [];
@@ -1290,6 +1696,14 @@ export default function InteractiveLOSTool() {
     const oneWallPoly = oneWallZones[0] || [];
     const numericRange = Number(rangeInches);
     const rangeRadius = !pixelsPerInch || !numericRange || numericRange <= 0 ? Infinity : numericRange * pixelsPerInch;
+    const homeDeploymentNumericRange = Number(homeDeploymentRangeInches);
+    const homeDeploymentRangeRadius = !pixelsPerInch || !homeDeploymentNumericRange || homeDeploymentNumericRange <= 0 ? Infinity : homeDeploymentNumericRange * pixelsPerInch;
+    const enemyDeploymentNumericRange = Number(enemyDeploymentRangeInches);
+    const enemyDeploymentRangeRadius = !pixelsPerInch || !enemyDeploymentNumericRange || enemyDeploymentNumericRange <= 0 ? Infinity : enemyDeploymentNumericRange * pixelsPerInch;
+    const homeDeployPath = deploymentPath?.length >= 2 ? deploymentPath : (deploymentLine ? [deploymentLine.a, deploymentLine.b] : []);
+    const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
+    const deepstrikeNumericRange = Number(deepstrikeRangeInches);
+    const deepstrikeRangeRadius = pixelsPerInch && deepstrikeNumericRange >= 0 ? deepstrikeNumericRange * pixelsPerInch : null;
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "#151515";
@@ -1344,8 +1758,22 @@ export default function InteractiveLOSTool() {
     }
 
     if (deploymentVisible && deploymentLine) {
-      drawZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, "rgba(0,76,153,.40)");
-      drawZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, "rgba(0,76,153,.40)");
+      drawDeploymentZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, "rgba(0,76,153,.40)");
+      drawDeploymentZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, "rgba(0,76,153,.40)");
+    }
+    if (enemyDeploymentVisible && enemyDeploymentLine) {
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.oneWallZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, "rgba(153,20,23,.40)");
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.clearZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, "rgba(153,20,23,.40)");
+    }
+
+    if (deepstrikeVisible && deepstrikeRangeRadius !== null) {
+      const exclusions = state.current.losMarkers.map((marker) => ({
+        x: marker.x,
+        y: marker.y,
+        rotation: marker.baseRotation || 0,
+        ...getBaseRadii(1, marker),
+      }));
+      drawDeepstrikeOverlay(ctx, exclusions, deepstrikeRangeRadius, W, H);
     }
 
     // Footprints are drawn after the LOS overlays with a near-solid fill.
@@ -1376,6 +1804,8 @@ export default function InteractiveLOSTool() {
       }
     });
     if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
+    rulers.forEach((ruler) => drawRulerLine(ctx, ruler.a, ruler.b, pixelsPerInch, camera.scale));
+    if (rulerPreview) drawRulerLine(ctx, rulerPreview.a, rulerPreview.b, pixelsPerInch, camera.scale, true);
     if (currentPoly.length) drawPoly(ctx, currentPoly, "rgba(255,255,255,.10)", "#fff", false, camera.scale);
 
     walls.forEach((wall) => drawWall(ctx, wall, camera.scale));
@@ -1388,9 +1818,12 @@ export default function InteractiveLOSTool() {
       }
     }
 
-    if (deploymentPath?.length >= 2) drawDeploymentPath(ctx, deploymentPath, camera.scale, deploymentVisible);
-    else if (deploymentLine) drawDeploymentLine(ctx, deploymentLine, camera.scale, deploymentVisible);
-    if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true);
+    if (deploymentPath?.length >= 2) drawDeploymentPath(ctx, deploymentPath, camera.scale, deploymentVisible, false, "home");
+    else if (deploymentLine) drawDeploymentLine(ctx, deploymentLine, camera.scale, deploymentVisible, false, "home");
+    if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true, "home");
+    if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(ctx, enemyDeploymentPath, camera.scale, enemyDeploymentVisible, false, "enemy");
+    else if (enemyDeploymentLine) drawDeploymentLine(ctx, enemyDeploymentLine, camera.scale, enemyDeploymentVisible, false, "enemy");
+    if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy");
 
     enemies.forEach((enemy, index) => {
       const losState = enemyLOSState(enemy, visibility);
@@ -1413,11 +1846,7 @@ export default function InteractiveLOSTool() {
       if (!marker.visible) ctx.setLineDash([6 / camera.scale, 5 / camera.scale]);
       ctx.stroke();
 
-      ctx.fillStyle = "#111";
-      ctx.font = `bold ${Math.max(7, 10 / camera.scale)}px system-ui`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(marker.name || "LOS", marker.x, marker.y);
+      drawLosMarkerLabel(ctx, marker, base, camera.scale);
 
       if (isActive) {
         ctx.setLineDash([]);
@@ -1428,7 +1857,7 @@ export default function InteractiveLOSTool() {
 
         ctx.beginPath();
         ctx.arc(showX, iconY, iconR, 0, Math.PI * 2);
-        ctx.fillStyle = marker.visible ? "rgba(34,197,94,.95)" : "rgba(71,85,105,.95)";
+        ctx.fillStyle = marker.visible ? "rgba(34,197,94,.95)" : "rgba(100,116,139,.95)";
         ctx.fill();
         ctx.fillStyle = "#fff";
         ctx.font = `bold ${11 / camera.scale}px system-ui`;
@@ -1436,7 +1865,7 @@ export default function InteractiveLOSTool() {
 
         ctx.beginPath();
         ctx.arc(hideX, iconY, iconR, 0, Math.PI * 2);
-        ctx.fillStyle = marker.visible ? "rgba(220,38,38,.95)" : "rgba(239,68,68,.95)";
+        ctx.fillStyle = marker.visible ? "rgba(100,116,139,.95)" : "rgba(239,68,68,.95)";
         ctx.fill();
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2 / camera.scale;
@@ -1483,6 +1912,20 @@ export default function InteractiveLOSTool() {
     } else {
       state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
     }
+
+    const enemyDeployPath = state.current.enemyDeploymentPath?.length >= 2
+      ? state.current.enemyDeploymentPath
+      : (state.current.enemyDeploymentLine ? [state.current.enemyDeploymentLine.a, state.current.enemyDeploymentLine.b] : []);
+
+    if (enemyDeployPath.length >= 2 && state.current.enemyDeploymentVisible) {
+      const deploymentOrigins = samplePathPoints(enemyDeployPath, 8);
+      state.current.enemyDeploymentVisibility = {
+        clearZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0)),
+        oneWallZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1)),
+      };
+    } else {
+      state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
+    }
   }
 
   const sortedMarkers = sortedLosMarkers();
@@ -1495,7 +1938,7 @@ export default function InteractiveLOSTool() {
           <button onClick={() => fileRef.current?.click()} style={styles.uploadButton}>Upload map</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
 
-          <div style={styles.sidebarSection}>
+          <div style={{ ...styles.sidebarSection, order: 1 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("game")}>
               <span style={styles.sectionTriangle}>{sectionOpen.game ? "▾" : "▸"}</span>
               <span>Game Save</span>
@@ -1504,7 +1947,7 @@ export default function InteractiveLOSTool() {
               <div style={styles.sectionContent}>
                 <div style={styles.sidebarRow}>
                   <select value={selectedSave} onChange={(e) => handleSelectedSaveChange(e.target.value)} style={{ ...styles.select, flex: 1, minWidth: 0 }}>
-                    <option value="">Choose save</option>
+                    <option value="__new_game__">New game save</option>
                     {saveSlots.map((name) => <option key={name} value={name}>{name}</option>)}
                   </select>
                   <ToolButton onClick={loadNamedSlot}>Load slot</ToolButton>
@@ -1517,8 +1960,11 @@ export default function InteractiveLOSTool() {
                     onChange={(e) => handleSaveNameChange(e.target.value)}
                     onBlur={commitSaveNameRename}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") commitSaveNameRename();
-                      if (e.key === "Escape") cancelSaveNameRename();
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelSaveNameRename();
+                      }
                     }}
                     style={styles.saveNameDisplayInput}
                     title="Press Enter or click away to save the name"
@@ -1544,14 +1990,17 @@ export default function InteractiveLOSTool() {
                 <div style={styles.sidebarRow}>
                   <ToolButton onClick={deleteNamedSlot}>Delete slot</ToolButton>
                 </div>
+                <div style={styles.storageNote}>
+                  {imageReady ? "Map image included in saves" : "No map image loaded"}
+                </div>
               </div>
             )}
           </div>
 
-          <div style={styles.sidebarSection}>
+          <div style={{ ...styles.sidebarSection, order: 4 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("scale")}>
               <span style={styles.sectionTriangle}>{sectionOpen.scale ? "▾" : "▸"}</span>
-              <span>Scale</span>
+              <span>Scale, Ruler &amp; Deepstrike</span>
             </button>
             {sectionOpen.scale && (
               <div style={styles.sectionContent}>
@@ -1559,29 +2008,81 @@ export default function InteractiveLOSTool() {
                   <input type="number" min="0.1" step="0.1" value={scaleInches} onChange={(e) => setScaleInches(Number(e.target.value))} style={styles.smallInput} title="Known distance in inches" />
                   <ToolButton active={mode === "scale"} onClick={() => setMode("scale")}>Set scale</ToolButton>
                 </div>
+                <div style={styles.sidebarRow}>
+                  <ToolButton active={mode === "ruler"} onClick={() => setMode("ruler")}>Ruler</ToolButton>
+                  <ToolButton onClick={clearRulers}>Clear rulers</ToolButton>
+                </div>
+                <div style={styles.deploymentControlGroup}>
+                  <div style={styles.deepstrikeRow}>
+                    <button
+                      type="button"
+                      onClick={() => setDeepstrikeOverlayVisibility(!deepstrikeVisible)}
+                      style={{
+                        ...styles.deploymentDrawButton,
+                        border: deepstrikeVisible ? "1px solid rgb(222,145,25)" : "1px solid rgba(255,255,255,.18)",
+                        background: deepstrikeVisible ? "rgba(222,145,25,.28)" : "rgba(255,255,255,.08)",
+                      }}
+                    >Deepstrike</button>
+                    <MarkerVisibilityButton
+                      active={deepstrikeVisible}
+                      kind="show"
+                      label="Enable deepstrike overlay"
+                      onClick={() => setDeepstrikeOverlayVisibility(true)}
+                    />
+                    <MarkerVisibilityButton
+                      active={!deepstrikeVisible}
+                      kind="hide"
+                      label="Disable deepstrike overlay"
+                      onClick={() => setDeepstrikeOverlayVisibility(false)}
+                    />
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={deepstrikeRangeInches}
+                    onChange={(e) => setDeepstrikeRangeInches(e.target.value)}
+                    style={styles.fullInput}
+                    placeholder="Deepstrike range in inches"
+                    title="Minimum deepstrike distance from your units in inches"
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          <div style={styles.sidebarSection}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("range")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.range ? "▾" : "▸"}</span>
-              <span>Range</span>
-            </button>
-            {sectionOpen.range && (
-              <div style={styles.sectionContent}>
-                <input type="number" min="0" step="1" value={rangeInches === "unlimited" ? "" : rangeInches} onChange={(e) => setRangeInches(e.target.value)} style={styles.fullInput} placeholder="0/blank = unlimited" title="Weapon range in inches; blank or 0 means unlimited" />
-              </div>
-            )}
-          </div>
-
-          <div style={styles.sidebarSection}>
+          <div style={{ ...styles.sidebarSection, order: 2 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("army")}>
               <span style={styles.sectionTriangle}>{sectionOpen.army ? "▾" : "▸"}</span>
               <span>Army List</span>
             </button>
             {sectionOpen.army && (
               <div style={styles.sectionContent}>
+                <input
+                  value={armyPresetName}
+                  onChange={(e) => setArmyPresetName(e.target.value)}
+                  style={styles.fullInput}
+                  placeholder="Army preset name"
+                  title="Name used when saving this army preset"
+                />
+                <div style={styles.sidebarRow}>
+                  <select
+                    value={selectedArmyPreset}
+                    onChange={(e) => {
+                      setSelectedArmyPreset(e.target.value);
+                      if (e.target.value) setArmyPresetName(e.target.value);
+                    }}
+                    style={{ ...styles.select, flex: 1, minWidth: 0 }}
+                  >
+                    <option value="">Choose army</option>
+                    {armyPresetNames.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <ToolButton onClick={loadArmyPreset}>Load</ToolButton>
+                </div>
+                <div style={styles.sidebarRow}>
+                  <ToolButton onClick={saveArmyPreset}>Save army</ToolButton>
+                  <ToolButton onClick={deleteArmyPreset}>Delete</ToolButton>
+                </div>
                 <textarea
                   value={armyListText}
                   onChange={(e) => setArmyListText(e.target.value)}
@@ -1664,7 +2165,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={styles.sidebarSection}>
+          <div style={{ ...styles.sidebarSection, order: 3 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("markers")}>
               <span style={styles.sectionTriangle}>{sectionOpen.markers ? "▾" : "▸"}</span>
               <span>LOS Markers</span>
@@ -1672,33 +2173,96 @@ export default function InteractiveLOSTool() {
             {sectionOpen.markers && (
               <div style={styles.sectionContent}>
                 <ToolButton onClick={addLosMarker}>Add LOS</ToolButton>
+                {!sortedMarkers.length && (
+                  <div style={styles.emptyMarkerNote}>No LOS markers on this map.</div>
+                )}
                 <div style={styles.markerList}>
                   {sortedMarkers.map((marker) => (
                     <div key={marker.id} style={{ ...styles.markerItem, borderColor: marker.id === activeLosId ? "#22c55e" : "rgba(255,255,255,.12)", background: marker.id === activeLosId ? "rgba(34,197,94,.14)" : "rgba(255,255,255,.05)" }} onClick={() => selectLosMarker(marker.id)}>
-                      <input value={marker.name || "LOS"} onFocus={() => selectLosMarker(marker.id)} onChange={(e) => renameLosMarker(marker.id, e.target.value)} style={styles.markerNameInput} />
+                      <div style={styles.markerHeader}>
+                        <input value={marker.name || "LOS"} onFocus={() => selectLosMarker(marker.id)} onChange={(e) => renameLosMarker(marker.id, e.target.value)} style={styles.markerNameInput} />
+                        <MarkerVisibilityButton
+                          active={marker.visible !== false}
+                          kind="show"
+                          label={`Enable LOS for ${marker.name || "LOS"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLosMarkerVisibility(marker.id, true);
+                          }}
+                        />
+                        <MarkerVisibilityButton
+                          active={marker.visible === false}
+                          kind="hide"
+                          label={`Disable LOS for ${marker.name || "LOS"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLosMarkerVisibility(marker.id, false);
+                          }}
+                        />
+                      </div>
+                      {marker.id === activeLosId && (
+                        <div style={styles.markerDetails} onClick={(e) => e.stopPropagation()}>
+                          <div style={styles.markerDetailLabel}>Base</div>
+                          <div style={styles.sidebarRow}>
+                            <ToolButton active={baseShape === "circle"} onClick={() => updateActiveLosMarker({ baseShape: "circle", baseWidthMm: baseLengthMm })}>○</ToolButton>
+                            <ToolButton active={baseShape === "oval"} onClick={() => updateActiveLosMarker({ baseShape: "oval" })}>⬭</ToolButton>
+                            <ToolButton onClick={deleteActiveLosMarker}>Delete</ToolButton>
+                          </div>
+                          <div style={styles.sidebarRow}>
+                            <input type="number" min="1" value={baseLengthMm} onChange={(e) => { const v = Number(e.target.value); updateActiveLosMarker(baseShape === "circle" ? { baseLengthMm: v, baseWidthMm: v } : { baseLengthMm: v }); }} style={styles.smallInput} title={baseShape === "circle" ? "Base diameter in mm" : "Base length in mm"} />
+                            <input type="number" min="1" value={baseShape === "circle" ? baseLengthMm : baseWidthMm} disabled={baseShape === "circle"} onChange={(e) => updateActiveLosMarker({ baseWidthMm: Number(e.target.value) })} style={{ ...styles.smallInput, opacity: baseShape === "circle" ? 0.45 : 1 }} title="Base width in mm" />
+                          </div>
+                          <div style={styles.markerDetailLabel}>Range</div>
+                          <input type="number" min="0" step="1" value={rangeInches === "unlimited" ? "" : rangeInches} onChange={(e) => updateActiveLosMarker({ rangeInches: e.target.value || "unlimited" })} style={styles.fullInput} placeholder="0/blank = unlimited" title="Weapon range in inches; blank or 0 means unlimited" />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </div>
-
-          <div style={styles.sidebarSection}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("base")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.base ? "▾" : "▸"}</span>
-              <span>Selected Base</span>
+          <div style={{ ...styles.sidebarSection, order: 5 }}>
+            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("draw")}>
+              <span style={styles.sectionTriangle}>{sectionOpen.draw ? "▾" : "▸"}</span>
+              <span>Draw, Deploy & Enemies</span>
             </button>
-            {sectionOpen.base && (
+            {sectionOpen.draw && (
               <div style={styles.sectionContent}>
-                <div style={styles.sidebarRow}>
-                  <ToolButton active={baseShape === "circle"} onClick={() => updateActiveLosMarker({ baseShape: "circle", baseWidthMm: baseLengthMm })}>○</ToolButton>
-                  <ToolButton active={baseShape === "oval"} onClick={() => updateActiveLosMarker({ baseShape: "oval" })}>⬭</ToolButton>
-                  <ToolButton onClick={deleteActiveLosMarker}>Delete</ToolButton>
+                <div style={styles.actionPairRow}>
+                  <ToolButton active={mode === "block"} onClick={() => setMode("block")}>Draw Footprint (F)</ToolButton>
+                  <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
                 </div>
-                <div style={styles.sidebarRow}>
-                  <input type="number" min="1" value={baseLengthMm} onChange={(e) => { const v = Number(e.target.value); updateActiveLosMarker(baseShape === "circle" ? { baseLengthMm: v, baseWidthMm: v } : { baseLengthMm: v }); }} style={styles.smallInput} title={baseShape === "circle" ? "Base diameter in mm" : "Base length in mm"} />
-                  <input type="number" min="1" value={baseShape === "circle" ? baseLengthMm : baseWidthMm} disabled={baseShape === "circle"} onChange={(e) => updateActiveLosMarker({ baseWidthMm: Number(e.target.value) })} style={{ ...styles.smallInput, opacity: baseShape === "circle" ? 0.45 : 1 }} title="Base width in mm" />
+                <div style={styles.actionPairRow}>
+                  <ToolButton active={mode === "wall"} onClick={() => setMode("wall")}>Draw Wall (W)</ToolButton>
+                  <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
                 </div>
+                <div style={styles.actionPairRow}>
+                  <ToolButton active={mode === "enemy"} onClick={() => setMode("enemy")}>Add Enemy (E)</ToolButton>
+                  <ToolButton onClick={clearEnemies}>Clear enemies</ToolButton>
+                </div>
+                <DeploymentControlRow
+                  label="Draw Home Deploy LOS (D)"
+                  active={mode === "deployHome"}
+                  visible={state.current.deploymentVisible}
+                  hasLine={Boolean(state.current.deploymentLine)}
+                  onDraw={() => setMode("deployHome")}
+                  onVisibility={(visible) => setDeploymentVisibility("home", visible)}
+                  onClear={() => clearDeploymentLOS("home")}
+                  rangeInches={homeDeploymentRangeInches}
+                  onRangeChange={(value) => setHomeDeploymentRangeInches(value || "unlimited")}
+                />
+                <DeploymentControlRow
+                  label="Draw Enemy Deploy LOS (Q)"
+                  active={mode === "deployEnemy"}
+                  visible={state.current.enemyDeploymentVisible}
+                  hasLine={Boolean(state.current.enemyDeploymentLine)}
+                  onDraw={() => setMode("deployEnemy")}
+                  onVisibility={(visible) => setDeploymentVisibility("enemy", visible)}
+                  onClear={() => clearDeploymentLOS("enemy")}
+                  rangeInches={enemyDeploymentRangeInches}
+                  onRangeChange={(value) => setEnemyDeploymentRangeInches(value || "unlimited")}
+                />
               </div>
             )}
           </div>
@@ -1707,25 +2271,28 @@ export default function InteractiveLOSTool() {
         <main style={styles.mainArea}>
           <div style={styles.toolbar}>
             <ToolButton active={mode === "pan"} onClick={() => setMode("pan")}>Pan map (P)</ToolButton>
-            <ToolButton active={mode === "block"} onClick={() => setMode("block")}>Draw footprint (F)</ToolButton>
-            <ToolButton active={mode === "wall"} onClick={() => setMode("wall")}>Draw wall (W)</ToolButton>
-            <ToolButton active={mode === "enemy"} onClick={() => setMode("enemy")}>Add enemy (E)</ToolButton>
-            <ToolButton active={mode === "deploy"} onClick={() => setMode("deploy")}>Draw deploy LOS (D)</ToolButton>
-            <ToolButton onClick={toggleDeploymentLOS}>{state.current.deploymentVisible ? "👁 Deploy" : "⊘ Deploy"}</ToolButton>
-            <ToolButton onClick={clearDeploymentLOS}>Clear deploy LOS</ToolButton>
             <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase (X)</ToolButton>
             <ToolButton onClick={undo}>Undo (Z)</ToolButton>
-            <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
-            <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
-            <ToolButton onClick={clearEnemies}>Clear enemies</ToolButton>
           </div>
           <div style={styles.status}>{status}</div>
-          <div style={styles.legend}>White = model LOS · Blue = deployment line LOS · Green = visible within selected range · Yellow = crossed one footprint wall · Dark = blocked</div>
+          <div style={styles.legend}>White = model LOS · Blue = home deployment LOS · Red = enemy deployment LOS · Orange = valid deepstrike area · Green = visible within selected range · Yellow = crossed one footprint wall · Dark = blocked</div>
           <div style={styles.canvasWrap}>
-            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={mode === "wall" ? finishWall : mode === "deploy" ? finishDeploymentLOS : finishFootprint} onWheel={handleWheel} />
+            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={mode === "wall" ? finishWall : isDeploymentMode() ? finishDeploymentLOS : finishFootprint} onWheel={handleWheel} />
           </div>
         </main>
       </div>
+      {showNewGamePrompt && (
+        <div style={styles.modalBackdrop} role="presentation">
+          <div style={styles.confirmDialog} role="dialog" aria-modal="true" aria-labelledby="new-game-title">
+            <div id="new-game-title" style={styles.confirmTitle}>Do you want to create a new game save file?</div>
+            <div style={styles.confirmText}>Your named game saves will remain available.</div>
+            <div style={styles.confirmActions}>
+              <button type="button" onClick={createNewGame} style={styles.confirmYesButton}>Yes</button>
+              <button type="button" onClick={() => setShowNewGamePrompt(false)} style={styles.confirmNoButton}>No</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1748,6 +2315,8 @@ const styles = {
   sidebar: {
     width: 270,
     flexShrink: 0,
+    display: "flex",
+    flexDirection: "column",
     overflowY: "auto",
     overflowX: "hidden",
     padding: 10,
@@ -1817,6 +2386,65 @@ const styles = {
     color: "white",
     fontWeight: 800,
   },
+  storageNote: {
+    padding: "7px 9px",
+    borderRadius: 8,
+    background: "rgba(96,165,250,.10)",
+    color: "#bfdbfe",
+    fontSize: 11,
+  },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    background: "rgba(0,0,0,.72)",
+  },
+  confirmDialog: {
+    width: "min(380px, 100%)",
+    padding: 20,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,.2)",
+    background: "#111827",
+    boxShadow: "0 18px 60px rgba(0,0,0,.55)",
+  },
+  confirmTitle: {
+    color: "#f8fafc",
+    fontSize: 18,
+    fontWeight: 800,
+  },
+  confirmText: {
+    marginTop: 8,
+    color: "#cbd5e1",
+    fontSize: 13,
+  },
+  confirmActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 18,
+  },
+  confirmYesButton: {
+    padding: "9px 18px",
+    borderRadius: 10,
+    border: "1px solid #2563eb",
+    background: "#2563eb",
+    color: "white",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  confirmNoButton: {
+    padding: "9px 18px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.22)",
+    background: "rgba(255,255,255,.08)",
+    color: "white",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
   sidebarTitle: {
     fontSize: 12,
     fontWeight: 800,
@@ -1830,6 +2458,47 @@ const styles = {
     gap: 6,
     alignItems: "center",
     marginBottom: 8,
+  },
+  actionPairRow: {
+    display: "grid",
+    gridTemplateColumns: "1.25fr 1fr",
+    gap: 6,
+  },
+  deploymentControlGroup: {
+    display: "grid",
+    gap: 5,
+  },
+  deploymentRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 29px 29px 52px",
+    alignItems: "center",
+    gap: 4,
+  },
+  deepstrikeRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 29px 29px",
+    alignItems: "center",
+    gap: 4,
+  },
+  compactClearButton: {
+    height: 32,
+    padding: "0 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "rgba(255,255,255,.08)",
+    color: "white",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  deploymentDrawButton: {
+    minHeight: 34,
+    padding: "5px 6px",
+    borderRadius: 8,
+    color: "white",
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: 1.15,
+    cursor: "pointer",
   },
   sidebarHeaderRow: {
     display: "flex",
@@ -1845,12 +2514,41 @@ const styles = {
   },
   markerItem: {
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
     gap: 6,
     padding: 6,
     border: "1px solid rgba(255,255,255,.12)",
     borderRadius: 10,
     cursor: "pointer",
+  },
+  markerDetails: {
+    width: "100%",
+    paddingTop: 8,
+    borderTop: "1px solid rgba(255,255,255,.12)",
+    cursor: "default",
+  },
+  markerHeader: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+  emptyMarkerNote: {
+    padding: "9px 10px",
+    borderRadius: 8,
+    background: "rgba(255,255,255,.05)",
+    color: "#94a3b8",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  markerDetailLabel: {
+    marginBottom: 6,
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: ".04em",
+    textTransform: "uppercase",
   },
   markerNameInput: {
     flex: 1,
@@ -1862,13 +2560,16 @@ const styles = {
     color: "white",
     fontWeight: 700,
   },
-  visibilityMiniButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    border: "1px solid rgba(255,255,255,.18)",
-    background: "rgba(255,255,255,.08)",
-    color: "white",
+  markerVisibilityButton: {
+    width: 29,
+    height: 29,
+    flexShrink: 0,
+    display: "grid",
+    placeItems: "center",
+    padding: 3,
+    border: 0,
+    borderRadius: 7,
+    background: "transparent",
     cursor: "pointer",
   },
   smallInput: {
@@ -2068,6 +2769,76 @@ function ToolButton({ active, onClick, children }) {
   );
 }
 
+function MarkerVisibilityButton({ active, kind, label, onClick }) {
+  const activeColor = kind === "show" ? "#22c55e" : "#ef4444";
+  const color = active ? activeColor : "#64748b";
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={{ ...styles.markerVisibilityButton, color }}
+    >
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="2.7" stroke="currentColor" strokeWidth="2.2" />
+        {kind === "hide" && (
+          <path d="M4 4 20 20" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" />
+        )}
+      </svg>
+    </button>
+  );
+}
+
+function DeploymentControlRow({ label, active, visible, hasLine, onDraw, onVisibility, onClear, rangeInches, onRangeChange }) {
+  return (
+    <div style={styles.deploymentControlGroup}>
+      <div style={styles.deploymentRow}>
+        <button
+          type="button"
+          onClick={onDraw}
+          style={{
+            ...styles.deploymentDrawButton,
+            border: active ? "1px solid #60a5fa" : "1px solid rgba(255,255,255,.18)",
+            background: active ? "rgba(37,99,235,.35)" : "rgba(255,255,255,.08)",
+          }}
+        >{label}</button>
+        <MarkerVisibilityButton
+          active={hasLine && visible}
+          kind="show"
+          label={`Enable ${label.replace("Draw ", "")}`}
+          onClick={() => onVisibility(true)}
+        />
+        <MarkerVisibilityButton
+          active={hasLine && !visible}
+          kind="hide"
+          label={`Disable ${label.replace("Draw ", "")}`}
+          onClick={() => onVisibility(false)}
+        />
+        <button type="button" onClick={onClear} style={styles.compactClearButton}>Clear</button>
+      </div>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={rangeInches === "unlimited" ? "" : rangeInches}
+        onChange={(e) => onRangeChange(e.target.value)}
+        style={styles.fullInput}
+        placeholder="0/blank = unlimited deployment range"
+        title="Deployment LOS range in inches; blank or 0 means unlimited"
+      />
+    </div>
+  );
+}
+
 function computeVisibilityZones(source, blockers, walls, W, H) {
   return {
     clear: computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, 0),
@@ -2228,6 +2999,71 @@ function drawZoneMask(ctx, zones, W, H, fillStyle) {
   ctx.drawImage(mask, 0, 0);
 }
 
+function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, fillStyle) {
+  if (!Number.isFinite(rangeRadius)) {
+    drawZoneMask(ctx, zones, W, H, fillStyle);
+    return;
+  }
+  const goodZones = zones.filter((poly) => poly?.length);
+  if (!goodZones.length || !Array.isArray(path) || path.length < 2) return;
+
+  const mask = document.createElement("canvas");
+  mask.width = W;
+  mask.height = H;
+  const m = mask.getContext("2d");
+  m.fillStyle = "#fff";
+  goodZones.forEach((poly) => {
+    m.beginPath();
+    m.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) m.lineTo(poly[i].x, poly[i].y);
+    m.closePath();
+    m.fill();
+  });
+
+  m.globalCompositeOperation = "destination-in";
+  m.beginPath();
+  m.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) m.lineTo(path[i].x, path[i].y);
+  m.lineWidth = rangeRadius * 2;
+  m.lineCap = "round";
+  m.lineJoin = "round";
+  m.strokeStyle = "#fff";
+  m.stroke();
+
+  m.globalCompositeOperation = "source-in";
+  m.fillStyle = fillStyle;
+  m.fillRect(0, 0, W, H);
+  ctx.drawImage(mask, 0, 0);
+}
+
+function drawDeepstrikeOverlay(ctx, exclusions, rangeRadius, W, H) {
+  const mask = document.createElement("canvas");
+  mask.width = W;
+  mask.height = H;
+  const m = mask.getContext("2d");
+
+  m.fillStyle = "rgba(222,145,25,.40)";
+  m.fillRect(0, 0, W, H);
+  m.globalCompositeOperation = "destination-out";
+
+  exclusions.forEach(({ x, y, rx, ry, rotation }) => {
+    m.beginPath();
+    m.ellipse(x, y, rx, ry, rotation, 0, Math.PI * 2);
+    m.fill();
+
+    const samples = 72;
+    for (let i = 0; i < samples; i++) {
+      const angle = (Math.PI * 2 * i) / samples;
+      const local = rotatePoint(Math.cos(angle) * rx, Math.sin(angle) * ry, rotation);
+      m.beginPath();
+      m.arc(x + local.x, y + local.y, rangeRadius, 0, Math.PI * 2);
+      m.fill();
+    }
+  });
+
+  ctx.drawImage(mask, 0, 0);
+}
+
 function drawRangeZoneMask(ctx, zones, W, H, light, rangeRadius, fillStyle) {
   const goodZones = zones.filter((poly) => poly?.length);
   if (!goodZones.length || !Number.isFinite(rangeRadius)) return;
@@ -2285,8 +3121,10 @@ function drawMeasurementLine(ctx, a, b, label, scale = 1) {
   ctx.restore();
 }
 
-function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = false) {
+function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = false, kind = "home") {
   if (!Array.isArray(path) || path.length < 2) return;
+  const activeColor = kind === "enemy" ? "rgb(153,20,23)" : "#38bdf8";
+  const previewColor = kind === "enemy" ? "rgba(153,20,23,.70)" : "rgba(125,211,252,.7)";
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(path[0].x, path[0].y);
@@ -2294,41 +3132,46 @@ function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = fals
   ctx.lineWidth = 5 / scale;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = visible ? (preview ? "rgba(125,211,252,.7)" : "#38bdf8") : "rgba(148,163,184,.7)";
+  ctx.strokeStyle = visible ? (preview ? previewColor : activeColor) : "rgba(148,163,184,.7)";
   if (!visible) ctx.setLineDash([8 / scale, 6 / scale]);
   ctx.stroke();
 
-  ctx.fillStyle = visible ? "#38bdf8" : "#94a3b8";
+  ctx.fillStyle = visible ? activeColor : "#94a3b8";
   for (const p of path) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, 4 / scale, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const mid = path[Math.floor(path.length / 2)];
+  const endpoints = [path[0], path[path.length - 1]];
+  const bottomEndpoint = endpoints[0].y >= endpoints[1].y ? endpoints[0] : endpoints[1];
   ctx.font = `bold ${12 / scale}px system-ui`;
+  ctx.fillStyle = "#000";
   ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("DEPLOY LOS", mid.x, mid.y - 8 / scale);
+  ctx.textBaseline = "top";
+  ctx.fillText(kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 8 / scale);
   ctx.restore();
 }
 
-function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = false) {
+function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = false, kind = "home") {
   if (!line?.a || !line?.b) return;
+  const activeColor = kind === "enemy" ? "rgb(153,20,23)" : "#38bdf8";
+  const previewColor = kind === "enemy" ? "rgba(153,20,23,.70)" : "rgba(125,211,252,.7)";
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(line.a.x, line.a.y);
   ctx.lineTo(line.b.x, line.b.y);
   ctx.lineWidth = 5 / scale;
   ctx.lineCap = "round";
-  ctx.strokeStyle = visible ? (preview ? "rgba(125,211,252,.7)" : "#38bdf8") : "rgba(148,163,184,.7)";
+  ctx.strokeStyle = visible ? (preview ? previewColor : activeColor) : "rgba(148,163,184,.7)";
   if (!visible) ctx.setLineDash([8 / scale, 6 / scale]);
   ctx.stroke();
-  ctx.fillStyle = visible ? "#38bdf8" : "#94a3b8";
   ctx.font = `bold ${12 / scale}px system-ui`;
+  const bottomEndpoint = line.a.y >= line.b.y ? line.a : line.b;
+  ctx.fillStyle = "#000";
   ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("DEPLOY LOS", (line.a.x + line.b.x) / 2, (line.a.y + line.b.y) / 2 - 8 / scale);
+  ctx.textBaseline = "top";
+  ctx.fillText(kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 8 / scale);
   ctx.restore();
 }
 
@@ -2416,6 +3259,82 @@ function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(number), enemy.x, enemy.y);
+  ctx.restore();
+}
+
+function drawRulerLine(ctx, a, b, pixelsPerInch, scale = 1, preview = false) {
+  if (!a || !b || !pixelsPerInch) return;
+  const label = `${(dist(a, b) / pixelsPerInch).toFixed(1)}"`;
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+
+  ctx.save();
+  ctx.lineWidth = 3 / scale;
+  ctx.strokeStyle = preview ? "rgba(0,0,0,.65)" : "#000";
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  for (const point of [a, b]) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.font = `bold ${14 / scale}px system-ui`;
+  const padding = 5 / scale;
+  const textWidth = ctx.measureText(label).width;
+  ctx.fillStyle = "rgba(255,255,255,.88)";
+  roundRect(ctx, midX - textWidth / 2 - padding, midY - 11 / scale, textWidth + padding * 2, 22 / scale, 5 / scale, true, false);
+  ctx.fillStyle = "#000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, midX, midY);
+  ctx.restore();
+}
+
+function drawLosMarkerLabel(ctx, marker, base, scale = 1) {
+  const label = String(marker.name || "LOS").trim() || "LOS";
+  const maxFontSize = 11;
+  const minimumReadableFontSize = 10 / scale;
+  const shortestRadius = Math.min(base.rx, base.ry);
+  const availableWidth = Math.max(1, shortestRadius * 1.65);
+  const availableHeight = Math.max(1, shortestRadius * 1.2);
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `bold ${maxFontSize}px system-ui`;
+
+  const measuredWidth = Math.max(1, ctx.measureText(label).width);
+  const fittedFontSize = Math.min(maxFontSize, maxFontSize * availableWidth / measuredWidth, availableHeight);
+
+  if (fittedFontSize >= minimumReadableFontSize) {
+    ctx.fillStyle = "#111";
+    ctx.font = `bold ${fittedFontSize}px system-ui`;
+    ctx.fillText(label, marker.x, marker.y);
+    ctx.restore();
+    return;
+  }
+
+  const captionFontSize = 10 / scale;
+  const captionY = marker.y + base.ry + 10 / scale;
+  ctx.font = `bold ${captionFontSize}px system-ui`;
+  const captionWidth = ctx.measureText(label).width + 10 / scale;
+  const captionHeight = captionFontSize + 6 / scale;
+  ctx.fillStyle = "rgba(15,23,42,.88)";
+  roundRect(
+    ctx,
+    marker.x - captionWidth / 2,
+    captionY - captionHeight / 2,
+    captionWidth,
+    captionHeight,
+    4 / scale,
+    true
+  );
+  ctx.fillStyle = "#fff";
+  ctx.fillText(label, marker.x, captionY);
   ctx.restore();
 }
 
