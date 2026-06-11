@@ -54,6 +54,8 @@ export default function InteractiveLOSTool() {
   const panningRef = useRef(false);
   const panLastRef = useRef(null);
   const objectDragRef = useRef(null);
+  const dragFrameRef = useRef(null);
+  const pendingDragPointRef = useRef(null);
   const saveTimerRef = useRef(null);
   const storedMapSourcesRef = useRef(new Map());
 
@@ -77,6 +79,10 @@ export default function InteractiveLOSTool() {
   const [activeLosId, setActiveLosId] = useState("los-1");
   const [losName, setLosName] = useState("LOS");
   const [losVersion, setLosVersion] = useState(0);
+  const [markerGroupingMode, setMarkerGroupingMode] = useState("model");
+  const [unitModelCount, setUnitModelCount] = useState(1);
+  const [selectedUnitSlot, setSelectedUnitSlot] = useState(1);
+  const [activeUnitSlot, setActiveUnitSlot] = useState(null);
   const [armyListText, setArmyListText] = useState("");
   const [armyResults, setArmyResults] = useState([]);
   const [armyPresetName, setArmyPresetName] = useState("Army 1");
@@ -84,11 +90,13 @@ export default function InteractiveLOSTool() {
   const [selectedArmyPreset, setSelectedArmyPreset] = useState("");
   const [editingSaveName, setEditingSaveName] = useState(false);
   const [showNewGamePrompt, setShowNewGamePrompt] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
     army: true,
     scale: true,
     markers: true,
+    units: true,
     draw: true,
   });
 
@@ -105,25 +113,32 @@ export default function InteractiveLOSTool() {
     rulerStart: null,
     rulerPreview: null,
     rulers: [],
+    stickyRulerStart: null,
+    stickyRulers: [],
     deploymentLine: null,
     deploymentPath: [],
     deploymentDraft: [],
     deploymentPreview: null,
     deploymentVisible: true,
+    deploymentNoMansSide: null,
     deploymentVisibility: { clearZones: [], oneWallZones: [] },
     enemyDeploymentLine: null,
     enemyDeploymentPath: [],
     enemyDeploymentDraft: [],
     enemyDeploymentPreview: null,
     enemyDeploymentVisible: true,
+    enemyDeploymentNoMansSide: null,
     enemyDeploymentVisibility: { clearZones: [], oneWallZones: [] },
     blockers: [],
+    blockerIds: [],
     walls: [],
     enemies: [],
     currentPoly: [],
     wallPath: [],
     wallPreview: null,
     visibility: { clear: [], oneWall: [] },
+    losVisibilityCache: new Map(),
+    combinedLosRender: { clear: null, oneWall: null },
   });
 
   useEffect(() => {
@@ -134,10 +149,20 @@ export default function InteractiveLOSTool() {
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(resize);
+    const timer = setTimeout(resize, 200);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     const marker = getActiveLosMarker();
@@ -148,8 +173,10 @@ export default function InteractiveLOSTool() {
     setBaseWidthMm(marker.baseWidthMm || marker.baseLengthMm || 40);
     setBaseRotation(marker.baseRotation || 0);
     setRangeInches(marker.rangeInches ?? "unlimited");
+    setMarkerGroupingMode(marker.groupingMode || "model");
+    setUnitModelCount(getMarkerTypeMembers(marker).length || 1);
+    setSelectedUnitSlot(marker.unitSlot || 1);
     state.current.light = { x: marker.x, y: marker.y };
-    updateVisibility();
     draw();
   }, [activeLosId, losVersion]);
 
@@ -157,7 +184,12 @@ export default function InteractiveLOSTool() {
     updateVisibility();
     draw();
     scheduleBrowserSave();
-  }, [mode, imageReady, baseShape, baseLengthMm, baseWidthMm, baseRotation, activeLosId, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, pixelsPerInch]);
+  }, [imageReady, pixelsPerInch]);
+
+  useEffect(() => {
+    draw();
+    scheduleBrowserSave();
+  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -216,17 +248,21 @@ export default function InteractiveLOSTool() {
         state.current.rulerStart = null;
         state.current.rulerPreview = null;
         state.current.rulers = [];
+        state.current.stickyRulerStart = null;
+        state.current.stickyRulers = [];
         state.current.deploymentLine = null;
         state.current.deploymentPath = [];
         state.current.deploymentDraft = [];
         state.current.deploymentPreview = null;
         state.current.deploymentVisible = true;
+        state.current.deploymentNoMansSide = null;
         state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
         state.current.enemyDeploymentLine = null;
         state.current.enemyDeploymentPath = [];
         state.current.enemyDeploymentDraft = [];
         state.current.enemyDeploymentPreview = null;
         state.current.enemyDeploymentVisible = true;
+        state.current.enemyDeploymentNoMansSide = null;
         state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
         setHomeDeploymentRangeInches("unlimited");
         setEnemyDeploymentRangeInches("unlimited");
@@ -246,7 +282,7 @@ export default function InteractiveLOSTool() {
 
   function buildSaveData() {
     return {
-      version: 4,
+      version: 8,
       savedAt: new Date().toISOString(),
       mapStorageKey: null,
       light: getActiveLosPoint(),
@@ -254,19 +290,23 @@ export default function InteractiveLOSTool() {
       activeLosId,
       camera: state.current.camera,
       blockers: state.current.blockers,
+      blockerIds: state.current.blockerIds,
       walls: state.current.walls,
       enemies: state.current.enemies,
       deploymentLine: state.current.deploymentLine,
       deploymentPath: state.current.deploymentPath,
       deploymentVisible: state.current.deploymentVisible,
+      deploymentNoMansSide: state.current.deploymentNoMansSide,
       enemyDeploymentLine: state.current.enemyDeploymentLine,
       enemyDeploymentPath: state.current.enemyDeploymentPath,
       enemyDeploymentVisible: state.current.enemyDeploymentVisible,
+      enemyDeploymentNoMansSide: state.current.enemyDeploymentNoMansSide,
       homeDeploymentRangeInches,
       enemyDeploymentRangeInches,
       deepstrikeRangeInches,
       deepstrikeVisible,
       rulers: state.current.rulers,
+      stickyRulers: state.current.stickyRulers,
       baseShape,
       baseLengthMm,
       baseWidthMm,
@@ -279,6 +319,7 @@ export default function InteractiveLOSTool() {
 
   async function applySaveData(data, message = "Browser save restored.") {
     if (!data) return;
+    setActiveUnitSlot(null);
 
     if (Array.isArray(data.losMarkers)) {
       state.current.losMarkers = data.losMarkers.map((marker, index) => normalizeLosMarker(marker, index, data.rangeInches));
@@ -314,12 +355,21 @@ export default function InteractiveLOSTool() {
       setLosVersion((v) => v + 1);
     }
     if (data.camera) state.current.camera = data.camera;
-    if (Array.isArray(data.blockers)) state.current.blockers = data.blockers;
+    if (Array.isArray(data.blockers)) {
+      state.current.blockers = data.blockers;
+      state.current.blockerIds = data.blockers.map((_, index) => data.blockerIds?.[index] || `footprint-${Date.now()}-${index}`);
+    }
     if (Array.isArray(data.walls)) state.current.walls = data.walls;
-    if (Array.isArray(data.enemies)) state.current.enemies = data.enemies;
+    if (Array.isArray(data.enemies)) {
+      state.current.enemies = data.enemies.map((enemy, index) => ({
+        ...enemy,
+        id: enemy.id || `enemy-${Date.now()}-${index}`,
+      }));
+    }
     state.current.deploymentLine = data.deploymentLine || null;
     state.current.deploymentPath = Array.isArray(data.deploymentPath) ? data.deploymentPath : (data.deploymentLine ? [data.deploymentLine.a, data.deploymentLine.b] : []);
     state.current.deploymentVisible = data.deploymentVisible !== false;
+    state.current.deploymentNoMansSide = data.deploymentNoMansSide === -1 ? -1 : data.deploymentNoMansSide === 1 ? 1 : null;
     state.current.deploymentDraft = [];
     state.current.deploymentPreview = null;
     state.current.enemyDeploymentLine = data.enemyDeploymentLine || null;
@@ -327,11 +377,14 @@ export default function InteractiveLOSTool() {
       ? data.enemyDeploymentPath
       : (data.enemyDeploymentLine ? [data.enemyDeploymentLine.a, data.enemyDeploymentLine.b] : []);
     state.current.enemyDeploymentVisible = data.enemyDeploymentVisible !== false;
+    state.current.enemyDeploymentNoMansSide = data.enemyDeploymentNoMansSide === -1 ? -1 : data.enemyDeploymentNoMansSide === 1 ? 1 : null;
     state.current.enemyDeploymentDraft = [];
     state.current.enemyDeploymentPreview = null;
     state.current.rulerStart = null;
     state.current.rulerPreview = null;
     state.current.rulers = Array.isArray(data.rulers) ? data.rulers : [];
+    state.current.stickyRulerStart = null;
+    state.current.stickyRulers = Array.isArray(data.stickyRulers) ? data.stickyRulers : [];
     setHomeDeploymentRangeInches(data.homeDeploymentRangeInches ?? "unlimited");
     setEnemyDeploymentRangeInches(data.enemyDeploymentRangeInches ?? "unlimited");
     setDeepstrikeRangeInches(data.deepstrikeRangeInches ?? 8);
@@ -524,19 +577,24 @@ export default function InteractiveLOSTool() {
     state.current.rulerStart = null;
     state.current.rulerPreview = null;
     state.current.rulers = [];
+    state.current.stickyRulerStart = null;
+    state.current.stickyRulers = [];
     state.current.deploymentLine = null;
     state.current.deploymentPath = [];
     state.current.deploymentDraft = [];
     state.current.deploymentPreview = null;
     state.current.deploymentVisible = true;
+    state.current.deploymentNoMansSide = null;
     state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
     state.current.enemyDeploymentLine = null;
     state.current.enemyDeploymentPath = [];
     state.current.enemyDeploymentDraft = [];
     state.current.enemyDeploymentPreview = null;
     state.current.enemyDeploymentVisible = true;
+    state.current.enemyDeploymentNoMansSide = null;
     state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     state.current.blockers = [];
+    state.current.blockerIds = [];
     state.current.walls = [];
     state.current.enemies = [];
     state.current.currentPoly = [];
@@ -548,11 +606,15 @@ export default function InteractiveLOSTool() {
     setSaveName(nextGameSaveName());
     setEditingSaveName(false);
     setActiveLosId("");
+    setActiveUnitSlot(null);
     setLosName("LOS");
     setBaseShape("circle");
     setBaseLengthMm(40);
     setBaseWidthMm(40);
     setBaseRotation(0);
+    setMarkerGroupingMode("model");
+    setUnitModelCount(1);
+    setSelectedUnitSlot(1);
     setScaleInches(6);
     setRangeInches("unlimited");
     setHomeDeploymentRangeInches("unlimited");
@@ -565,7 +627,7 @@ export default function InteractiveLOSTool() {
     setLosVersion((version) => version + 1);
     setShowNewGamePrompt(false);
     if (fileRef.current) fileRef.current.value = "";
-    updateVisibility();
+    updateVisibility(activeLosId, false);
     draw();
     scheduleBrowserSave();
     setStatus("New game ready. Upload a map to begin.");
@@ -737,6 +799,12 @@ export default function InteractiveLOSTool() {
       baseRotation: 0,
       rangeInches: "unlimited",
       visible: true,
+      groupingMode: "model",
+      unitSlot: null,
+      unitTypeId: id,
+      unitName: "",
+      unitNameCustom: false,
+      unitRangeInches: "unlimited",
     };
   }
 
@@ -754,6 +822,12 @@ export default function InteractiveLOSTool() {
       baseRotation: Number(marker.baseRotation) || 0,
       rangeInches: marker.rangeInches ?? fallbackRange ?? "unlimited",
       visible: marker.visible !== false,
+      groupingMode: marker.groupingMode === "unit" ? "unit" : "model",
+      unitSlot: marker.groupingMode === "unit" && Number(marker.unitSlot) ? Number(marker.unitSlot) : null,
+      unitTypeId: marker.unitTypeId || id,
+      unitName: marker.unitName || "",
+      unitNameCustom: marker.unitNameCustom === true,
+      unitRangeInches: marker.unitRangeInches ?? "unlimited",
     };
   }
 
@@ -780,9 +854,11 @@ export default function InteractiveLOSTool() {
     if ("baseWidthMm" in patch) setBaseWidthMm(active.baseWidthMm);
     if ("baseRotation" in patch) setBaseRotation(active.baseRotation);
     if ("rangeInches" in patch) setRangeInches(active.rangeInches ?? "unlimited");
+    if ("groupingMode" in patch) setMarkerGroupingMode(active.groupingMode || "model");
+    if ("unitSlot" in patch) setSelectedUnitSlot(active.unitSlot || 1);
 
     setLosVersion((v) => v + 1);
-    updateVisibility();
+    updateVisibility(activeLosId, false);
     draw();
     scheduleBrowserSave();
   }
@@ -802,7 +878,7 @@ export default function InteractiveLOSTool() {
       state.current.light = { x: marker.x, y: marker.y };
     }
     setLosVersion((v) => v + 1);
-    updateVisibility();
+    updateVisibility(id, false);
     draw();
     scheduleBrowserSave();
   }
@@ -822,9 +898,226 @@ export default function InteractiveLOSTool() {
     return [...state.current.losMarkers].sort((a, b) => (a.name || "LOS").localeCompare(b.name || "LOS"));
   }
 
+  function getUnitMembers(slot) {
+    return state.current.losMarkers.filter((marker) => marker.groupingMode === "unit" && marker.unitSlot === Number(slot));
+  }
+
+  function getMarkerTypeMembers(marker) {
+    if (!marker) return [];
+    if (marker.groupingMode !== "unit") return [marker];
+    return getUnitMembers(marker.unitSlot).filter((item) => item.unitTypeId === marker.unitTypeId);
+  }
+
+  function getUnitDisplayName(slot, members = getUnitMembers(slot)) {
+    const customName = members.find((member) => member.unitNameCustom && member.unitName)?.unitName;
+    if (customName) return customName;
+    const types = new Map();
+    members.forEach((member) => {
+      const key = member.unitTypeId || member.id;
+      const existing = types.get(key) || { name: member.name || "LOS", count: 0 };
+      existing.count += 1;
+      types.set(key, existing);
+    });
+    const names = [...types.values()]
+      .sort((first, second) => first.count - second.count)
+      .map((type) => type.name);
+    return `Unit ${slot}: ${names.join(" + ")}`;
+  }
+
+  function getUnitRange(slot, members = getUnitMembers(slot)) {
+    return members.find((member) => member.unitRangeInches !== undefined)?.unitRangeInches ?? "unlimited";
+  }
+
+  function updateUnit(slot, patch) {
+    const members = getUnitMembers(slot);
+    if (!members.length) return;
+    members.forEach((member) => Object.assign(member, patch));
+    setLosVersion((version) => version + 1);
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function renameUnit(slot, name) {
+    updateUnit(slot, { unitName: name, unitNameCustom: true });
+  }
+
+  function setUnitRange(slot, value) {
+    updateUnit(slot, { unitRangeInches: value || "unlimited" });
+  }
+
+  function setUnitVisibility(slot, visible) {
+    const members = getUnitMembers(slot);
+    if (!members.length) return;
+    members.forEach((member) => {
+      member.visible = visible;
+      if (visible && !state.current.losVisibilityCache.has(member.id)) {
+        cacheMarkerVisibility(member.id, calculateMarkerVisibility(member));
+      }
+    });
+    rebuildCombinedVisibility();
+    setLosVersion((version) => version + 1);
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${getUnitDisplayName(slot, members)} LOS ${visible ? "enabled" : "disabled"}.`);
+  }
+
+  function selectUnit(slot) {
+    const members = getUnitMembers(slot);
+    if (!members.length) return;
+    const first = members[0];
+    setActiveUnitSlot(slot);
+    setActiveLosId(first.id);
+    setLosName(first.name);
+    setBaseShape(first.baseShape);
+    setBaseLengthMm(first.baseLengthMm);
+    setBaseWidthMm(first.baseWidthMm);
+    setBaseRotation(first.baseRotation || 0);
+    setRangeInches(first.rangeInches ?? "unlimited");
+    setMarkerGroupingMode("unit");
+    setUnitModelCount(getMarkerTypeMembers(first).length || 1);
+    setSelectedUnitSlot(slot);
+    state.current.light = { x: first.x, y: first.y };
+    setStatus(`${getUnitDisplayName(slot, members)} selected. Drag any model to move the whole unit.`);
+    draw();
+  }
+
+  function startUnitStickyRuler(slot) {
+    if (!pixelsPerInch) {
+      setStatus("Set the map scale before using a unit sticky ruler.");
+      return;
+    }
+    selectUnit(slot);
+    state.current.stickyRulerStart = { type: "unit", id: String(slot) };
+    setMode("stickyRuler");
+    setStatus(`${getUnitDisplayName(slot)} selected. Choose a footprint, enemy, or LOS marker.`);
+    draw();
+  }
+
+  function setActiveMarkerAsModel() {
+    const marker = getActiveLosMarker();
+    if (!marker) return;
+    marker.groupingMode = "model";
+    marker.unitSlot = null;
+    marker.unitTypeId = marker.id;
+    marker.unitName = "";
+    marker.unitNameCustom = false;
+    marker.unitRangeInches = "unlimited";
+    setActiveUnitSlot(null);
+    setMarkerGroupingMode("model");
+    setUnitModelCount(1);
+    setLosVersion((version) => version + 1);
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${marker.name} is now a standalone model.`);
+  }
+
+  function applyActiveMarkerToUnit() {
+    const marker = getActiveLosMarker();
+    if (!marker) return;
+    if (!pixelsPerInch) {
+      setStatus("Set the map scale before generating a unit formation.");
+      return;
+    }
+
+    const slot = Math.max(1, Math.min(20, Number(selectedUnitSlot) || 1));
+    const desiredCount = Math.max(1, Math.min(20, Number(unitModelCount) || 1));
+    const sourceMembers = getMarkerTypeMembers(marker);
+    const sourceIds = new Set(sourceMembers.map((item) => item.id));
+    const destinationMembers = getUnitMembers(slot).filter((item) => !sourceIds.has(item.id));
+    const typeId = marker.unitTypeId || marker.id;
+    const workingMembers = [...sourceMembers];
+
+    while (workingMembers.length < desiredCount) {
+      const copyIndex = workingMembers.length + 1;
+      const copy = {
+        ...marker,
+        id: `unit-model-${Date.now()}-${copyIndex}`,
+        name: marker.name,
+        visible: marker.visible,
+        groupingMode: "unit",
+        unitSlot: slot,
+        unitTypeId: typeId,
+      };
+      state.current.losMarkers.push(copy);
+      workingMembers.push(copy);
+    }
+
+    while (workingMembers.length > desiredCount) {
+      let removeIndex = workingMembers.length - 1;
+      while (removeIndex >= 0 && workingMembers[removeIndex].id === marker.id) removeIndex -= 1;
+      if (removeIndex < 0) break;
+      const [removed] = workingMembers.splice(removeIndex, 1);
+      state.current.losMarkers = state.current.losMarkers.filter((item) => item.id !== removed.id);
+      removeStickyRulersForTarget({ type: "los", id: removed.id });
+    }
+
+    workingMembers.forEach((item) => {
+      item.groupingMode = "unit";
+      item.unitSlot = slot;
+      item.unitTypeId = typeId;
+    });
+
+    const anchorGroup = destinationMembers.length >= workingMembers.length ? destinationMembers : workingMembers;
+    const movingGroup = anchorGroup === destinationMembers ? workingMembers : destinationMembers;
+    const anchor = anchorGroup[0] || marker;
+    const orderedMembers = anchorGroup === destinationMembers
+      ? [...destinationMembers, ...movingGroup]
+      : [...workingMembers, ...movingGroup];
+    layoutUnitGrid(orderedMembers, anchor.x, anchor.y);
+
+    const combinedMembers = getUnitMembers(slot);
+    const existingCustomName = combinedMembers.find((item) => item.unitNameCustom && item.unitName)?.unitName;
+    const unitName = existingCustomName || getUnitDisplayName(slot, combinedMembers);
+    const unitRange = combinedMembers.find((item) => item.unitRangeInches !== undefined)?.unitRangeInches ?? "unlimited";
+    combinedMembers.forEach((item) => {
+      item.unitName = unitName;
+      item.unitNameCustom = Boolean(existingCustomName);
+      item.unitRangeInches = unitRange;
+    });
+
+    setMarkerGroupingMode("unit");
+    setActiveUnitSlot(slot);
+    setSelectedUnitSlot(slot);
+    setUnitModelCount(desiredCount);
+    setLosVersion((version) => version + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${marker.name} assigned to Unit ${slot} with ${desiredCount} model${desiredCount === 1 ? "" : "s"} of this type.`);
+  }
+
+  function layoutUnitGrid(members, startX, startY) {
+    if (!members.length) return;
+    const gap = 0.25 * pixelsPerInch;
+    const columns = 5;
+    const rows = Math.ceil(members.length / columns);
+    const columnWidths = Array(columns).fill(0);
+    const rowHeights = Array(rows).fill(0);
+    members.forEach((member, index) => {
+      const base = getBaseRadii(1, member);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      columnWidths[column] = Math.max(columnWidths[column], base.rx * 2);
+      rowHeights[row] = Math.max(rowHeights[row], base.ry * 2);
+    });
+    const columnCenters = [startX];
+    for (let column = 1; column < columns; column++) {
+      columnCenters[column] = columnCenters[column - 1] + columnWidths[column - 1] / 2 + gap + columnWidths[column] / 2;
+    }
+    const rowCenters = [startY];
+    for (let row = 1; row < rows; row++) {
+      rowCenters[row] = rowCenters[row - 1] + rowHeights[row - 1] / 2 + gap + rowHeights[row] / 2;
+    }
+    members.forEach((member, index) => {
+      member.x = columnCenters[index % columns];
+      member.y = rowCenters[Math.floor(index / columns)];
+    });
+  }
+
   function selectLosMarker(id) {
     const marker = state.current.losMarkers.find((m) => m.id === id);
     if (!marker) return;
+    setActiveUnitSlot(null);
     setActiveLosId(id);
     setLosName(marker.name);
     setBaseShape(marker.baseShape);
@@ -832,6 +1125,9 @@ export default function InteractiveLOSTool() {
     setBaseWidthMm(marker.baseWidthMm);
     setBaseRotation(marker.baseRotation);
     setRangeInches(marker.rangeInches ?? "unlimited");
+    setMarkerGroupingMode(marker.groupingMode || "model");
+    setUnitModelCount(getMarkerTypeMembers(marker).length || 1);
+    setSelectedUnitSlot(marker.unitSlot || 1);
     state.current.light = { x: marker.x, y: marker.y };
     setStatus(`Selected ${marker.name}.`);
   }
@@ -846,8 +1142,12 @@ export default function InteractiveLOSTool() {
     marker.baseRotation = baseRotation;
     marker.rangeInches = "unlimited";
     state.current.losMarkers.push(marker);
+    setActiveUnitSlot(null);
     setActiveLosId(id);
     setLosName(marker.name);
+    setMarkerGroupingMode("model");
+    setUnitModelCount(1);
+    setSelectedUnitSlot(1);
     setLosVersion((v) => v + 1);
     setStatus(`Added ${marker.name}.`);
     scheduleBrowserSave();
@@ -870,7 +1170,9 @@ export default function InteractiveLOSTool() {
     const old = getActiveLosMarker();
     if (!old) return;
     state.current.losMarkers = state.current.losMarkers.filter((marker) => marker.id !== activeLosId);
+    removeStickyRulersForTarget({ type: "los", id: activeLosId });
     const next = state.current.losMarkers[0];
+    if (old.groupingMode === "unit" && !getUnitMembers(old.unitSlot).length) setActiveUnitSlot(null);
     setActiveLosId(next?.id || "");
     if (next) {
       setLosName(next.name);
@@ -879,9 +1181,15 @@ export default function InteractiveLOSTool() {
       setBaseWidthMm(next.baseWidthMm);
       setBaseRotation(next.baseRotation);
       setRangeInches(next.rangeInches ?? "unlimited");
+      setMarkerGroupingMode(next.groupingMode || "model");
+      setUnitModelCount(getMarkerTypeMembers(next).length || 1);
+      setSelectedUnitSlot(next.unitSlot || 1);
       state.current.light = { x: next.x, y: next.y };
     } else {
       setRangeInches("unlimited");
+      setMarkerGroupingMode("model");
+      setUnitModelCount(1);
+      setSelectedUnitSlot(1);
       state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
     }
     setLosVersion((v) => v + 1);
@@ -1044,28 +1352,39 @@ export default function InteractiveLOSTool() {
     const startX = state.current.W / 2 - ((accepted.length - 1) * spacing) / 2;
     const startY = state.current.H / 2;
 
-    const newMarkers = accepted.map((result, index) => ({
-      id: `army-los-${Date.now()}-${index}`,
-      name: result.unit || result.original || `Unit ${index + 1}`,
-      x: startX + index * spacing,
-      y: startY + (index % 2) * spacing,
-      baseShape: result.baseShape || "circle",
-      baseLengthMm: Number(result.baseLengthMm) || 40,
-      baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
-      baseRotation: 0,
-      rangeInches: "unlimited",
-      visible: false,
-    }));
+    const createdAt = Date.now();
+    const newMarkers = accepted.map((result, index) => {
+      const id = `army-los-${createdAt}-${index}`;
+      return {
+        id,
+        name: result.unit || result.original || `Unit ${index + 1}`,
+        x: startX + index * spacing,
+        y: startY + (index % 2) * spacing,
+        baseShape: result.baseShape || "circle",
+        baseLengthMm: Number(result.baseLengthMm) || 40,
+        baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
+        baseRotation: 0,
+        rangeInches: "unlimited",
+        visible: false,
+        groupingMode: "model",
+        unitSlot: null,
+        unitTypeId: id,
+      };
+    });
 
     state.current.losMarkers.push(...newMarkers);
     const first = newMarkers[0];
     setActiveLosId(first.id);
+    setActiveUnitSlot(null);
     setLosName(first.name);
     setBaseShape(first.baseShape);
     setBaseLengthMm(first.baseLengthMm);
     setBaseWidthMm(first.baseWidthMm);
     setBaseRotation(0);
     setRangeInches(first.rangeInches ?? "unlimited");
+    setMarkerGroupingMode("model");
+    setUnitModelCount(1);
+    setSelectedUnitSlot(1);
     state.current.light = { x: first.x, y: first.y };
     setLosVersion((v) => v + 1);
     updateVisibility();
@@ -1084,6 +1403,11 @@ export default function InteractiveLOSTool() {
     }
 
     state.current.losMarkers = remaining;
+    const remainingIds = new Set(remaining.map((marker) => marker.id));
+    state.current.stickyRulers = state.current.stickyRulers.filter((ruler) => (
+      (ruler.from.type !== "los" || remainingIds.has(ruler.from.id)) &&
+      (ruler.to.type !== "los" || remainingIds.has(ruler.to.id))
+    ));
     const activeStillExists = remaining.some((marker) => marker.id === activeLosId);
     const nextActive = activeStillExists ? getActiveLosMarker() : remaining[0];
 
@@ -1095,9 +1419,15 @@ export default function InteractiveLOSTool() {
       setBaseWidthMm(nextActive.baseWidthMm);
       setBaseRotation(nextActive.baseRotation || 0);
       setRangeInches(nextActive.rangeInches ?? "unlimited");
+      setMarkerGroupingMode(nextActive.groupingMode || "model");
+      setUnitModelCount(getMarkerTypeMembers(nextActive).length || 1);
+      setSelectedUnitSlot(nextActive.unitSlot || 1);
       state.current.light = { x: nextActive.x, y: nextActive.y };
     } else {
       setRangeInches("unlimited");
+      setMarkerGroupingMode("model");
+      setUnitModelCount(1);
+      setSelectedUnitSlot(1);
       state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
     }
     setLosVersion((v) => v + 1);
@@ -1134,8 +1464,18 @@ export default function InteractiveLOSTool() {
   function pointerDown(e) {
     const p = screenToWorld(e);
 
+    const deploymentSideChoice = mode !== "erase" ? findDeploymentSideArrow(p) : null;
+    if (deploymentSideChoice) {
+      if (deploymentSideChoice.kind === "enemy") state.current.enemyDeploymentNoMansSide = deploymentSideChoice.side;
+      else state.current.deploymentNoMansSide = deploymentSideChoice.side;
+      setStatus(`${deploymentSideChoice.kind === "enemy" ? "Enemy" : "Home"} deployment no man's land side selected.`);
+      draw();
+      scheduleBrowserSave();
+      return;
+    }
+
     const visibilityButton = findLosVisibilityButton(p);
-    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && !isDeploymentMode()) {
+    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler" && !isDeploymentMode()) {
       updateLosMarkerById(visibilityButton.id, { visible: visibilityButton.visible });
       const marker = state.current.losMarkers.find((m) => m.id === visibilityButton.id);
       setStatus(`${marker?.name || "LOS"} LOS ${visibilityButton.visible ? "shown" : "hidden"}.`);
@@ -1143,12 +1483,76 @@ export default function InteractiveLOSTool() {
     }
 
     const draggable = findDraggableObject(p);
-    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler") {
-      if (draggable.type === "light") selectLosMarker(draggable.id);
-      objectDragRef.current = draggable;
+    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler") {
+      const draggedMarker = draggable.type === "light" ? state.current.losMarkers.find((marker) => marker.id === draggable.id) : null;
+      const moveSelectedUnit = draggedMarker?.groupingMode === "unit" && draggedMarker.unitSlot === activeUnitSlot;
+      if (draggable.type === "light" && !moveSelectedUnit) selectLosMarker(draggable.id);
+      objectDragRef.current = moveSelectedUnit
+        ? {
+          ...draggable,
+          unitSlot: activeUnitSlot,
+          startPoint: p,
+          memberStarts: getUnitMembers(activeUnitSlot).map((member) => ({ id: member.id, x: member.x, y: member.y })),
+          lastLosUpdate: 0,
+        }
+        : draggable;
       if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
       const active = draggable.type === "light" ? state.current.losMarkers.find((m) => m.id === draggable.id) : null;
-      setStatus(draggable.type === "light" ? `Moving ${active?.name || "LOS marker"}. Release to drop.` : "Moving enemy. Release to drop.");
+      setStatus(moveSelectedUnit
+        ? `Moving ${getUnitDisplayName(activeUnitSlot)}. Release to drop.`
+        : draggable.type === "light" ? `Moving ${active?.name || "LOS marker"}. Release to drop.` : "Moving enemy. Release to drop.");
+      return;
+    }
+
+    if (mode === "stickyRuler") {
+      if (!pixelsPerInch) {
+        setStatus("Set the map scale before using a sticky ruler.");
+        return;
+      }
+      const target = findStickyRulerTarget(p);
+      if (!target) {
+        setStatus(state.current.stickyRulerStart ? "Choose a footprint, enemy, or different LOS marker." : "Choose a LOS marker or enemy first.");
+        return;
+      }
+      if (!state.current.stickyRulerStart) {
+        if (target.type === "footprint") {
+          setStatus("Start from a LOS marker or enemy, then choose the footprint.");
+          return;
+        }
+        state.current.stickyRulerStart = target;
+        setStatus(`${target.type === "enemy" ? "Enemy" : "LOS marker"} selected. Now choose a footprint${target.type === "los" ? ", enemy, or another LOS marker" : ""}.`);
+        draw();
+        return;
+      }
+      if (sameStickyTarget(state.current.stickyRulerStart, target)) {
+        setStatus("Choose a different target.");
+        return;
+      }
+      if (state.current.stickyRulerStart.type === "unit" && target.type === "los") {
+        const targetMarker = state.current.losMarkers.find((marker) => marker.id === target.id);
+        if (targetMarker?.groupingMode === "unit" && String(targetMarker.unitSlot) === state.current.stickyRulerStart.id) {
+          setStatus("Choose a target outside the selected unit.");
+          return;
+        }
+      }
+      if (state.current.stickyRulerStart.type === "enemy" && target.type !== "footprint") {
+        setStatus("An enemy sticky ruler must connect to a footprint.");
+        return;
+      }
+      if (target.type === "footprint" && state.current.stickyRulerStart.type === "footprint") {
+        setStatus("Footprints cannot be connected to each other.");
+        return;
+      }
+      state.current.stickyRulers.push({
+        id: `sticky-ruler-${Date.now()}`,
+        from: state.current.stickyRulerStart,
+        to: target,
+      });
+      state.current.stickyRulerStart = null;
+      setLosVersion((version) => version + 1);
+      setStatus("Sticky ruler added. Choose another LOS marker to start the next one.");
+      draw();
+      scheduleBrowserSave();
       return;
     }
 
@@ -1198,6 +1602,7 @@ export default function InteractiveLOSTool() {
       const poly = state.current.currentPoly;
       if (poly.length >= 3 && dist(p, poly[0]) < 24 / state.current.camera.scale) {
         state.current.blockers.push([...poly]);
+        state.current.blockerIds.push(`footprint-${Date.now()}`);
         state.current.currentPoly = [];
         setStatus("Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked.");
       } else {
@@ -1216,15 +1621,43 @@ export default function InteractiveLOSTool() {
       draw();
       scheduleBrowserSave();
     } else if (mode === "enemy") {
-      state.current.enemies.push(p);
+      state.current.enemies.push({ id: `enemy-${Date.now()}`, x: p.x, y: p.y });
       setStatus("Enemy added. Red = clear, yellow = through one footprint wall, grey = blocked.");
       draw();
       scheduleBrowserSave();
     } else if (mode === "erase") {
+      const rulerIndex = state.current.rulers.findIndex((ruler) => pointNearSegment(p, ruler.a, ruler.b, 10 / state.current.camera.scale));
+      const stickyRulerIndex = state.current.stickyRulers.findIndex((ruler) => {
+        const geometry = getStickyRulerGeometry(ruler);
+        return geometry && pointNearSegment(p, geometry.a, geometry.b, 10 / state.current.camera.scale);
+      });
       const enemyIndex = state.current.enemies.findIndex((enemy) => dist(p, enemy) < 18 / state.current.camera.scale);
-      if (enemyIndex >= 0) {
-        state.current.enemies.splice(enemyIndex, 1);
+      const homeDeployPath = state.current.deploymentPath?.length >= 2
+        ? state.current.deploymentPath
+        : (state.current.deploymentLine ? [state.current.deploymentLine.a, state.current.deploymentLine.b] : []);
+      const enemyDeployPath = state.current.enemyDeploymentPath?.length >= 2
+        ? state.current.enemyDeploymentPath
+        : (state.current.enemyDeploymentLine ? [state.current.enemyDeploymentLine.a, state.current.enemyDeploymentLine.b] : []);
+      const homeDeployHit = pointNearPath(p, homeDeployPath, 12 / state.current.camera.scale);
+      const enemyDeployHit = pointNearPath(p, enemyDeployPath, 12 / state.current.camera.scale);
+      if (rulerIndex >= 0) {
+        state.current.rulers.splice(rulerIndex, 1);
+        setStatus("Ruler erased.");
+      } else if (stickyRulerIndex >= 0) {
+        state.current.stickyRulers.splice(stickyRulerIndex, 1);
+        setStatus("Sticky ruler erased.");
+      } else if (enemyIndex >= 0) {
+        const [removedEnemy] = state.current.enemies.splice(enemyIndex, 1);
+        removeStickyRulersForTarget({ type: "enemy", id: removedEnemy.id });
         setStatus("Enemy erased.");
+      } else if (homeDeployHit) {
+        clearDeploymentLOS("home");
+        setStatus("Home deployment LOS erased.");
+        return;
+      } else if (enemyDeployHit) {
+        clearDeploymentLOS("enemy");
+        setStatus("Enemy deployment LOS erased.");
+        return;
       } else {
         const wallIndex = state.current.walls.findIndex((wall) => pointNearSegment(p, wall.a, wall.b, 12 / state.current.camera.scale));
         if (wallIndex >= 0) {
@@ -1233,7 +1666,10 @@ export default function InteractiveLOSTool() {
         } else {
           const blockerIndex = state.current.blockers.findIndex((poly) => pointInPoly(p, poly));
           if (blockerIndex >= 0) {
+            const removedId = state.current.blockerIds[blockerIndex];
             state.current.blockers.splice(blockerIndex, 1);
+            state.current.blockerIds.splice(blockerIndex, 1);
+            removeStickyRulersForTarget({ type: "footprint", id: removedId });
             setStatus("Footprint erased.");
           }
         }
@@ -1248,19 +1684,13 @@ export default function InteractiveLOSTool() {
     const p = screenToWorld(e);
 
     if (objectDragRef.current) {
-      if (objectDragRef.current.type === "light") {
-        const markerIndex = state.current.losMarkers.findIndex((marker) => marker.id === objectDragRef.current.id);
-        if (markerIndex >= 0) {
-          state.current.losMarkers[markerIndex] = { ...state.current.losMarkers[markerIndex], x: p.x, y: p.y };
-          if (state.current.losMarkers[markerIndex].id === activeLosId) state.current.light = { x: p.x, y: p.y };
-          updateVisibility();
-          setLosVersion((v) => v + 1);
-        }
-      } else if (objectDragRef.current.type === "enemy") {
-        state.current.enemies[objectDragRef.current.index] = p;
+      pendingDragPointRef.current = p;
+      if (!dragFrameRef.current) {
+        dragFrameRef.current = requestAnimationFrame(() => {
+          dragFrameRef.current = null;
+          applyPendingObjectDrag();
+        });
       }
-      draw();
-      scheduleBrowserSave();
       return;
     }
 
@@ -1293,9 +1723,69 @@ export default function InteractiveLOSTool() {
     }
   }
 
+  function applyPendingObjectDrag() {
+    const p = pendingDragPointRef.current;
+    const dragged = objectDragRef.current;
+    if (!p || !dragged) return;
+    pendingDragPointRef.current = null;
+
+    if (dragged.type === "light") {
+      if (dragged.unitSlot && dragged.startPoint && dragged.memberStarts) {
+        const dx = p.x - dragged.startPoint.x;
+        const dy = p.y - dragged.startPoint.y;
+        dragged.memberStarts.forEach((start) => {
+          const marker = state.current.losMarkers.find((item) => item.id === start.id);
+          if (!marker) return;
+          marker.x = start.x + dx;
+          marker.y = start.y + dy;
+          if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
+          if (marker.id === activeLosId) state.current.light = { x: marker.x, y: marker.y };
+        });
+        const now = performance.now();
+        if (now - dragged.lastLosUpdate >= 100) {
+          getUnitMembers(dragged.unitSlot).forEach((marker) => {
+            if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, true));
+          });
+          rebuildCombinedVisibility();
+          dragged.lastLosUpdate = now;
+        }
+      } else {
+        const markerIndex = state.current.losMarkers.findIndex((marker) => marker.id === dragged.id);
+        if (markerIndex >= 0) {
+          const marker = state.current.losMarkers[markerIndex];
+          state.current.losMarkers[markerIndex] = { ...marker, x: p.x, y: p.y };
+          if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
+          if (marker.id === activeLosId) state.current.light = { x: p.x, y: p.y };
+          updateVisibility(dragged.id, false, true);
+        }
+      }
+    } else if (dragged.type === "enemy") {
+      const enemy = state.current.enemies[dragged.index];
+      if (enemy) state.current.enemies[dragged.index] = { ...enemy, x: p.x, y: p.y };
+    }
+    draw();
+  }
+
   function pointerUp() {
     if (objectDragRef.current) {
+      if (dragFrameRef.current) {
+        cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+      const dragged = objectDragRef.current;
+      applyPendingObjectDrag();
+      if (dragged.type === "light") {
+        if (dragged.unitSlot) {
+          getUnitMembers(dragged.unitSlot).forEach((marker) => {
+            if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, true));
+          });
+          rebuildCombinedVisibility();
+        }
+        else updateVisibility(dragged.id, false);
+      }
       objectDragRef.current = null;
+      if (dragged.type === "light") setLosVersion((v) => v + 1);
+      scheduleBrowserSave();
       if (canvasRef.current) canvasRef.current.style.cursor = "grab";
     }
 
@@ -1335,6 +1825,89 @@ export default function InteractiveLOSTool() {
     draggingRef.current = false;
     panningRef.current = false;
     panLastRef.current = null;
+  }
+
+  function sameStickyTarget(a, b) {
+    return Boolean(a && b && a.type === b.type && a.id === b.id);
+  }
+
+  function handleCanvasDoubleClick(e) {
+    if (mode === "wall") return finishWall(e);
+    if (isDeploymentMode()) return finishDeploymentLOS(e);
+    if (mode === "block") return finishFootprint(e);
+    const hit = findDraggableObject(screenToWorld(e));
+    if (hit?.type !== "light") return;
+    const marker = state.current.losMarkers.find((item) => item.id === hit.id);
+    if (!marker || marker.groupingMode !== "unit") return;
+    setActiveUnitSlot(null);
+    selectLosMarker(marker.id);
+    setStatus(`${marker.name} selected individually. Drag it to move this model only.`);
+    draw();
+  }
+
+  function findStickyRulerTarget(p) {
+    const hit = findDraggableObject(p);
+    if (hit?.type === "light") return { type: "los", id: hit.id };
+    if (hit?.type === "enemy") {
+      const enemy = state.current.enemies[hit.index];
+      if (enemy && !enemy.id) enemy.id = `enemy-${Date.now()}-${hit.index}`;
+      return enemy ? { type: "enemy", id: enemy.id } : null;
+    }
+    const footprintIndex = state.current.blockers.findIndex((poly) => pointInPoly(p, poly) || pointNearPolygon(p, poly, 12 / state.current.camera.scale));
+    if (footprintIndex >= 0) {
+      if (!state.current.blockerIds[footprintIndex]) state.current.blockerIds[footprintIndex] = `footprint-${Date.now()}-${footprintIndex}`;
+      return { type: "footprint", id: state.current.blockerIds[footprintIndex] };
+    }
+    return null;
+  }
+
+  function resolveStickyTarget(target) {
+    if (target?.type === "los") {
+      const marker = state.current.losMarkers.find((item) => item.id === target.id);
+      if (!marker) return null;
+      const radii = getBaseRadii(1, marker);
+      return { center: marker, rx: radii.rx, ry: radii.ry, rotation: marker.baseRotation || 0 };
+    }
+    if (target?.type === "enemy") {
+      const enemy = state.current.enemies.find((item) => item.id === target.id);
+      if (!enemy) return null;
+      const radius = 13 / state.current.camera.scale;
+      return { center: enemy, rx: radius, ry: radius, rotation: 0 };
+    }
+    if (target?.type === "footprint") {
+      const index = state.current.blockerIds.indexOf(target.id);
+      const poly = state.current.blockers[index];
+      return poly ? { poly } : null;
+    }
+    if (target?.type === "unit") {
+      const members = getUnitMembers(Number(target.id));
+      if (!members.length) return null;
+      return {
+        unitMembers: members.map((marker) => {
+          const radii = getBaseRadii(1, marker);
+          return { center: marker, rx: radii.rx, ry: radii.ry, rotation: marker.baseRotation || 0 };
+        }),
+      };
+    }
+    return null;
+  }
+
+  function getStickyRulerGeometry(ruler) {
+    const from = resolveStickyTarget(ruler.from);
+    const to = resolveStickyTarget(ruler.to);
+    if (!from || !to) return null;
+    if (from.unitMembers) return closestUnitStickyGeometry(from.unitMembers, to, true);
+    if (to.unitMembers) return closestUnitStickyGeometry(to.unitMembers, from, false);
+    if (from.poly) return closestPolygonToEllipsePoints(from.poly, to, true);
+    if (to.poly) return closestPolygonToEllipsePoints(to.poly, from, false);
+    return closestEllipseEdgePoints(from, to);
+  }
+
+  function removeStickyRulersForTarget(target) {
+    state.current.stickyRulers = state.current.stickyRulers.filter((ruler) => (
+      !sameStickyTarget(ruler.from, target) && !sameStickyTarget(ruler.to, target)
+    ));
+    if (sameStickyTarget(state.current.stickyRulerStart, target)) state.current.stickyRulerStart = null;
   }
 
   function findDraggableObject(p) {
@@ -1383,9 +1956,9 @@ export default function InteractiveLOSTool() {
     if (!canvas) return;
     if (objectDragRef.current) {
       canvas.style.cursor = "grabbing";
-    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && !isDeploymentMode()) {
+    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "stickyRuler" && !isDeploymentMode()) {
       canvas.style.cursor = "pointer";
-    } else if (findDraggableObject(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale") {
+    } else if (findDraggableObject(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "stickyRuler") {
       canvas.style.cursor = "grab";
     } else if (mode === "pan") {
       canvas.style.cursor = panningRef.current ? "grabbing" : "grab";
@@ -1430,6 +2003,7 @@ export default function InteractiveLOSTool() {
     }
 
     state.current.blockers.push([...poly]);
+    state.current.blockerIds.push(`footprint-${Date.now()}`);
     state.current.currentPoly = [];
     updateVisibility();
     setStatus("Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked.");
@@ -1463,15 +2037,17 @@ export default function InteractiveLOSTool() {
       state.current.enemyDeploymentDraft = [];
       state.current.enemyDeploymentPreview = null;
       state.current.enemyDeploymentVisible = true;
+      state.current.enemyDeploymentNoMansSide = null;
     } else {
       state.current.deploymentPath = [...path];
       state.current.deploymentLine = { a: path[0], b: path[path.length - 1] };
       state.current.deploymentDraft = [];
       state.current.deploymentPreview = null;
       state.current.deploymentVisible = true;
+      state.current.deploymentNoMansSide = null;
     }
     updateVisibility();
-    setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS path set.`);
+    setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS path set. Which side is no man's land? Select an arrow.`);
     draw();
     scheduleBrowserSave();
   }
@@ -1558,13 +2134,13 @@ export default function InteractiveLOSTool() {
     };
   }
 
-  function getLOSOriginsForMarker(marker) {
+  function getLOSOriginsForMarker(marker, interactive = false) {
     if (!marker) return [];
     const center = { x: marker.x, y: marker.y };
     if (!pixelsPerInch) return [center];
 
     const { rx, ry } = getBaseRadii(1, marker);
-    const samples = marker.baseShape === "circle" ? 20 : 28;
+    const samples = interactive ? (marker.baseShape === "circle" ? 8 : 12) : (marker.baseShape === "circle" ? 20 : 28);
     const points = [center];
 
     for (let i = 0; i < samples; i++) {
@@ -1584,7 +2160,9 @@ export default function InteractiveLOSTool() {
   }
 
   function undo() {
-    if (state.current.rulerPreview) {
+    if (state.current.stickyRulerStart) state.current.stickyRulerStart = null;
+    else if (state.current.stickyRulers.length) state.current.stickyRulers.pop();
+    else if (state.current.rulerPreview) {
       state.current.rulerStart = null;
       state.current.rulerPreview = null;
     } else if (state.current.rulers.length) state.current.rulers.pop();
@@ -1592,9 +2170,16 @@ export default function InteractiveLOSTool() {
       state.current.wallPath = [];
       state.current.wallPreview = null;
     } else if (state.current.currentPoly.length) state.current.currentPoly.pop();
-    else if (state.current.enemies.length) state.current.enemies.pop();
+    else if (state.current.enemies.length) {
+      const removedEnemy = state.current.enemies.pop();
+      removeStickyRulersForTarget({ type: "enemy", id: removedEnemy.id });
+    }
     else if (state.current.walls.length) state.current.walls.pop();
-    else state.current.blockers.pop();
+    else {
+      const removedId = state.current.blockerIds.pop();
+      state.current.blockers.pop();
+      removeStickyRulersForTarget({ type: "footprint", id: removedId });
+    }
     updateVisibility();
     draw();
     scheduleBrowserSave();
@@ -1602,6 +2187,8 @@ export default function InteractiveLOSTool() {
 
   function clearBlockers() {
     state.current.blockers = [];
+    state.current.blockerIds = [];
+    state.current.stickyRulers = state.current.stickyRulers.filter((ruler) => ruler.from.type !== "footprint" && ruler.to.type !== "footprint");
     state.current.currentPoly = [];
     updateVisibility();
     setStatus("Footprints cleared.");
@@ -1621,6 +2208,7 @@ export default function InteractiveLOSTool() {
 
   function clearEnemies() {
     state.current.enemies = [];
+    state.current.stickyRulers = state.current.stickyRulers.filter((ruler) => ruler.from.type !== "enemy" && ruler.to.type !== "enemy");
     setStatus("Enemies cleared.");
     draw();
     scheduleBrowserSave();
@@ -1631,6 +2219,14 @@ export default function InteractiveLOSTool() {
     state.current.rulerPreview = null;
     state.current.rulers = [];
     setStatus("Ruler lines cleared.");
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function clearStickyRulers() {
+    state.current.stickyRulerStart = null;
+    state.current.stickyRulers = [];
+    setStatus("Sticky ruler lines cleared.");
     draw();
     scheduleBrowserSave();
   }
@@ -1659,6 +2255,24 @@ export default function InteractiveLOSTool() {
     setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS ${visible ? "enabled" : "disabled"}.`);
   }
 
+  function findDeploymentSideArrow(p) {
+    const homePath = state.current.deploymentPath?.length >= 2
+      ? state.current.deploymentPath
+      : (state.current.deploymentLine ? [state.current.deploymentLine.a, state.current.deploymentLine.b] : []);
+    const enemyPath = state.current.enemyDeploymentPath?.length >= 2
+      ? state.current.enemyDeploymentPath
+      : (state.current.enemyDeploymentLine ? [state.current.enemyDeploymentLine.a, state.current.enemyDeploymentLine.b] : []);
+    const candidates = [];
+    if (homePath.length >= 2 && !state.current.deploymentNoMansSide) candidates.push({ kind: "home", path: homePath });
+    if (enemyPath.length >= 2 && !state.current.enemyDeploymentNoMansSide) candidates.push({ kind: "enemy", path: enemyPath });
+    for (const candidate of candidates) {
+      for (const arrow of deploymentSideArrowPositions(candidate.path, state.current.camera.scale)) {
+        if (dist(p, arrow.point) <= 28 / state.current.camera.scale) return { kind: candidate.kind, side: arrow.side };
+      }
+    }
+    return null;
+  }
+
   function clearDeploymentLOS(kind) {
     const isEnemy = kind === "enemy";
     if (isEnemy) {
@@ -1666,12 +2280,14 @@ export default function InteractiveLOSTool() {
       state.current.enemyDeploymentPath = [];
       state.current.enemyDeploymentDraft = [];
       state.current.enemyDeploymentPreview = null;
+      state.current.enemyDeploymentNoMansSide = null;
       state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     } else {
       state.current.deploymentLine = null;
       state.current.deploymentPath = [];
       state.current.deploymentDraft = [];
       state.current.deploymentPreview = null;
+      state.current.deploymentNoMansSide = null;
       state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
     }
     updateVisibility();
@@ -1684,17 +2300,78 @@ export default function InteractiveLOSTool() {
     updateActiveLosMarker({ x: state.current.W / 2, y: state.current.H / 2 });
   }
 
+  function calculateUnitCoherency() {
+    const results = new Map();
+    if (!pixelsPerInch) return results;
+    for (let slot = 1; slot <= 20; slot++) {
+      const members = getUnitMembers(slot);
+      if (!members.length) continue;
+      const neighbourLimit = 2 * pixelsPerInch;
+      const neighbourFailures = new Set();
+      if (members.length > 1) {
+        members.forEach((member) => {
+          const memberEllipse = markerEllipse(member);
+          const hasNeighbour = members.some((other) => {
+            if (other.id === member.id) return false;
+            const edge = closestEllipseEdgePoints(memberEllipse, markerEllipse(other));
+            return dist(edge.a, edge.b) <= neighbourLimit + 0.01;
+          });
+          if (!hasNeighbour) neighbourFailures.add(member.id);
+        });
+      }
+
+      let furthestPair = null;
+      let furthestEdgeDistance = 0;
+      for (let first = 0; first < members.length; first++) {
+        for (let second = first + 1; second < members.length; second++) {
+          const edge = closestEllipseEdgePoints(markerEllipse(members[first]), markerEllipse(members[second]));
+          const edgeDistance = dist(edge.a, edge.b);
+          if (edgeDistance >= furthestEdgeDistance) {
+            furthestEdgeDistance = edgeDistance;
+            furthestPair = { ...edge, first: members[first], second: members[second] };
+          }
+        }
+      }
+      const withinNine = furthestEdgeDistance + 0.01 < 9 * pixelsPerInch;
+      results.set(slot, {
+        coherent: neighbourFailures.size === 0 && withinNine,
+        neighbourFailures,
+        withinNine,
+        furthestEdgeDistance,
+        furthestPair,
+        members,
+      });
+    }
+    return results;
+  }
+
+  function markerEllipse(marker) {
+    const base = getBaseRadii(1, marker);
+    return { center: marker, rx: base.rx, ry: base.ry, rotation: marker.baseRotation || 0 };
+  }
+
+  function markerRangeRadius(marker) {
+    if (!pixelsPerInch || !marker) return Infinity;
+    const value = marker.groupingMode === "unit"
+      ? getUnitRange(marker.unitSlot)
+      : marker.rangeInches;
+    const numeric = Number(value);
+    return !numeric || numeric <= 0 ? Infinity : numeric * pixelsPerInch;
+  }
+
   function draw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const { W, H, fit, camera, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentVisibility } = state.current;
+    const { W, H, fit, camera, blockers, walls, enemies, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, stickyRulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentVisibility } = state.current;
     const light = getActiveLosPoint();
     const clearZones = visibility.clearZones || [];
     const oneWallZones = visibility.oneWallZones || [];
     const clearPoly = clearZones[0] || [];
     const oneWallPoly = oneWallZones[0] || [];
-    const numericRange = Number(rangeInches);
+    const selectedUnitMembers = activeUnitSlot ? getUnitMembers(activeUnitSlot) : [];
+    const selectedRangeValue = selectedUnitMembers.length ? getUnitRange(activeUnitSlot, selectedUnitMembers) : rangeInches;
+    const numericRange = Number(selectedRangeValue);
     const rangeRadius = !pixelsPerInch || !numericRange || numericRange <= 0 ? Infinity : numericRange * pixelsPerInch;
     const homeDeploymentNumericRange = Number(homeDeploymentRangeInches);
     const homeDeploymentRangeRadius = !pixelsPerInch || !homeDeploymentNumericRange || homeDeploymentNumericRange <= 0 ? Infinity : homeDeploymentNumericRange * pixelsPerInch;
@@ -1704,6 +2381,20 @@ export default function InteractiveLOSTool() {
     const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
     const deepstrikeNumericRange = Number(deepstrikeRangeInches);
     const deepstrikeRangeRadius = pixelsPerInch && deepstrikeNumericRange >= 0 ? deepstrikeNumericRange * pixelsPerInch : null;
+    const unitCoherency = calculateUnitCoherency();
+    const rangedMarkers = state.current.losMarkers
+      .map((marker) => ({ marker, radius: markerRangeRadius(marker) }))
+      .filter((entry) => Number.isFinite(entry.radius));
+    const markerIdsInRange = new Set();
+    const enemyRangeCounts = enemies.map((enemy) => {
+      let count = 0;
+      rangedMarkers.forEach(({ marker, radius }) => {
+        if (!enemyInRange(enemy, marker, radius)) return;
+        count += 1;
+        markerIdsInRange.add(marker.id);
+      });
+      return count;
+    });
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "#151515";
@@ -1741,29 +2432,38 @@ export default function InteractiveLOSTool() {
       ctx.restore();
     }
 
-    drawZoneMask(ctx, oneWallZones, W, H, "rgba(245, 190, 55, .16)");
-    drawZoneMask(ctx, clearZones, W, H, "rgba(255,255,255,.09)");
+    if (state.current.combinedLosRender.oneWall) ctx.drawImage(state.current.combinedLosRender.oneWall, 0, 0);
+    if (state.current.combinedLosRender.clear) ctx.drawImage(state.current.combinedLosRender.clear, 0, 0);
 
     if (Number.isFinite(rangeRadius)) {
-      drawRangeZoneMask(ctx, [...oneWallZones, ...clearZones], W, H, light, rangeRadius, "rgba(34,197,94,.18)");
+      const rangeMarkers = selectedUnitMembers.length ? selectedUnitMembers : [getActiveLosMarker()].filter(Boolean);
+      const activeZones = rangeMarkers.flatMap((marker) => {
+        const activeVisibility = state.current.losVisibilityCache.get(marker.id);
+        return activeVisibility ? [...activeVisibility.oneWallZones, ...activeVisibility.clearZones] : [];
+      });
+      drawMultiRangeZoneMask(ctx, activeZones, W, H, rangeMarkers, rangeRadius, "rgba(34,197,94,.18)");
 
       ctx.save();
       ctx.setLineDash([8 / camera.scale, 8 / camera.scale]);
       ctx.lineWidth = 2 / camera.scale;
       ctx.strokeStyle = "rgba(34,197,94,.90)";
-      ctx.beginPath();
-      ctx.arc(light.x, light.y, rangeRadius, 0, Math.PI * 2);
-      ctx.stroke();
+      rangeMarkers.forEach((marker) => {
+        ctx.beginPath();
+        ctx.arc(marker.x, marker.y, rangeRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      });
       ctx.restore();
     }
 
     if (deploymentVisible && deploymentLine) {
-      drawDeploymentZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, "rgba(0,76,153,.40)");
-      drawDeploymentZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, "rgba(0,76,153,.40)");
+      const side = state.current.deploymentNoMansSide;
+      drawDeploymentZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.40)");
+      drawDeploymentZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.40)");
     }
     if (enemyDeploymentVisible && enemyDeploymentLine) {
-      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.oneWallZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, "rgba(153,20,23,.40)");
-      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.clearZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, "rgba(153,20,23,.40)");
+      const side = state.current.enemyDeploymentNoMansSide;
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.oneWallZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.40)");
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.clearZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.40)");
     }
 
     if (deepstrikeVisible && deepstrikeRangeRadius !== null) {
@@ -1806,6 +2506,10 @@ export default function InteractiveLOSTool() {
     if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
     rulers.forEach((ruler) => drawRulerLine(ctx, ruler.a, ruler.b, pixelsPerInch, camera.scale));
     if (rulerPreview) drawRulerLine(ctx, rulerPreview.a, rulerPreview.b, pixelsPerInch, camera.scale, true);
+    stickyRulers.forEach((ruler) => {
+      const geometry = getStickyRulerGeometry(ruler);
+      if (geometry) drawStickyRulerLine(ctx, geometry.a, geometry.b, pixelsPerInch, camera.scale);
+    });
     if (currentPoly.length) drawPoly(ctx, currentPoly, "rgba(255,255,255,.10)", "#fff", false, camera.scale);
 
     walls.forEach((wall) => drawWall(ctx, wall, camera.scale));
@@ -1824,31 +2528,48 @@ export default function InteractiveLOSTool() {
     if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(ctx, enemyDeploymentPath, camera.scale, enemyDeploymentVisible, false, "enemy");
     else if (enemyDeploymentLine) drawDeploymentLine(ctx, enemyDeploymentLine, camera.scale, enemyDeploymentVisible, false, "enemy");
     if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy");
+    if (homeDeployPath.length >= 2 && !state.current.deploymentNoMansSide) {
+      drawDeploymentSideArrows(ctx, homeDeployPath, camera.scale, "home");
+    }
+    if (enemyDeployPath.length >= 2 && !state.current.enemyDeploymentNoMansSide) {
+      drawDeploymentSideArrows(ctx, enemyDeployPath, camera.scale, "enemy");
+    }
 
     enemies.forEach((enemy, index) => {
       const losState = enemyLOSState(enemy, visibility);
       const rangeActive = Number.isFinite(rangeRadius);
-      const inRange = enemyInRange(enemy, light, rangeRadius);
-      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale);
+      const inRange = selectedUnitMembers.length
+        ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius))
+        : enemyInRange(enemy, light, rangeRadius);
+      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale, enemyRangeCounts[index]);
     });
 
     state.current.losMarkers.forEach((marker) => {
       const base = getBaseRadii(camera.scale, marker);
-      const isActive = marker.id === activeLosId;
+      const isPrimaryActive = marker.id === activeLosId;
+      const isActiveUnitMember = activeUnitSlot && marker.groupingMode === "unit" && marker.unitSlot === activeUnitSlot;
+      const isActive = isPrimaryActive || isActiveUnitMember;
+      const isStickyStart = sameStickyTarget(state.current.stickyRulerStart, { type: "los", id: marker.id });
+      const isUnitStickyStart = marker.groupingMode === "unit" && sameStickyTarget(state.current.stickyRulerStart, { type: "unit", id: String(marker.unitSlot) });
+      const coherency = marker.groupingMode === "unit" ? unitCoherency.get(marker.unitSlot) : null;
+      const unitFailed = coherency && !coherency.coherent;
 
       ctx.save();
       ctx.beginPath();
       ctx.ellipse(marker.x, marker.y, base.rx, base.ry, marker.baseRotation || 0, 0, Math.PI * 2);
       ctx.fillStyle = marker.visible ? "#f5f7fa" : "rgba(245,247,250,.45)";
       ctx.fill();
-      ctx.lineWidth = isActive ? 5 / camera.scale : 4 / camera.scale;
-      ctx.strokeStyle = isActive ? "#22c55e" : marker.visible ? "#2563eb" : "#64748b";
+      ctx.lineWidth = isUnitStickyStart || isStickyStart ? 6 / camera.scale : unitFailed ? 6 / camera.scale : isActive ? 5 / camera.scale : 4 / camera.scale;
+      ctx.strokeStyle = isUnitStickyStart || isStickyStart ? "rgb(222,145,25)" : unitFailed ? "#ef4444" : isActive ? "#22c55e" : marker.visible ? "#2563eb" : "#64748b";
       if (!marker.visible) ctx.setLineDash([6 / camera.scale, 5 / camera.scale]);
       ctx.stroke();
 
-      drawLosMarkerLabel(ctx, marker, base, camera.scale);
+      if (markerIdsInRange.has(marker.id)) drawMarkerRangeTick(ctx, marker, base, camera.scale);
 
-      if (isActive) {
+      const unitMembers = marker.groupingMode === "unit" ? getUnitMembers(marker.unitSlot) : [];
+      if (unitMembers.length <= 2) drawLosMarkerLabel(ctx, marker, base, camera.scale);
+
+      if (isPrimaryActive && !activeUnitSlot) {
         ctx.setLineDash([]);
         const iconY = marker.y - base.ry - 18 / camera.scale;
         const showX = marker.x - 15 / camera.scale;
@@ -1881,23 +2602,97 @@ export default function InteractiveLOSTool() {
       ctx.restore();
     });
 
+    for (let slot = 1; slot <= 20; slot++) {
+      const members = getUnitMembers(slot);
+      if (members.length <= 2) continue;
+      const lowest = members.reduce((best, marker) => {
+        const bottom = marker.y + getBaseRadii(1, marker).ry;
+        const bestBottom = best.y + getBaseRadii(1, best).ry;
+        return bottom > bestBottom ? marker : best;
+      });
+      const label = getUnitDisplayName(slot, members);
+      const labelY = lowest.y + getBaseRadii(1, lowest).ry + 12 / camera.scale;
+      drawMapCaption(ctx, label, lowest.x, labelY, camera.scale);
+    }
+
+    if (activeUnitSlot && pixelsPerInch) {
+      const coherency = unitCoherency.get(activeUnitSlot);
+      if (coherency) {
+        const center = coherency.furthestPair
+          ? {
+            x: (coherency.furthestPair.a.x + coherency.furthestPair.b.x) / 2,
+            y: (coherency.furthestPair.a.y + coherency.furthestPair.b.y) / 2,
+          }
+          : coherency.members[0];
+        ctx.save();
+        ctx.setLineDash([8 / camera.scale, 7 / camera.scale]);
+        ctx.lineWidth = 3 / camera.scale;
+        ctx.strokeStyle = coherency.coherent ? "rgba(34,197,94,.95)" : "rgba(239,68,68,.95)";
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 4.5 * pixelsPerInch, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     ctx.restore();
   }
 
-  function updateVisibility() {
-    const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+  function calculateMarkerVisibility(marker, interactive = false, forceFullDetail = false) {
     const clearZones = [];
     const oneWallZones = [];
-
-    visibleMarkers.forEach((marker) => {
-      const origins = getLOSOriginsForMarker(marker);
-      origins.forEach((origin) => {
-        clearZones.push(computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0));
-        oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1));
-      });
+    if (!marker || marker.visible === false) return { clearZones, oneWallZones };
+    const visibleMarkerCount = state.current.losMarkers.filter((item) => item.visible !== false).length;
+    const useReducedSamples = !forceFullDetail && (interactive || visibleMarkerCount > 5);
+    const origins = getLOSOriginsForMarker(marker, useReducedSamples);
+    origins.forEach((origin) => {
+      clearZones.push(computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0));
+      oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1));
     });
+    return { clearZones, oneWallZones };
+  }
 
+  function cacheMarkerVisibility(markerId, visibility) {
+    state.current.losVisibilityCache.set(markerId, visibility);
+  }
+
+  function rebuildCombinedVisibility() {
+    const clearZones = [];
+    const oneWallZones = [];
+    state.current.losMarkers.forEach((marker) => {
+      if (marker.visible === false) return;
+      const cached = state.current.losVisibilityCache.get(marker.id);
+      if (!cached) return;
+      clearZones.push(...cached.clearZones);
+      oneWallZones.push(...cached.oneWallZones);
+    });
     state.current.visibility = { clearZones, oneWallZones };
+    state.current.combinedLosRender = {
+      oneWall: createZoneLayer(oneWallZones, state.current.W, state.current.H, "rgba(245, 190, 55, .16)", state.current.combinedLosRender.oneWall),
+      clear: createZoneLayer(clearZones, state.current.W, state.current.H, "rgba(255,255,255,.09)", state.current.combinedLosRender.clear),
+    };
+  }
+
+  function updateVisibility(markerId = null, recomputeDeployment = true, interactive = false) {
+    if (markerId) {
+      const marker = state.current.losMarkers.find((item) => item.id === markerId);
+      if (marker?.visible !== false) cacheMarkerVisibility(markerId, calculateMarkerVisibility(marker, interactive));
+      else rebuildCombinedVisibility();
+    } else {
+      const currentIds = new Set(state.current.losMarkers.map((marker) => marker.id));
+      for (const cachedId of state.current.losVisibilityCache.keys()) {
+        if (!currentIds.has(cachedId)) {
+          state.current.losVisibilityCache.delete(cachedId);
+        }
+      }
+      state.current.losMarkers.forEach((marker) => {
+        if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker));
+        else state.current.losVisibilityCache.delete(marker.id);
+      });
+    }
+
+    rebuildCombinedVisibility();
+    if (!recomputeDeployment) return;
 
     const deployPath = state.current.deploymentPath?.length >= 2
       ? state.current.deploymentPath
@@ -1929,12 +2724,16 @@ export default function InteractiveLOSTool() {
   }
 
   const sortedMarkers = sortedLosMarkers();
+  const sortedUnits = Array.from({ length: 20 }, (_, index) => index + 1)
+    .map((slot) => ({ slot, members: getUnitMembers(slot) }))
+    .filter((unit) => unit.members.length);
   const displayedSaveName = selectedSave || saveName || "Unsaved game";
 
   return (
     <div style={styles.appShell}>
       <div style={styles.body}>
-        <aside style={styles.sidebar}>
+        <div style={{ ...styles.sidebarShell, width: sidebarCollapsed ? 0 : 270 }}>
+          <aside style={{ ...styles.sidebar, transform: sidebarCollapsed ? "translateX(-100%)" : "translateX(0)" }}>
           <button onClick={() => fileRef.current?.click()} style={styles.uploadButton}>Upload map</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
 
@@ -1997,10 +2796,10 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 4 }}>
+          <div style={{ ...styles.sidebarSection, order: 5 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("scale")}>
               <span style={styles.sectionTriangle}>{sectionOpen.scale ? "▾" : "▸"}</span>
-              <span>Scale, Ruler &amp; Deepstrike</span>
+              <span>Scale, Rulers &amp; Deepstrike</span>
             </button>
             {sectionOpen.scale && (
               <div style={styles.sectionContent}>
@@ -2011,6 +2810,10 @@ export default function InteractiveLOSTool() {
                 <div style={styles.sidebarRow}>
                   <ToolButton active={mode === "ruler"} onClick={() => setMode("ruler")}>Ruler</ToolButton>
                   <ToolButton onClick={clearRulers}>Clear rulers</ToolButton>
+                </div>
+                <div style={styles.sidebarRow}>
+                  <ToolButton active={mode === "stickyRuler"} onClick={() => { state.current.stickyRulerStart = null; setMode("stickyRuler"); setStatus("Choose a LOS marker or enemy to start a sticky ruler."); }}>Sticky ruler</ToolButton>
+                  <ToolButton onClick={clearStickyRulers}>Clear sticky rulers</ToolButton>
                 </div>
                 <div style={styles.deploymentControlGroup}>
                   <div style={styles.deepstrikeRow}>
@@ -2214,6 +3017,22 @@ export default function InteractiveLOSTool() {
                           </div>
                           <div style={styles.markerDetailLabel}>Range</div>
                           <input type="number" min="0" step="1" value={rangeInches === "unlimited" ? "" : rangeInches} onChange={(e) => updateActiveLosMarker({ rangeInches: e.target.value || "unlimited" })} style={styles.fullInput} placeholder="0/blank = unlimited" title="Weapon range in inches; blank or 0 means unlimited" />
+                          <div style={styles.markerDetailLabel}>Model or Unit</div>
+                          <div style={styles.sidebarRow}>
+                            <ToolButton active={markerGroupingMode === "model"} onClick={setActiveMarkerAsModel}>Model</ToolButton>
+                            <ToolButton active={markerGroupingMode === "unit"} onClick={() => setMarkerGroupingMode("unit")}>Unit</ToolButton>
+                          </div>
+                          {markerGroupingMode === "unit" && (
+                            <div style={styles.unitAssignmentPanel}>
+                              <div style={styles.markerDetailLabel}>Models of this type</div>
+                              <input type="number" min="1" max="20" value={unitModelCount} onChange={(e) => setUnitModelCount(e.target.value)} style={styles.fullInput} />
+                              <div style={styles.markerDetailLabel}>Which unit</div>
+                              <select value={selectedUnitSlot} onChange={(e) => setSelectedUnitSlot(Number(e.target.value))} style={styles.fullInput}>
+                                {Array.from({ length: 20 }, (_, index) => <option key={index + 1} value={index + 1}>Unit {index + 1}</option>)}
+                              </select>
+                              <ToolButton onClick={applyActiveMarkerToUnit}>Apply unit</ToolButton>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2222,7 +3041,77 @@ export default function InteractiveLOSTool() {
               </div>
             )}
           </div>
-          <div style={{ ...styles.sidebarSection, order: 5 }}>
+          <div style={{ ...styles.sidebarSection, order: 4 }}>
+            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("units")}>
+              <span style={styles.sectionTriangle}>{sectionOpen.units ? "▾" : "▸"}</span>
+              <span>Units</span>
+            </button>
+            {sectionOpen.units && (
+              <div style={styles.sectionContent}>
+                {!sortedUnits.length && <div style={styles.emptyMarkerNote}>No units created yet.</div>}
+                <div style={styles.markerList}>
+                  {sortedUnits.map(({ slot, members }) => {
+                    const allVisible = members.every((member) => member.visible !== false);
+                    const allHidden = members.every((member) => member.visible === false);
+                    const selected = activeUnitSlot === slot;
+                    const unitRange = getUnitRange(slot, members);
+                    return (
+                      <div
+                        key={slot}
+                        style={{ ...styles.markerItem, borderColor: selected ? "#22c55e" : "rgba(255,255,255,.12)", background: selected ? "rgba(34,197,94,.14)" : "rgba(255,255,255,.05)" }}
+                        onClick={() => selectUnit(slot)}
+                      >
+                        <div style={styles.markerHeader}>
+                          <input
+                            value={getUnitDisplayName(slot, members)}
+                            onFocus={() => selectUnit(slot)}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => renameUnit(slot, event.target.value)}
+                            onWheel={(event) => { event.currentTarget.scrollLeft += event.deltaY; }}
+                            style={styles.unitNameInput}
+                            title={getUnitDisplayName(slot, members)}
+                          />
+                          <MarkerVisibilityButton
+                            active={allVisible}
+                            kind="show"
+                            label={`Enable LOS for ${getUnitDisplayName(slot, members)}`}
+                            onClick={(event) => { event.stopPropagation(); setUnitVisibility(slot, true); }}
+                          />
+                          <MarkerVisibilityButton
+                            active={allHidden}
+                            kind="hide"
+                            label={`Disable LOS for ${getUnitDisplayName(slot, members)}`}
+                            onClick={(event) => { event.stopPropagation(); setUnitVisibility(slot, false); }}
+                          />
+                        </div>
+                        {selected && (
+                          <div style={styles.markerDetails} onClick={(event) => event.stopPropagation()}>
+                            <div style={styles.markerDetailLabel}>Range</div>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={unitRange === "unlimited" ? "" : unitRange}
+                              onChange={(event) => setUnitRange(slot, event.target.value)}
+                              style={styles.fullInput}
+                              placeholder="0/blank = unlimited"
+                              title="Unit range measured from every model in the unit"
+                            />
+                            <ToolButton
+                              active={sameStickyTarget(state.current.stickyRulerStart, { type: "unit", id: String(slot) })}
+                              onClick={() => startUnitStickyRuler(slot)}
+                            >Sticky ruler for unit</ToolButton>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...styles.sidebarSection, order: 6 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("draw")}>
               <span style={styles.sectionTriangle}>{sectionOpen.draw ? "▾" : "▸"}</span>
               <span>Draw, Deploy & Enemies</span>
@@ -2266,7 +3155,15 @@ export default function InteractiveLOSTool() {
               </div>
             )}
           </div>
-        </aside>
+          </aside>
+          <button
+            type="button"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            style={{ ...styles.sidebarToggle, right: sidebarCollapsed ? -32 : -31 }}
+          >{sidebarCollapsed ? "›" : "‹"}</button>
+        </div>
 
         <main style={styles.mainArea}>
           <div style={styles.toolbar}>
@@ -2277,7 +3174,7 @@ export default function InteractiveLOSTool() {
           <div style={styles.status}>{status}</div>
           <div style={styles.legend}>White = model LOS · Blue = home deployment LOS · Red = enemy deployment LOS · Orange = valid deepstrike area · Green = visible within selected range · Yellow = crossed one footprint wall · Dark = blocked</div>
           <div style={styles.canvasWrap}>
-            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={mode === "wall" ? finishWall : isDeploymentMode() ? finishDeploymentLOS : finishFootprint} onWheel={handleWheel} />
+            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} />
           </div>
         </main>
       </div>
@@ -2312,8 +3209,17 @@ const styles = {
     display: "flex",
     overflow: "hidden",
   },
+  sidebarShell: {
+    position: "relative",
+    height: "100%",
+    flexShrink: 0,
+    transition: "width 180ms ease",
+    zIndex: 4,
+  },
   sidebar: {
     width: 270,
+    height: "100%",
+    boxSizing: "border-box",
     flexShrink: 0,
     display: "flex",
     flexDirection: "column",
@@ -2322,6 +3228,24 @@ const styles = {
     padding: 10,
     background: "rgba(0,0,0,.94)",
     borderRight: "1px solid rgba(255,255,255,.12)",
+    transition: "transform 180ms ease",
+  },
+  sidebarToggle: {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: 32,
+    height: 64,
+    padding: 0,
+    borderRadius: "0 10px 10px 0",
+    border: "1px solid rgba(255,255,255,.28)",
+    borderLeft: 0,
+    background: "rgba(0,0,0,.94)",
+    color: "#fff",
+    fontSize: 30,
+    lineHeight: 1,
+    cursor: "pointer",
+    zIndex: 5,
   },
   mainArea: {
     flex: 1,
@@ -2528,6 +3452,12 @@ const styles = {
     borderTop: "1px solid rgba(255,255,255,.12)",
     cursor: "default",
   },
+  unitAssignmentPanel: {
+    width: "100%",
+    display: "grid",
+    gap: 6,
+    paddingTop: 2,
+  },
   markerHeader: {
     width: "100%",
     display: "flex",
@@ -2559,6 +3489,18 @@ const styles = {
     background: "#111827",
     color: "white",
     fontWeight: 700,
+  },
+  unitNameInput: {
+    flex: 1,
+    minWidth: 0,
+    padding: "7px 8px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,.12)",
+    background: "#111827",
+    color: "white",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    overflowX: "auto",
   },
   markerVisibilityButton: {
     width: 29,
@@ -2976,13 +3918,20 @@ function strokePoly(ctx, poly, stroke, width) {
 }
 
 function drawZoneMask(ctx, zones, W, H, fillStyle) {
-  const goodZones = zones.filter((poly) => poly?.length);
-  if (!goodZones.length) return;
+  const layer = createZoneLayer(zones, W, H, fillStyle);
+  if (layer) ctx.drawImage(layer, 0, 0);
+}
 
-  const mask = document.createElement("canvas");
-  mask.width = W;
-  mask.height = H;
+function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null) {
+  const goodZones = zones.filter((poly) => poly?.length);
+  if (!goodZones.length) return null;
+
+  const mask = reusableCanvas || document.createElement("canvas");
+  if (mask.width !== W) mask.width = W;
+  if (mask.height !== H) mask.height = H;
   const m = mask.getContext("2d");
+  m.clearRect(0, 0, W, H);
+  m.globalCompositeOperation = "source-over";
 
   m.fillStyle = "#fff";
   goodZones.forEach((poly) => {
@@ -2996,11 +3945,15 @@ function drawZoneMask(ctx, zones, W, H, fillStyle) {
   m.globalCompositeOperation = "source-in";
   m.fillStyle = fillStyle;
   m.fillRect(0, 0, W, H);
-  ctx.drawImage(mask, 0, 0);
+  return mask;
 }
 
-function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, fillStyle) {
+function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, towardSide, fillStyle) {
   if (!Number.isFinite(rangeRadius)) {
+    drawZoneMask(ctx, zones, W, H, fillStyle);
+    return;
+  }
+  if (!towardSide) {
     drawZoneMask(ctx, zones, W, H, fillStyle);
     return;
   }
@@ -3021,19 +3974,102 @@ function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, fillStyle) 
   });
 
   m.globalCompositeOperation = "destination-in";
-  m.beginPath();
-  m.moveTo(path[0].x, path[0].y);
-  for (let i = 1; i < path.length; i++) m.lineTo(path[i].x, path[i].y);
-  m.lineWidth = rangeRadius * 2;
-  m.lineCap = "round";
-  m.lineJoin = "round";
-  m.strokeStyle = "#fff";
-  m.stroke();
+  const allowed = document.createElement("canvas");
+  allowed.width = W;
+  allowed.height = H;
+  const a = allowed.getContext("2d");
+  a.strokeStyle = "#fff";
+  a.fillStyle = "#fff";
+  a.beginPath();
+  a.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) a.lineTo(path[i].x, path[i].y);
+  a.lineWidth = rangeRadius * 2;
+  a.lineCap = "round";
+  a.lineJoin = "round";
+  a.stroke();
+  if (towardSide) fillDeploymentUnlimitedSide(a, path, -towardSide, W, H);
+  m.drawImage(allowed, 0, 0);
 
   m.globalCompositeOperation = "source-in";
   m.fillStyle = fillStyle;
   m.fillRect(0, 0, W, H);
   ctx.drawImage(mask, 0, 0);
+}
+
+function pathMidpointAndTangent(path) {
+  const segments = [];
+  let totalLength = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length <= 0.001) continue;
+    segments.push({ a, b, length, start: totalLength });
+    totalLength += length;
+  }
+
+  if (!segments.length) {
+    const point = path[0] || { x: 0, y: 0 };
+    return { point, tangent: { x: 1, y: 0 } };
+  }
+
+  const halfway = totalLength / 2;
+  const segment = segments.find((item) => halfway <= item.start + item.length) || segments[segments.length - 1];
+  const t = Math.max(0, Math.min(1, (halfway - segment.start) / segment.length));
+  return {
+    point: {
+      x: segment.a.x + (segment.b.x - segment.a.x) * t,
+      y: segment.a.y + (segment.b.y - segment.a.y) * t,
+    },
+    tangent: {
+      x: (segment.b.x - segment.a.x) / segment.length,
+      y: (segment.b.y - segment.a.y) / segment.length,
+    },
+  };
+}
+
+function fillDeploymentUnlimitedSide(ctx, path, side, W, H) {
+  const mid = pathMidpointAndTangent(path);
+  const normal = { x: -mid.tangent.y * side, y: mid.tangent.x * side };
+  const distance = Math.max(W, H) * 4;
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+  for (let i = path.length - 1; i >= 0; i--) ctx.lineTo(path[i].x + normal.x * distance, path[i].y + normal.y * distance);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function deploymentSideArrowPositions(path, scale = 1) {
+  const mid = pathMidpointAndTangent(path);
+  const offset = 58 / scale;
+  const leftNormal = { x: -mid.tangent.y, y: mid.tangent.x };
+  return [
+    { side: 1, point: { x: mid.point.x + leftNormal.x * offset, y: mid.point.y + leftNormal.y * offset }, normal: leftNormal },
+    { side: -1, point: { x: mid.point.x - leftNormal.x * offset, y: mid.point.y - leftNormal.y * offset }, normal: { x: -leftNormal.x, y: -leftNormal.y } },
+  ];
+}
+
+function drawDeploymentSideArrows(ctx, path, scale = 1) {
+  ctx.save();
+  deploymentSideArrowPositions(path, scale).forEach(({ point, normal }) => {
+    const tip = { x: point.x + normal.x * 25 / scale, y: point.y + normal.y * 25 / scale };
+    const base = { x: point.x - normal.x * 19 / scale, y: point.y - normal.y * 19 / scale };
+    const side = { x: -normal.y * 20 / scale, y: normal.x * 20 / scale };
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(base.x + side.x, base.y + side.y);
+    ctx.lineTo(base.x - side.x, base.y - side.y);
+    ctx.closePath();
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3 / scale;
+    ctx.stroke();
+  });
+  const mid = pathMidpointAndTangent(path).point;
+  drawMapCaption(ctx, "WHICH SIDE IS NO MAN'S LAND?", mid.x, mid.y - 58 / scale, scale);
+  ctx.restore();
 }
 
 function drawDeepstrikeOverlay(ctx, exclusions, rangeRadius, W, H) {
@@ -3064,28 +4100,31 @@ function drawDeepstrikeOverlay(ctx, exclusions, rangeRadius, W, H) {
   ctx.drawImage(mask, 0, 0);
 }
 
-function drawRangeZoneMask(ctx, zones, W, H, light, rangeRadius, fillStyle) {
+function drawMultiRangeZoneMask(ctx, zones, W, H, markers, rangeRadius, fillStyle) {
   const goodZones = zones.filter((poly) => poly?.length);
-  if (!goodZones.length || !Number.isFinite(rangeRadius)) return;
+  if (!goodZones.length || !markers.length || !Number.isFinite(rangeRadius)) return;
 
   const mask = document.createElement("canvas");
   mask.width = W;
   mask.height = H;
   const m = mask.getContext("2d");
 
-  m.save();
-  m.beginPath();
-  m.arc(light.x, light.y, rangeRadius, 0, Math.PI * 2);
-  m.clip();
   m.fillStyle = "#fff";
   goodZones.forEach((poly) => {
     m.beginPath();
     m.moveTo(poly[0].x, poly[0].y);
-    for (let i = 1; i < poly.length; i++) m.lineTo(poly[i].x, poly[i].y);
+    for (let index = 1; index < poly.length; index++) m.lineTo(poly[index].x, poly[index].y);
     m.closePath();
     m.fill();
   });
-  m.restore();
+
+  m.globalCompositeOperation = "destination-in";
+  m.beginPath();
+  markers.forEach((marker) => {
+    m.moveTo(marker.x + rangeRadius, marker.y);
+    m.arc(marker.x, marker.y, rangeRadius, 0, Math.PI * 2);
+  });
+  m.fill();
 
   m.globalCompositeOperation = "source-in";
   m.fillStyle = fillStyle;
@@ -3145,11 +4184,7 @@ function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = fals
 
   const endpoints = [path[0], path[path.length - 1]];
   const bottomEndpoint = endpoints[0].y >= endpoints[1].y ? endpoints[0] : endpoints[1];
-  ctx.font = `bold ${12 / scale}px system-ui`;
-  ctx.fillStyle = "#000";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText(kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 8 / scale);
+  drawMapCaption(ctx, kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 15 / scale, scale);
   ctx.restore();
 }
 
@@ -3166,12 +4201,8 @@ function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = fals
   ctx.strokeStyle = visible ? (preview ? previewColor : activeColor) : "rgba(148,163,184,.7)";
   if (!visible) ctx.setLineDash([8 / scale, 6 / scale]);
   ctx.stroke();
-  ctx.font = `bold ${12 / scale}px system-ui`;
   const bottomEndpoint = line.a.y >= line.b.y ? line.a : line.b;
-  ctx.fillStyle = "#000";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillText(kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 8 / scale);
+  drawMapCaption(ctx, kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 15 / scale, scale);
   ctx.restore();
 }
 
@@ -3220,7 +4251,7 @@ function drawWall(ctx, wall, scale = 1, preview = false) {
   ctx.restore();
 }
 
-function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1) {
+function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1, rangeCount = 0) {
   const r = 13 / scale;
   const visible = state === "clear";
   const oneWall = state === "oneWall";
@@ -3259,6 +4290,45 @@ function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(number), enemy.x, enemy.y);
+
+  if (rangeCount > 0) {
+    const badgeRadius = 8 / scale;
+    const badgeX = enemy.x + r * 0.82;
+    const badgeY = enemy.y + r * 0.82;
+    ctx.beginPath();
+    ctx.arc(badgeX, badgeY, badgeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#22c55e";
+    ctx.fill();
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${Math.max(8, 9 / scale)}px system-ui`;
+    ctx.fillText(String(rangeCount), badgeX, badgeY);
+  }
+  ctx.restore();
+}
+
+function drawMarkerRangeTick(ctx, marker, base, scale = 1) {
+  const x = marker.x + base.rx * 0.72;
+  const y = marker.y - base.ry * 0.72;
+  const radius = 8 / scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = "#22c55e";
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.5 / scale;
+  ctx.stroke();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2.2 / scale;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x - 4 / scale, y);
+  ctx.lineTo(x - 1 / scale, y + 3 / scale);
+  ctx.lineTo(x + 5 / scale, y - 4 / scale);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -3292,6 +4362,103 @@ function drawRulerLine(ctx, a, b, pixelsPerInch, scale = 1, preview = false) {
   ctx.textBaseline = "middle";
   ctx.fillText(label, midX, midY);
   ctx.restore();
+}
+
+function drawStickyRulerLine(ctx, a, b, pixelsPerInch, scale = 1) {
+  if (!a || !b || !pixelsPerInch) return;
+  const label = `${(dist(a, b) / pixelsPerInch).toFixed(1)}"`;
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+  const color = "rgb(222,145,25)";
+
+  ctx.save();
+  ctx.lineWidth = 3 / scale;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  for (const point of [a, b]) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.font = `bold ${14 / scale}px system-ui`;
+  const padding = 5 / scale;
+  const textWidth = ctx.measureText(label).width;
+  ctx.fillStyle = "rgba(255,255,255,.88)";
+  roundRect(ctx, midX - textWidth / 2 - padding, midY - 11 / scale, textWidth + padding * 2, 22 / scale, 5 / scale, true, false);
+  ctx.fillStyle = "#000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, midX, midY);
+  ctx.restore();
+}
+
+function ellipseRadiusInDirection(ellipse, dx, dy) {
+  const length = Math.hypot(dx, dy);
+  if (!length) return 0;
+  const unit = rotatePoint(dx / length, dy / length, -(ellipse.rotation || 0));
+  const denominator = Math.sqrt((unit.x * unit.x) / (ellipse.rx * ellipse.rx) + (unit.y * unit.y) / (ellipse.ry * ellipse.ry));
+  return denominator ? 1 / denominator : 0;
+}
+
+function closestEllipseEdgePoints(from, to) {
+  const dx = to.center.x - from.center.x;
+  const dy = to.center.y - from.center.y;
+  const centerDistance = Math.hypot(dx, dy);
+  if (!centerDistance) {
+    const point = { x: from.center.x, y: from.center.y };
+    return { a: point, b: point };
+  }
+  const ux = dx / centerDistance;
+  const uy = dy / centerDistance;
+  const fromRadius = ellipseRadiusInDirection(from, ux, uy);
+  const toRadius = ellipseRadiusInDirection(to, -ux, -uy);
+  if (centerDistance <= fromRadius + toRadius) {
+    const point = { x: from.center.x + ux * Math.min(fromRadius, centerDistance / 2), y: from.center.y + uy * Math.min(fromRadius, centerDistance / 2) };
+    return { a: point, b: point };
+  }
+  return {
+    a: { x: from.center.x + ux * fromRadius, y: from.center.y + uy * fromRadius },
+    b: { x: to.center.x - ux * toRadius, y: to.center.y - uy * toRadius },
+  };
+}
+
+function closestUnitStickyGeometry(unitMembers, target, unitFirst = true) {
+  let closest = null;
+  let closestDistance = Infinity;
+  unitMembers.forEach((member) => {
+    let geometry;
+    if (target.poly) {
+      geometry = closestPolygonToEllipsePoints(target.poly, member, !unitFirst);
+    } else {
+      geometry = unitFirst
+        ? closestEllipseEdgePoints(member, target)
+        : closestEllipseEdgePoints(target, member);
+    }
+    const distance = dist(geometry.a, geometry.b);
+    if (distance < closestDistance) {
+      closest = geometry;
+      closestDistance = distance;
+    }
+  });
+  return closest;
+}
+
+function drawMapCaption(ctx, label, x, y, scale = 1) {
+  const fontSize = 10 / scale;
+  ctx.font = `bold ${fontSize}px system-ui`;
+  const width = ctx.measureText(label).width + 10 / scale;
+  const height = fontSize + 6 / scale;
+  ctx.fillStyle = "rgba(15,23,42,.88)";
+  roundRect(ctx, x - width / 2, y - height / 2, width, height, 4 / scale, true, false);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y);
 }
 
 function drawLosMarkerLabel(ctx, marker, base, scale = 1) {
@@ -3359,6 +4526,55 @@ function pointNearSegment(p, a, b, threshold) {
   const t = Math.max(0, Math.min(1, (ap.x * ab.x + ap.y * ab.y) / len2));
   const closest = { x: a.x + ab.x * t, y: a.y + ab.y * t };
   return dist(p, closest) <= threshold;
+}
+
+function pointNearPath(p, path, threshold) {
+  if (!Array.isArray(path) || path.length < 2) return false;
+  for (let i = 0; i < path.length - 1; i++) {
+    if (pointNearSegment(p, path[i], path[i + 1], threshold)) return true;
+  }
+  return false;
+}
+
+function closestPointOnSegment(p, a, b) {
+  const ab = { x: b.x - a.x, y: b.y - a.y };
+  const lengthSquared = ab.x * ab.x + ab.y * ab.y;
+  if (!lengthSquared) return { ...a };
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lengthSquared));
+  return { x: a.x + ab.x * t, y: a.y + ab.y * t };
+}
+
+function closestPointOnPolygon(p, poly) {
+  let closest = poly[0];
+  let closestDistance = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const candidate = closestPointOnSegment(p, poly[i], poly[(i + 1) % poly.length]);
+    const distance = dist(p, candidate);
+    if (distance < closestDistance) {
+      closest = candidate;
+      closestDistance = distance;
+    }
+  }
+  return closest;
+}
+
+function pointNearPolygon(p, poly, threshold) {
+  return dist(p, closestPointOnPolygon(p, poly)) <= threshold;
+}
+
+function closestPolygonToEllipsePoints(poly, ellipse, polygonFirst = false) {
+  const polygonPoint = closestPointOnPolygon(ellipse.center, poly);
+  const dx = polygonPoint.x - ellipse.center.x;
+  const dy = polygonPoint.y - ellipse.center.y;
+  const length = Math.hypot(dx, dy);
+  if (!length) return { a: polygonPoint, b: polygonPoint };
+  const radius = ellipseRadiusInDirection(ellipse, dx, dy);
+  if (length <= radius) return { a: polygonPoint, b: polygonPoint };
+  const ellipsePoint = {
+    x: ellipse.center.x + dx / length * radius,
+    y: ellipse.center.y + dy / length * radius,
+  };
+  return polygonFirst ? { a: polygonPoint, b: ellipsePoint } : { a: ellipsePoint, b: polygonPoint };
 }
 
 function singularise(text) {
