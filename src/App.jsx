@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import BASE_DATABASE from "./baseSizes.json";
+import LAYOUT_PRESETS from "./layoutPresets.json";
 import LOS_TERRAIN_DATA from "./losTerrain.json";
 
 const FORCE_DISPOSITIONS = [
@@ -9,7 +10,6 @@ const FORCE_DISPOSITIONS = [
   "Reconnaissance",
   "Priority Assets",
 ];
-
 const FORCE_DISPOSITION_MISSIONS = {
   "Take and Hold": {
     "Take and Hold": "Battlefield Dominance",
@@ -118,39 +118,29 @@ const TERRAIN_FOOTPRINTS = Object.fromEntries(LOS_TERRAIN_DATA.pieces.map((piece
   }];
 }));
 
-const LAYOUT_PRESETS = {
-  "Take and Hold|Take and Hold|A": {
-    source: "Event Companion page 9, Layout A",
-    portraitCoordinates: true,
-    terrain: [
-      { shape: "long_line", x: 7, y: 4, rotation: 0 },
-      { shape: "long_line", x: 7, y: 9, rotation: 0 },
-      { shape: "short_line", x: 16, y: 4, rotation: 0 },
-      { shape: "short_line", x: 24, y: 4, rotation: 0 },
-      { shape: "short_line", x: 32, y: 4, rotation: 0 },
-      { shape: "short_line", x: 20, y: 9, rotation: 0 },
-      { shape: "medium_rectangle", x: 29, y: 10, rotation: 0 },
-      { shape: "medium_rectangle", x: 36, y: 10, rotation: 0 },
-      { shape: "medium_rectangle", x: 31, y: 18, rotation: 0 },
-      { shape: "medium_rectangle", x: 38, y: 18, rotation: 0 },
-      { shape: "large_rectangle", x: 7, y: 17, rotation: 0 },
-      { shape: "large_rectangle", x: 7, y: 27, rotation: 0 },
-      { shape: "large_rectangle", x: 7, y: 37, rotation: 0 },
-      { shape: "large_rectangle", x: 7, y: 47, rotation: 0 },
-      { shape: "right_triangle", x: 24, y: 30, rotation: 0 },
-      { shape: "right_triangle", x: 24, y: 43, rotation: 180 },
-    ],
-    objectives: [
-      { x: 45.5, y: 16.5, allegiance: "enemy" },
-      { x: 38.5, y: 36, allegiance: "neutral" },
-      { x: 29, y: 22, allegiance: "neutral" },
-      { x: 17, y: 8, allegiance: "neutral" },
-      { x: 10, y: 25, allegiance: "home" },
-    ],
-    homeDeploymentPath: [[12, 0], [12, 22], [20, 22], [20, 44]],
-    enemyDeploymentPath: [[40, 0], [40, 22], [48, 22], [48, 44]],
-  },
+const LAYOUT_WALL_TYPES = {
+  AB: { label: "AB", width: 5, height: 4, thickness: 0.5 },
+  CD: { label: "CD", width: 6, height: 2.5, thickness: 0.5 },
+  EF: { label: "EF", width: 6, height: 4.5, thickness: 0.5 },
+  GH: { label: "GH", width: 3, height: 6, thickness: 0.5 },
 };
+
+const LAYOUT_FEATURE_TYPES = {
+  largeLightL: { label: "Light", button: "Add large L", kind: "light", shape: "l", width: 3, height: 2, thickness: 0.5 },
+  smallLightL: { label: "Light", button: "Add small L", kind: "light", shape: "l", width: 2, height: 2, thickness: 0.5 },
+  largeLightBarricade: { label: "Light", button: "Add L barricade", kind: "light", shape: "bar", width: 4.75, height: 1 },
+  smallLightBarricade: { label: "Light", button: "Add S barricade", kind: "light", shape: "u", width: 4, height: 1, thickness: 0.25 },
+  smallDenseRectangle: { label: "Dense", button: "Add S green rectangle", kind: "dense", shape: "rect", width: 2.5, height: 3 },
+  denseBarricade: { label: "Dense", button: "Add green barricade", kind: "dense", shape: "rect", width: 8, height: 2 },
+  largeDenseRectangle: { label: "Dense", button: "Add L green rectangle", kind: "dense", shape: "rect", width: 2.75, height: 4 },
+};
+
+const DEFAULT_LAYOUT_WALL_SET = [
+  { type: "AB", x: 7, y: 8 }, { type: "AB", x: 37, y: 52, rotation: 180 },
+  { type: "CD", x: 18, y: 8 }, { type: "CD", x: 26, y: 52, rotation: 180 },
+  { type: "EF", x: 31, y: 8 }, { type: "EF", x: 13, y: 52, rotation: 180 },
+  { type: "GH", x: 40, y: 17 }, { type: "GH", x: 4, y: 43, rotation: 180 },
+];
 
 const MAP_DB_NAME = "warhammer-los-maps";
 const MAP_STORE_NAME = "maps";
@@ -234,7 +224,14 @@ export default function InteractiveLOSTool() {
   const [missionCardsVisible, setMissionCardsVisible] = useState(false);
   const [layoutEditMode, setLayoutEditMode] = useState(false);
   const [selectedLayoutTerrainId, setSelectedLayoutTerrainId] = useState(null);
+  const [layoutTerrainRelationVersion, setLayoutTerrainRelationVersion] = useState(0);
+  const [selectedLayoutWallId, setSelectedLayoutWallId] = useState(null);
+  const [selectedLayoutFeatureId, setSelectedLayoutFeatureId] = useState(null);
   const [selectedLayoutObjectiveId, setSelectedLayoutObjectiveId] = useState(null);
+  const [layoutLinkMode, setLayoutLinkMode] = useState(false);
+  const [firstLinkedTerrainId, setFirstLinkedTerrainId] = useState(null);
+  const [firstLinkedWallId, setFirstLinkedWallId] = useState(null);
+  const [firstLinkedFeatureId, setFirstLinkedFeatureId] = useState(null);
   const [activeLosId, setActiveLosId] = useState("los-1");
   const [losName, setLosName] = useState("LOS");
   const [losVersion, setLosVersion] = useState(0);
@@ -282,6 +279,7 @@ export default function InteractiveLOSTool() {
     deploymentPreview: null,
     deploymentVisible: true,
     deploymentNoMansSide: null,
+    deploymentLabelPosition: null,
     deploymentVisibility: { clearZones: [], oneWallZones: [] },
     enemyDeploymentLine: null,
     enemyDeploymentPath: [],
@@ -289,6 +287,7 @@ export default function InteractiveLOSTool() {
     enemyDeploymentPreview: null,
     enemyDeploymentVisible: true,
     enemyDeploymentNoMansSide: null,
+    enemyDeploymentLabelPosition: null,
     enemyDeploymentVisibility: { clearZones: [], oneWallZones: [] },
     blockers: [],
     blockerIds: [],
@@ -297,6 +296,14 @@ export default function InteractiveLOSTool() {
     enemies: [],
     layoutObjectives: [],
     layoutTerrain: [],
+    layoutTerrainLinks: [],
+    layoutTerrainGroups: [],
+    layoutWalls: [],
+    layoutWallLinks: [],
+    layoutTerrainFeatures: [],
+    layoutFeaturePieces: [],
+    layoutFeatureLinks: [],
+    layoutStagingIndex: 0,
     activeLayoutKey: null,
     currentPoly: [],
     wallPath: [],
@@ -304,6 +311,18 @@ export default function InteractiveLOSTool() {
     visibility: { clear: [], oneWall: [] },
     losVisibilityCache: new Map(),
     combinedLosRender: { clear: null, oneWall: null },
+    combinedLosBuffers: {
+      clearMask: null,
+      clearRender: null,
+      oneWallMask: null,
+      oneWallRender: null,
+      clearColour: null,
+      oneWallColour: null,
+      clearCleanupA: null,
+      clearCleanupB: null,
+      oneWallCleanupA: null,
+      oneWallCleanupB: null,
+    },
   });
 
   useEffect(() => {
@@ -354,7 +373,7 @@ export default function InteractiveLOSTool() {
   useEffect(() => {
     draw();
     scheduleBrowserSave();
-  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectedLayoutTerrainId]);
+  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId]);
 
   useEffect(() => {
     if (!layoutSaveReadyRef.current) {
@@ -415,6 +434,13 @@ export default function InteractiveLOSTool() {
         state.current.enemies = [];
         state.current.layoutObjectives = [];
         state.current.layoutTerrain = [];
+        state.current.layoutTerrainLinks = [];
+        state.current.layoutTerrainGroups = [];
+        state.current.layoutWalls = [];
+        state.current.layoutWallLinks = [];
+        state.current.layoutTerrainFeatures = [];
+        state.current.layoutFeaturePieces = [];
+        state.current.layoutFeatureLinks = [];
         state.current.activeLayoutKey = null;
         state.current.currentPoly = [];
         state.current.wallPath = [];
@@ -438,6 +464,7 @@ export default function InteractiveLOSTool() {
         state.current.deploymentPreview = null;
         state.current.deploymentVisible = true;
         state.current.deploymentNoMansSide = null;
+        state.current.deploymentLabelPosition = null;
         state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
         state.current.enemyDeploymentLine = null;
         state.current.enemyDeploymentPath = [];
@@ -445,6 +472,7 @@ export default function InteractiveLOSTool() {
         state.current.enemyDeploymentPreview = null;
         state.current.enemyDeploymentVisible = true;
         state.current.enemyDeploymentNoMansSide = null;
+        state.current.enemyDeploymentLabelPosition = null;
         state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
         setHomeDeploymentRangeInches("unlimited");
         setEnemyDeploymentRangeInches("unlimited");
@@ -475,19 +503,28 @@ export default function InteractiveLOSTool() {
       camera: state.current.camera,
       blockers: state.current.blockers,
       blockerIds: state.current.blockerIds,
-      walls: state.current.walls,
+      walls: state.current.walls.filter((wall) => !wall.generatedLayoutWall),
       enemies: state.current.enemies,
       layoutObjectives: state.current.layoutObjectives,
       layoutTerrain: state.current.layoutTerrain,
+      layoutTerrainLinks: state.current.layoutTerrainLinks,
+      layoutTerrainGroups: state.current.layoutTerrainGroups,
+      layoutWalls: state.current.layoutWalls,
+      layoutWallLinks: state.current.layoutWallLinks,
+      layoutTerrainFeatures: state.current.layoutTerrainFeatures,
+      layoutFeaturePieces: state.current.layoutFeaturePieces,
+      layoutFeatureLinks: state.current.layoutFeatureLinks,
       activeLayoutKey: state.current.activeLayoutKey,
       deploymentLine: state.current.deploymentLine,
       deploymentPath: state.current.deploymentPath,
       deploymentVisible: state.current.deploymentVisible,
       deploymentNoMansSide: state.current.deploymentNoMansSide,
+      deploymentLabelPosition: state.current.deploymentLabelPosition,
       enemyDeploymentLine: state.current.enemyDeploymentLine,
       enemyDeploymentPath: state.current.enemyDeploymentPath,
       enemyDeploymentVisible: state.current.enemyDeploymentVisible,
       enemyDeploymentNoMansSide: state.current.enemyDeploymentNoMansSide,
+      enemyDeploymentLabelPosition: state.current.enemyDeploymentLabelPosition,
       homeDeploymentRangeInches,
       enemyDeploymentRangeInches,
       deepstrikeRangeInches,
@@ -511,6 +548,10 @@ export default function InteractiveLOSTool() {
   async function applySaveData(data, message = "Browser save restored.") {
     if (!data) return;
     setActiveUnitSlot(null);
+    setLayoutLinkMode(false);
+    setFirstLinkedTerrainId(null);
+    setFirstLinkedWallId(null);
+    setFirstLinkedFeatureId(null);
     setDefenderForceDisposition(FORCE_DISPOSITIONS.includes(data.defenderForceDisposition) ? data.defenderForceDisposition : "Take and Hold");
     setAttackerForceDisposition(FORCE_DISPOSITIONS.includes(data.attackerForceDisposition) ? data.attackerForceDisposition : "Take and Hold");
     setSelectedLayoutVariant(["A", "B", "C"].includes(data.selectedLayoutVariant) ? data.selectedLayoutVariant : "A");
@@ -562,6 +603,27 @@ export default function InteractiveLOSTool() {
       }));
     }
     state.current.layoutObjectives = Array.isArray(data.layoutObjectives) ? data.layoutObjectives : [];
+    state.current.layoutWalls = Array.isArray(data.layoutWalls)
+      ? data.layoutWalls.map((wall) => ({ ...wall, mirrored: wall.mirrored === true }))
+      : [];
+    state.current.layoutWallLinks = Array.isArray(data.layoutWallLinks)
+      ? data.layoutWallLinks.filter((link) => Array.isArray(link) && link.length === 2)
+      : [];
+    state.current.layoutTerrainLinks = Array.isArray(data.layoutTerrainLinks)
+      ? data.layoutTerrainLinks.filter((link) => Array.isArray(link) && link.length === 2)
+      : [];
+    state.current.layoutTerrainGroups = Array.isArray(data.layoutTerrainGroups)
+      ? data.layoutTerrainGroups.filter((group) => Array.isArray(group) && group.length >= 2)
+      : [];
+    // Legacy freehand TFs were replaced by reusable feature pieces. Discard them
+    // on load so old, non-interactive overlays cannot remain stuck on layouts.
+    state.current.layoutTerrainFeatures = [];
+    state.current.layoutFeaturePieces = Array.isArray(data.layoutFeaturePieces)
+      ? data.layoutFeaturePieces.map((feature) => ({ ...feature, mirrored: feature.mirrored === true }))
+      : [];
+    state.current.layoutFeatureLinks = Array.isArray(data.layoutFeatureLinks)
+      ? data.layoutFeatureLinks.filter((link) => Array.isArray(link) && link.length === 2)
+      : [];
     const usesPortraitBattlefield = data.battlefieldOrientation === "portrait-44x60";
     const restoredLayoutKey = typeof data.activeLayoutKey === "string"
       ? data.activeLayoutKey
@@ -569,6 +631,16 @@ export default function InteractiveLOSTool() {
         ? `${data.defenderForceDisposition || "Take and Hold"}|${data.attackerForceDisposition || "Take and Hold"}|${data.selectedLayoutVariant || "A"}`
         : null;
     const restoredPreset = LAYOUT_PRESETS[restoredLayoutKey];
+    if (!state.current.layoutWalls.length && restoredPreset) {
+      state.current.layoutWalls = (restoredPreset.wallPieces || DEFAULT_LAYOUT_WALL_SET).map((wall, index) => ({
+        id: `layout-wall-${wall.type}-${index}`,
+        type: wall.type,
+        x: wall.x,
+        y: wall.y,
+        rotation: wall.rotation || 0,
+        mirrored: wall.mirrored === true,
+      }));
+    }
     const shouldUpgradeLayoutGeometry = restoredPreset && data.layoutGeometryVersion !== "wartoken-json-v1";
     state.current.layoutTerrain = shouldUpgradeLayoutGeometry
       ? restoredPreset.terrain.map((terrain, index) => {
@@ -599,6 +671,7 @@ export default function InteractiveLOSTool() {
     state.current.deploymentPath = Array.isArray(data.deploymentPath) ? data.deploymentPath : (data.deploymentLine ? [data.deploymentLine.a, data.deploymentLine.b] : []);
     state.current.deploymentVisible = data.deploymentVisible !== false;
     state.current.deploymentNoMansSide = data.deploymentNoMansSide === -1 ? -1 : data.deploymentNoMansSide === 1 ? 1 : null;
+    state.current.deploymentLabelPosition = validBoardPoint(data.deploymentLabelPosition) ? { ...data.deploymentLabelPosition } : null;
     state.current.deploymentDraft = [];
     state.current.deploymentPreview = null;
     state.current.enemyDeploymentLine = data.enemyDeploymentLine || null;
@@ -607,6 +680,7 @@ export default function InteractiveLOSTool() {
       : (data.enemyDeploymentLine ? [data.enemyDeploymentLine.a, data.enemyDeploymentLine.b] : []);
     state.current.enemyDeploymentVisible = data.enemyDeploymentVisible !== false;
     state.current.enemyDeploymentNoMansSide = data.enemyDeploymentNoMansSide === -1 ? -1 : data.enemyDeploymentNoMansSide === 1 ? 1 : null;
+    state.current.enemyDeploymentLabelPosition = validBoardPoint(data.enemyDeploymentLabelPosition) ? { ...data.enemyDeploymentLabelPosition } : null;
     state.current.enemyDeploymentDraft = [];
     state.current.enemyDeploymentPreview = null;
     state.current.rulerStart = null;
@@ -831,6 +905,7 @@ export default function InteractiveLOSTool() {
     state.current.deploymentPreview = null;
     state.current.deploymentVisible = true;
     state.current.deploymentNoMansSide = null;
+    state.current.deploymentLabelPosition = null;
     state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
     state.current.enemyDeploymentLine = null;
     state.current.enemyDeploymentPath = [];
@@ -838,6 +913,7 @@ export default function InteractiveLOSTool() {
     state.current.enemyDeploymentPreview = null;
     state.current.enemyDeploymentVisible = true;
     state.current.enemyDeploymentNoMansSide = null;
+    state.current.enemyDeploymentLabelPosition = null;
     state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     state.current.blockers = [];
     state.current.blockerIds = [];
@@ -845,11 +921,22 @@ export default function InteractiveLOSTool() {
     state.current.enemies = [];
     state.current.layoutObjectives = [];
     state.current.layoutTerrain = [];
+    state.current.layoutTerrainLinks = [];
+    state.current.layoutTerrainGroups = [];
+    state.current.layoutWalls = [];
+    state.current.layoutWallLinks = [];
+    state.current.layoutTerrainFeatures = [];
+    state.current.layoutFeaturePieces = [];
+    state.current.layoutFeatureLinks = [];
     state.current.activeLayoutKey = null;
     state.current.currentPoly = [];
     state.current.wallPath = [];
     state.current.wallPreview = null;
     state.current.visibility = { clear: [], oneWall: [] };
+    setLayoutLinkMode(false);
+    setFirstLinkedTerrainId(null);
+    setFirstLinkedWallId(null);
+    setFirstLinkedFeatureId(null);
 
     setSelectedSave("");
     setDefenderForceDisposition("Take and Hold");
@@ -1718,12 +1805,94 @@ export default function InteractiveLOSTool() {
   function pointerDown(e) {
     const p = screenToWorld(e);
 
-    if (layoutEditMode) {
+    const wallFloorChoice = selectedLayoutWallId ? findLayoutWallFloorButton(p) : null;
+    if (wallFloorChoice) {
+      setSelectedWallFloorState(wallFloorChoice);
+      return;
+    }
+    const terrainRelationChoice = layoutEditMode && selectedLayoutTerrainId
+      ? findLayoutTerrainRelationButton(p)
+      : null;
+    if (terrainRelationChoice !== null) {
+      setSelectedTerrainFootprintRelation(terrainRelationChoice);
+      return;
+    }
+
+    if (selectedLayoutWallId && (mode === "denseTF" || mode === "lightTF")) {
+      setSelectedLayoutWallId(null);
+    }
+
+    const canSelectLayoutWall = mode !== "denseTF" && mode !== "lightTF" && mode !== "block"
+      && mode !== "wall" && mode !== "erase" && !isDeploymentMode();
+    const clickedDeploymentLabel = layoutEditMode && canSelectLayoutWall ? findDeploymentLabelAtPoint(p) : null;
+    if (clickedDeploymentLabel) {
+      objectDragRef.current = { type: "deploymentLabel", kind: clickedDeploymentLabel };
+      setSelectedLayoutFeatureId(null);
+      setSelectedLayoutWallId(null);
+      setSelectedLayoutTerrainId(null);
+      setSelectedLayoutObjectiveId(null);
+      setStatus(`${clickedDeploymentLabel === "enemy" ? "Enemy" : "Home"} deploy line label selected. Drag it to reposition both deploy labels.`);
+      draw();
+      return;
+    }
+    const clickedLayoutFeatureIndex = layoutEditMode && canSelectLayoutWall
+      ? findLayoutFeatureAtPoint(p)
+      : -1;
+    if (clickedLayoutFeatureIndex >= 0) {
+      const feature = state.current.layoutFeaturePieces[clickedLayoutFeatureIndex];
+      if (layoutEditMode && layoutLinkMode) {
+        selectFeatureForLink(feature);
+        return;
+      }
+      setSelectedLayoutFeatureId(feature.id);
+      setSelectedLayoutWallId(null);
+      setSelectedLayoutTerrainId(null);
+      setSelectedLayoutObjectiveId(null);
+      if (layoutEditMode) {
+        objectDragRef.current = { type: "layoutFeature", index: clickedLayoutFeatureIndex, startPoint: p, startX: feature.x, startY: feature.y };
+      }
+      setStatus(`${LAYOUT_FEATURE_TYPES[feature.type]?.label || "Terrain feature"} selected.`);
+      draw();
+      return;
+    }
+    const clickedLayoutWallIndex = canSelectLayoutWall ? findLayoutWallAtPoint(p) : -1;
+    if (clickedLayoutWallIndex >= 0) {
+      const wall = state.current.layoutWalls[clickedLayoutWallIndex];
+      if (layoutEditMode && layoutLinkMode) {
+        selectWallForLink(wall);
+        return;
+      }
+      setSelectedLayoutWallId(wall.id);
+      setSelectedLayoutFeatureId(null);
+      setSelectedLayoutTerrainId(null);
+      setSelectedLayoutObjectiveId(null);
+      if (layoutEditMode) {
+        objectDragRef.current = { type: "layoutWall", index: clickedLayoutWallIndex, startPoint: p, startX: wall.x, startY: wall.y };
+      }
+      setStatus(`${wall.type} wall selected. Choose Ground or 1st Floor.`);
+      draw();
+      return;
+    }
+
+    if (selectedLayoutWallId) setSelectedLayoutWallId(null);
+    if (selectedLayoutFeatureId) setSelectedLayoutFeatureId(null);
+
+    if (layoutEditMode && mode !== "denseTF" && mode !== "lightTF") {
+      if (layoutLinkMode) {
+        const linkTerrainIndex = findLayoutTerrainAtPoint(p);
+        if (linkTerrainIndex >= 0) {
+          selectTerrainForLink(state.current.layoutTerrain[linkTerrainIndex]);
+        } else {
+          setStatus("Link mode: click a terrain footprint.");
+        }
+        return;
+      }
       const objectiveIndex = findLayoutObjectiveAtPoint(p);
       if (objectiveIndex >= 0) {
         const objective = state.current.layoutObjectives[objectiveIndex];
         setSelectedLayoutObjectiveId(objective.id);
         setSelectedLayoutTerrainId(null);
+        setSelectedLayoutWallId(null);
         objectDragRef.current = { type: "layoutObjective", index: objectiveIndex };
         setStatus("Objective marker selected. Drag it to reposition it.");
         draw();
@@ -1731,6 +1900,7 @@ export default function InteractiveLOSTool() {
       }
       const handle = findSelectedLayoutTerrainHandle(p);
       if (handle) {
+        setSelectedLayoutWallId(null);
         objectDragRef.current = { type: "layoutTerrainPoint", ...handle };
         setStatus("Drag this outline point to reshape the terrain footprint.");
         draw();
@@ -1740,11 +1910,20 @@ export default function InteractiveLOSTool() {
       if (terrainIndex >= 0) {
         const terrain = state.current.layoutTerrain[terrainIndex];
         setSelectedLayoutTerrainId(terrain.id);
+        setSelectedLayoutWallId(null);
         setSelectedLayoutObjectiveId(null);
         objectDragRef.current = { type: "layoutTerrain", index: terrainIndex, startPoint: p, startX: terrain.x, startY: terrain.y };
         setStatus("Terrain selected. Drag to move it, use the mouse wheel to rotate it, or use the Layout controls.");
         draw();
         return;
+      }
+      if (selectedLayoutTerrainId || selectedLayoutWallId || selectedLayoutFeatureId || selectedLayoutObjectiveId) {
+        setSelectedLayoutTerrainId(null);
+        setSelectedLayoutWallId(null);
+        setSelectedLayoutFeatureId(null);
+        setSelectedLayoutObjectiveId(null);
+        setLayoutTerrainRelationVersion((version) => version + 1);
+        draw();
       }
     }
 
@@ -1759,7 +1938,7 @@ export default function InteractiveLOSTool() {
     }
 
     const visibilityButton = findLosVisibilityButton(p);
-    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler" && !isDeploymentMode()) {
+    if (visibilityButton && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "denseTF" && mode !== "lightTF" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler" && !isDeploymentMode()) {
       updateLosMarkerById(visibilityButton.id, { visible: visibilityButton.visible });
       const marker = state.current.losMarkers.find((m) => m.id === visibilityButton.id);
       setStatus(`${marker?.name || "LOS"} LOS ${visibilityButton.visible ? "shown" : "hidden"}.`);
@@ -1767,7 +1946,7 @@ export default function InteractiveLOSTool() {
     }
 
     const draggable = findDraggableObject(p);
-    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler") {
+    if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "denseTF" && mode !== "lightTF" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler") {
       const draggedMarker = draggable.type === "light" ? state.current.losMarkers.find((marker) => marker.id === draggable.id) : null;
       const moveSelectedUnit = draggedMarker?.groupingMode === "unit" && draggedMarker.unitSlot === activeUnitSlot;
       if (draggable.type === "light" && !moveSelectedUnit) selectLosMarker(draggable.id);
@@ -1778,6 +1957,7 @@ export default function InteractiveLOSTool() {
           startPoint: p,
           memberStarts: getUnitMembers(activeUnitSlot).map((member) => ({ id: member.id, x: member.x, y: member.y })),
           lastLosUpdate: 0,
+          previewMemberIndex: 0,
         }
         : { ...draggable, lastLosUpdate: 0 };
       if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
@@ -1882,18 +2062,26 @@ export default function InteractiveLOSTool() {
     if (mode === "light") {
       draggingRef.current = true;
       updateActiveLosMarker({ x: p.x, y: p.y });
-    } else if (mode === "block") {
+    } else if (mode === "block" || mode === "denseTF" || mode === "lightTF") {
       const poly = state.current.currentPoly;
       if (poly.length >= 3 && dist(p, poly[0]) < 24 / state.current.camera.scale) {
-        state.current.blockers.push([...poly]);
-        state.current.blockerIds.push(`footprint-${Date.now()}`);
+        if (mode === "block") {
+          state.current.blockers.push([...poly]);
+          state.current.blockerIds.push(`footprint-${Date.now()}`);
+        } else {
+          state.current.layoutTerrainFeatures.push({
+            id: `layout-${mode}-${Date.now()}`,
+            kind: mode === "denseTF" ? "dense" : "light",
+            points: poly.map((point) => worldToBattlefieldPoint(point)),
+          });
+        }
         state.current.currentPoly = [];
-        setStatus("Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked.");
+        setStatus(mode === "block" ? "Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked." : `${mode === "denseTF" ? "Dense" : "Light"} TF added.`);
       } else {
         poly.push(p);
-        setStatus(`Footprint point ${poly.length}. Tap near the first point to close.`);
+        setStatus(`${mode === "block" ? "Footprint" : mode === "denseTF" ? "Dense TF" : "Light TF"} point ${poly.length}. Tap near the first point to close.`);
       }
-      updateVisibility();
+      if (mode === "block") updateVisibility();
       draw();
       scheduleBrowserSave();
     } else if (mode === "wall") {
@@ -1953,6 +2141,34 @@ export default function InteractiveLOSTool() {
         setStatus("Enemy deployment LOS erased.");
         return;
       } else {
+        const objectiveIndex = findLayoutObjectiveAtPoint(p);
+        if (objectiveIndex >= 0) {
+          state.current.layoutObjectives.splice(objectiveIndex, 1);
+          setSelectedLayoutObjectiveId(null);
+          setStatus("Objective marker erased.");
+          draw();
+          scheduleBrowserSave();
+          return;
+        }
+        const featurePieceIndex = state.current.layoutFeaturePieces.findIndex((feature) => pointInPoly(p, layoutFeaturePolygonToWorld(feature)));
+        if (featurePieceIndex >= 0) {
+          state.current.layoutFeaturePieces.splice(featurePieceIndex, 1);
+          setSelectedLayoutFeatureId(null);
+          setStatus("Reusable terrain feature erased.");
+          draw();
+          scheduleBrowserSave();
+          return;
+        }
+        const decorativeIndex = state.current.layoutTerrainFeatures.findIndex((feature) => (
+          pointInPoly(p, feature.points.map((point) => battlefieldPoint(point.x, point.y)))
+        ));
+        if (decorativeIndex >= 0) {
+          state.current.layoutTerrainFeatures.splice(decorativeIndex, 1);
+          setStatus("Decorative terrain feature erased.");
+          draw();
+          scheduleBrowserSave();
+          return;
+        }
         const wallIndex = state.current.walls.findIndex((wall) => pointNearSegment(p, wall.a, wall.b, 12 / state.current.camera.scale));
         if (wallIndex >= 0) {
           state.current.walls.splice(wallIndex, 1);
@@ -2036,12 +2252,15 @@ export default function InteractiveLOSTool() {
           if (marker.id === activeLosId) state.current.light = { x: marker.x, y: marker.y };
         });
         const now = performance.now();
-        if (now - dragged.lastLosUpdate >= 220) {
+        if (now - dragged.lastLosUpdate >= 80) {
           const visibleMembers = getUnitMembers(dragged.unitSlot).filter((marker) => marker.visible !== false);
           const previewIndex = dragged.previewMemberIndex || 0;
-          const previewMarker = visibleMembers[previewIndex % Math.max(1, visibleMembers.length)];
-          if (previewMarker) cacheMarkerVisibility(previewMarker.id, calculateMarkerVisibility(previewMarker, true));
-          dragged.previewMemberIndex = previewIndex + 1;
+          const previewCount = Math.min(2, visibleMembers.length);
+          for (let index = 0; index < previewCount; index += 1) {
+            const previewMarker = visibleMembers[(previewIndex + index) % Math.max(1, visibleMembers.length)];
+            if (previewMarker) cacheMarkerVisibility(previewMarker.id, calculateMarkerVisibility(previewMarker, true));
+          }
+          dragged.previewMemberIndex = previewIndex + previewCount;
           rebuildCombinedVisibility(true);
           dragged.lastLosUpdate = now;
         }
@@ -2052,11 +2271,7 @@ export default function InteractiveLOSTool() {
           state.current.losMarkers[markerIndex] = { ...marker, x: p.x, y: p.y };
           if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
           if (marker.id === activeLosId) state.current.light = { x: p.x, y: p.y };
-          const now = performance.now();
-          if (now - dragged.lastLosUpdate >= 120) {
-            updateVisibility(dragged.id, false, true);
-            dragged.lastLosUpdate = now;
-          }
+          updateVisibility(dragged.id, false, true);
         }
       }
     } else if (dragged.type === "enemy") {
@@ -2068,7 +2283,25 @@ export default function InteractiveLOSTool() {
       if (terrain && inch) {
         terrain.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
         terrain.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
+        syncLinkedLayoutTerrain(terrain);
         rebuildLayoutTerrainGeometry();
+      }
+    } else if (dragged.type === "layoutWall") {
+      const wall = state.current.layoutWalls[dragged.index];
+      const inch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      if (wall && inch) {
+        wall.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
+        wall.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
+        syncLinkedLayoutWall(wall);
+        rebuildLayoutWallGeometry();
+      }
+    } else if (dragged.type === "layoutFeature") {
+      const feature = state.current.layoutFeaturePieces[dragged.index];
+      const inch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      if (feature && inch) {
+        feature.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
+        feature.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
+        syncLinkedLayoutFeature(feature);
       }
     } else if (dragged.type === "layoutObjective") {
       const objective = state.current.layoutObjectives[dragged.index];
@@ -2079,6 +2312,8 @@ export default function InteractiveLOSTool() {
         objective.x = p.x;
         objective.y = p.y;
       }
+    } else if (dragged.type === "deploymentLabel") {
+      setDeploymentLabelBoardPosition(dragged.kind, worldToBattlefieldPoint(p));
     } else if (dragged.type === "layoutTerrainPoint") {
       const terrain = state.current.layoutTerrain[dragged.index];
       if (terrain?.outer?.[dragged.pointIndex]) {
@@ -2106,9 +2341,13 @@ export default function InteractiveLOSTool() {
         }
         else updateVisibility(dragged.id, false);
       }
+      if (dragged.type === "layoutObjective") snapObjectiveToTerrainCenter(dragged.index);
       objectDragRef.current = null;
       if (dragged.type === "light") setLosVersion((v) => v + 1);
-      if (dragged.type === "layoutTerrain" || dragged.type === "layoutTerrainPoint") updateVisibility();
+      if (dragged.type === "layoutTerrain" || dragged.type === "layoutTerrainPoint" || dragged.type === "layoutWall") updateVisibility();
+      if (dragged.type === "layoutTerrain" || dragged.type === "layoutTerrainPoint") {
+        setLayoutTerrainRelationVersion((version) => version + 1);
+      }
       scheduleBrowserSave();
       if (canvasRef.current) canvasRef.current.style.cursor = "grab";
     }
@@ -2158,7 +2397,7 @@ export default function InteractiveLOSTool() {
   function handleCanvasDoubleClick(e) {
     if (mode === "wall") return finishWall(e);
     if (isDeploymentMode()) return finishDeploymentLOS(e);
-    if (mode === "block") return finishFootprint(e);
+    if (mode === "block" || mode === "denseTF" || mode === "lightTF") return finishFootprint(e);
     const hit = findDraggableObject(screenToWorld(e));
     if (hit?.type !== "light") return;
     const marker = state.current.losMarkers.find((item) => item.id === hit.id);
@@ -2270,6 +2509,78 @@ export default function InteractiveLOSTool() {
     return -1;
   }
 
+  function findLayoutWallAtPoint(p) {
+    for (let index = state.current.layoutWalls.length - 1; index >= 0; index--) {
+      const wall = state.current.layoutWalls[index];
+      if (pointInPoly(p, layoutWallPolygonToWorld(wall))) return index;
+    }
+    return -1;
+  }
+
+  function findLayoutFeatureAtPoint(p) {
+    for (let index = state.current.layoutFeaturePieces.length - 1; index >= 0; index--) {
+      if (pointInPoly(p, layoutFeaturePolygonToWorld(state.current.layoutFeaturePieces[index]))) return index;
+    }
+    return -1;
+  }
+
+  function layoutWallFloorButtons(wall) {
+    const polygon = layoutWallPolygonToWorld(wall);
+    const bounds = polygon.reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x),
+      maxX: Math.max(result.maxX, point.x),
+      minY: Math.min(result.minY, point.y),
+    }), { minX: Infinity, maxX: -Infinity, minY: Infinity });
+    const scale = state.current.camera.scale;
+    const width = 72 / scale;
+    const height = 24 / scale;
+    const gap = 6 / scale;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const y = bounds.minY - height - 10 / scale;
+    return [
+      { floorState: "ground", label: "Ground", x: centerX - width - gap / 2, y, width, height },
+      { floorState: "firstFloor", label: "1st Floor", x: centerX + gap / 2, y, width, height },
+    ];
+  }
+
+  function findLayoutWallFloorButton(p) {
+    const wall = state.current.layoutWalls.find((item) => item.id === selectedLayoutWallId);
+    if (!wall) return null;
+    const button = layoutWallFloorButtons(wall).find((item) => (
+      p.x >= item.x && p.x <= item.x + item.width && p.y >= item.y && p.y <= item.y + item.height
+    ));
+    return button?.floorState || null;
+  }
+
+  function layoutTerrainRelationButtons(terrain) {
+    const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+    const polygon = terrainLocalPolygonToWorld(terrain, terrain.outer || definition.outer);
+    const bounds = polygon.reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x),
+      maxX: Math.max(result.maxX, point.x),
+      minY: Math.min(result.minY, point.y),
+    }), { minX: Infinity, maxX: -Infinity, minY: Infinity });
+    const scale = state.current.camera.scale;
+    const width = 112 / scale;
+    const height = 24 / scale;
+    const gap = 6 / scale;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const y = bounds.minY - height - 10 / scale;
+    return [
+      { same: true, label: "Same footprint", x: centerX - width - gap / 2, y, width, height },
+      { same: false, label: "Separate", x: centerX + gap / 2, y, width, height },
+    ];
+  }
+
+  function findLayoutTerrainRelationButton(p) {
+    const terrain = state.current.layoutTerrain.find((item) => item.id === selectedLayoutTerrainId);
+    if (!terrain || !selectedTerrainRelation()) return null;
+    const button = layoutTerrainRelationButtons(terrain).find((item) => (
+      p.x >= item.x && p.x <= item.x + item.width && p.y >= item.y && p.y <= item.y + item.height
+    ));
+    return button ? button.same : null;
+  }
+
   function findLayoutObjectiveAtPoint(p) {
     const pixelsPerInch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
     const radius = Math.max(16 / state.current.camera.scale, pixelsPerInch * 1.8);
@@ -2277,6 +2588,94 @@ export default function InteractiveLOSTool() {
       if (dist(p, state.current.layoutObjectives[index]) <= radius) return index;
     }
     return -1;
+  }
+
+  function findDeploymentLabelAtPoint(p) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext("2d");
+    const { fit, camera } = state.current;
+    const labels = [
+      {
+        kind: "home",
+        label: "Home deploy line",
+        path: state.current.deploymentPath?.length >= 2
+          ? state.current.deploymentPath
+          : state.current.deploymentLine ? [state.current.deploymentLine.a, state.current.deploymentLine.b] : [],
+        position: state.current.deploymentLabelPosition,
+      },
+      {
+        kind: "enemy",
+        label: "Enemy deploy line",
+        path: state.current.enemyDeploymentPath?.length >= 2
+          ? state.current.enemyDeploymentPath
+          : state.current.enemyDeploymentLine ? [state.current.enemyDeploymentLine.a, state.current.enemyDeploymentLine.b] : [],
+        position: state.current.enemyDeploymentLabelPosition,
+      },
+    ];
+    for (const item of labels) {
+      const rect = deploymentLineCaptionRect(ctx, item.label, item.path, fit, camera.scale, item.position);
+      if (rect && p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height) {
+        return item.kind;
+      }
+    }
+    return null;
+  }
+
+  function layoutTerrainPolygon(terrain) {
+    const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+    return terrainLocalPolygonToWorld(terrain, terrain.outer || definition.outer);
+  }
+
+  function polygonBounds(polygons) {
+    return polygons.flat().reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x),
+      maxX: Math.max(result.maxX, point.x),
+      minY: Math.min(result.minY, point.y),
+      maxY: Math.max(result.maxY, point.y),
+    }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  }
+
+  function groupedLayoutTerrainPolygonsForPoint(point) {
+    const containingTerrain = state.current.layoutTerrain.find((terrain) => pointInPoly(point, layoutTerrainPolygon(terrain)));
+    if (!containingTerrain) return [];
+    const group = layoutTerrainGroupFor(containingTerrain.id);
+    if (group) {
+      return group
+        .map((id) => state.current.layoutTerrain.find((terrain) => terrain.id === id))
+        .filter(Boolean)
+        .map(layoutTerrainPolygon);
+    }
+    if (containingTerrain.shape === "right_triangle") {
+      const containingPolygon = layoutTerrainPolygon(containingTerrain);
+      const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      const touchingTriangle = state.current.layoutTerrain.find((terrain) => (
+        terrain.id !== containingTerrain.id
+        && terrain.shape === "right_triangle"
+        && polygonsTouchOrNear(containingPolygon, layoutTerrainPolygon(terrain), inchesToPixels)
+      ));
+      if (touchingTriangle) return [containingPolygon, layoutTerrainPolygon(touchingTriangle)];
+    }
+    return [layoutTerrainPolygon(containingTerrain)];
+  }
+
+  function snapObjectiveToTerrainCenter(objectiveIndex) {
+    const objective = state.current.layoutObjectives[objectiveIndex];
+    if (!objective) return;
+    const groupedPolygons = groupedLayoutTerrainPolygonsForPoint(objective);
+    const footprint = state.current.blockers.find((poly) => pointInPoly(objective, poly));
+    if (!groupedPolygons.length && !footprint?.length) return;
+    const bounds = groupedPolygons.length ? polygonBounds(groupedPolygons) : polygonBounds([footprint]);
+    const center = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+    const boardCenter = worldToBattlefieldPoint(center);
+    objective.boardX = boardCenter.x;
+    objective.boardY = boardCenter.y;
+    objective.x = center.x;
+    objective.y = center.y;
+    setStatus("Objective snapped to the centre of the terrain footprint.");
   }
 
   function findSelectedLayoutTerrainHandle(p) {
@@ -2317,9 +2716,13 @@ export default function InteractiveLOSTool() {
       canvas.style.cursor = "grab";
     } else if (layoutEditMode && findSelectedLayoutTerrainHandle(p)) {
       canvas.style.cursor = "crosshair";
+    } else if (layoutEditMode && findLayoutFeatureAtPoint(p) >= 0) {
+      canvas.style.cursor = "grab";
+    } else if (findLayoutWallAtPoint(p) >= 0) {
+      canvas.style.cursor = layoutEditMode ? "grab" : "pointer";
     } else if (layoutEditMode && findLayoutTerrainAtPoint(p) >= 0) {
       canvas.style.cursor = "grab";
-    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "stickyRuler" && !isDeploymentMode()) {
+    } else if (findLosVisibilityButton(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "denseTF" && mode !== "lightTF" && mode !== "scale" && mode !== "stickyRuler" && !isDeploymentMode()) {
       canvas.style.cursor = "pointer";
     } else if (findDraggableObject(p) && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "scale" && mode !== "stickyRuler") {
       canvas.style.cursor = "grab";
@@ -2356,7 +2759,7 @@ export default function InteractiveLOSTool() {
   }
 
   function finishFootprint(e) {
-    if (mode !== "block") return;
+    if (mode !== "block" && mode !== "denseTF" && mode !== "lightTF") return;
     e.preventDefault();
 
     const poly = state.current.currentPoly;
@@ -2365,11 +2768,19 @@ export default function InteractiveLOSTool() {
       return;
     }
 
-    state.current.blockers.push([...poly]);
-    state.current.blockerIds.push(`footprint-${Date.now()}`);
+    if (mode === "block") {
+      state.current.blockers.push([...poly]);
+      state.current.blockerIds.push(`footprint-${Date.now()}`);
+    } else {
+      state.current.layoutTerrainFeatures.push({
+        id: `layout-${mode}-${Date.now()}`,
+        kind: mode === "denseTF" ? "dense" : "light",
+        points: poly.map((point) => worldToBattlefieldPoint(point)),
+      });
+    }
     state.current.currentPoly = [];
-    updateVisibility();
-    setStatus("Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked.");
+    if (mode === "block") updateVisibility();
+    setStatus(mode === "block" ? "Footprint added. White = clear, yellow = one footprint wall crossed, dark = blocked." : `${mode === "denseTF" ? "Dense" : "Light"} TF added.`);
     draw();
     scheduleBrowserSave();
   }
@@ -2401,6 +2812,7 @@ export default function InteractiveLOSTool() {
       state.current.enemyDeploymentPreview = null;
       state.current.enemyDeploymentVisible = true;
       state.current.enemyDeploymentNoMansSide = null;
+      state.current.enemyDeploymentLabelPosition = null;
     } else {
       state.current.deploymentPath = [...path];
       state.current.deploymentLine = { a: path[0], b: path[path.length - 1] };
@@ -2408,6 +2820,7 @@ export default function InteractiveLOSTool() {
       state.current.deploymentPreview = null;
       state.current.deploymentVisible = true;
       state.current.deploymentNoMansSide = null;
+      state.current.deploymentLabelPosition = null;
     }
     updateVisibility();
     setStatus(`${isEnemy ? "Enemy" : "Home"} deployment LOS path set. Which side is no man's land? Select an arrow.`);
@@ -2433,12 +2846,38 @@ export default function InteractiveLOSTool() {
     if (objectDragRef.current?.type === "layoutTerrain") {
       const terrain = state.current.layoutTerrain[objectDragRef.current.index];
       if (terrain) {
-        const delta = e.deltaY < 0 ? 5 : -5;
+        const delta = e.deltaY < 0 ? 1 : -1;
         terrain.rotation = (terrain.rotation + delta + 360) % 360;
+        syncLinkedLayoutTerrain(terrain);
         rebuildLayoutTerrainGeometry();
         draw();
       }
       setStatus("Rotating terrain while dragging. Mouse wheel up = clockwise, down = anticlockwise.");
+      return;
+    }
+
+    if (objectDragRef.current?.type === "layoutWall") {
+      const wall = state.current.layoutWalls[objectDragRef.current.index];
+      if (wall) {
+        const delta = e.deltaY < 0 ? 1 : -1;
+        wall.rotation = ((wall.rotation || 0) + delta + 360) % 360;
+        syncLinkedLayoutWall(wall);
+        rebuildLayoutWallGeometry();
+        draw();
+      }
+      setStatus("Rotating wall while dragging. Mouse wheel up = clockwise, down = anticlockwise.");
+      return;
+    }
+
+    if (objectDragRef.current?.type === "layoutFeature") {
+      const feature = state.current.layoutFeaturePieces[objectDragRef.current.index];
+      if (feature) {
+        const delta = e.deltaY < 0 ? 1 : -1;
+        feature.rotation = ((feature.rotation || 0) + delta + 360) % 360;
+        syncLinkedLayoutFeature(feature);
+        draw();
+      }
+      setStatus("Rotating terrain feature while dragging.");
       return;
     }
 
@@ -2656,6 +3095,7 @@ export default function InteractiveLOSTool() {
       state.current.enemyDeploymentDraft = [];
       state.current.enemyDeploymentPreview = null;
       state.current.enemyDeploymentNoMansSide = null;
+      state.current.enemyDeploymentLabelPosition = null;
       state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     } else {
       state.current.deploymentLine = null;
@@ -2663,6 +3103,7 @@ export default function InteractiveLOSTool() {
       state.current.deploymentDraft = [];
       state.current.deploymentPreview = null;
       state.current.deploymentNoMansSide = null;
+      state.current.deploymentLabelPosition = null;
       state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
     }
     updateVisibility();
@@ -2697,6 +3138,8 @@ export default function InteractiveLOSTool() {
     state.current.enemyDeploymentVisible = false;
     state.current.deploymentNoMansSide = null;
     state.current.enemyDeploymentNoMansSide = null;
+    state.current.deploymentLabelPosition = validBoardPoint(preset.deploymentLabelPosition) ? { ...preset.deploymentLabelPosition } : null;
+    state.current.enemyDeploymentLabelPosition = validBoardPoint(preset.enemyDeploymentLabelPosition) ? { ...preset.enemyDeploymentLabelPosition } : null;
     setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
     updateVisibility();
     draw();
@@ -2771,12 +3214,10 @@ export default function InteractiveLOSTool() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const { W, H, fit, camera, blockers, walls, enemies, layoutObjectives, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, stickyRulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentVisibility } = state.current;
+    const { W, H, fit, camera, blockers, walls, enemies, layoutObjectives, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, stickyRulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentLabelPosition, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentLabelPosition, enemyDeploymentVisibility } = state.current;
     const light = getActiveLosPoint();
     const clearZones = visibility.clearZones || [];
     const oneWallZones = visibility.oneWallZones || [];
-    const clearPoly = clearZones[0] || [];
-    const oneWallPoly = oneWallZones[0] || [];
     const selectedUnitMembers = activeUnitSlot ? getUnitMembers(activeUnitSlot) : [];
     const selectedRangeValue = selectedUnitMembers.length ? getUnitRange(activeUnitSlot, selectedUnitMembers) : rangeInches;
     const numericRange = Number(selectedRangeValue);
@@ -2797,7 +3238,7 @@ export default function InteractiveLOSTool() {
     const enemyRangeCounts = enemies.map((enemy) => {
       let count = 0;
       rangedMarkers.forEach(({ marker, radius }) => {
-        if (!enemyInRange(enemy, marker, radius)) return;
+        if (!enemyInRange(enemy, marker, radius, pixelsPerInch)) return;
         count += 1;
         markerIdsInRange.add(marker.id);
       });
@@ -2813,55 +3254,80 @@ export default function InteractiveLOSTool() {
     ctx.scale(camera.scale, camera.scale);
 
     const img = imgRef.current;
-    ctx.fillStyle = "#d7d5c8";
+    ctx.fillStyle = "#24272b";
     ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
-    if (img) ctx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
+    if (img) {
+      ctx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
+      ctx.fillStyle = "rgba(15,18,22,.72)";
+      ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
+    }
     drawBattlefieldGrid(ctx, fit, camera.scale);
 
-    if (oneWallPoly.length) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, W, H);
-      ctx.moveTo(oneWallPoly[0].x, oneWallPoly[0].y);
-      for (const p of oneWallPoly.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.closePath();
-      ctx.fillStyle = "rgba(0,0,0,.45)";
-      ctx.fill("evenodd");
-      ctx.restore();
+    if (homeDeployPath.length >= 2 && state.current.deploymentNoMansSide) {
+      drawDeploymentAreaWash(
+        ctx,
+        homeDeployPath,
+        state.current.deploymentNoMansSide,
+        W,
+        H,
+        fit,
+        blockers,
+        "rgba(125,211,252,.18)",
+      );
+    }
+    if (enemyDeployPath.length >= 2 && state.current.enemyDeploymentNoMansSide) {
+      drawDeploymentAreaWash(
+        ctx,
+        enemyDeployPath,
+        state.current.enemyDeploymentNoMansSide,
+        W,
+        H,
+        fit,
+        blockers,
+        "rgba(248,113,113,.18)",
+      );
     }
 
-    if (state.current.combinedLosRender.oneWall) ctx.drawImage(state.current.combinedLosRender.oneWall, 0, 0);
-    if (state.current.combinedLosRender.clear) ctx.drawImage(state.current.combinedLosRender.clear, 0, 0);
+    const rangeMarkers = Number.isFinite(rangeRadius)
+      ? (selectedUnitMembers.length ? selectedUnitMembers : [getActiveLosMarker()].filter(Boolean))
+      : [];
+
+    // Filled tactical overlays are confined to the playable 44" x 60" battlefield.
+    // Measurement and coherency guides are drawn after this clip is released.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(fit.x, fit.y, fit.w, fit.h);
+    ctx.clip();
+
+    if (state.current.combinedLosRender?.oneWall || state.current.combinedLosRender?.clear) {
+      if (state.current.combinedLosRender.oneWall) {
+        ctx.drawImage(state.current.combinedLosRender.oneWall, 0, 0);
+      }
+      if (state.current.combinedLosRender.clear) {
+        ctx.save();
+        clipOutsidePolygons(ctx, blockers, W, H);
+        ctx.drawImage(state.current.combinedLosRender.clear, 0, 0);
+        ctx.restore();
+      }
+    }
 
     if (Number.isFinite(rangeRadius)) {
-      const rangeMarkers = selectedUnitMembers.length ? selectedUnitMembers : [getActiveLosMarker()].filter(Boolean);
       const activeZones = rangeMarkers.flatMap((marker) => {
         const activeVisibility = state.current.losVisibilityCache.get(marker.id);
         return activeVisibility ? [...activeVisibility.oneWallZones, ...activeVisibility.clearZones] : [];
       });
       drawMultiRangeZoneMask(ctx, activeZones, W, H, rangeMarkers, rangeRadius, "rgba(34,197,94,.18)");
-
-      ctx.save();
-      ctx.setLineDash([8 / camera.scale, 8 / camera.scale]);
-      ctx.lineWidth = 2 / camera.scale;
-      ctx.strokeStyle = "rgba(34,197,94,.90)";
-      rangeMarkers.forEach((marker) => {
-        ctx.beginPath();
-        ctx.arc(marker.x, marker.y, rangeRadius, 0, Math.PI * 2);
-        ctx.stroke();
-      });
-      ctx.restore();
     }
 
     if (deploymentVisible && deploymentLine) {
       const side = state.current.deploymentNoMansSide;
-      drawDeploymentZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.40)");
-      drawDeploymentZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.40)");
+      drawDeploymentZoneMask(ctx, deploymentVisibility.oneWallZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.65)");
+      drawDeploymentZoneMask(ctx, deploymentVisibility.clearZones || [], W, H, homeDeployPath, homeDeploymentRangeRadius, side, "rgba(0,76,153,.65)");
     }
     if (enemyDeploymentVisible && enemyDeploymentLine) {
       const side = state.current.enemyDeploymentNoMansSide;
-      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.oneWallZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.40)");
-      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.clearZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.40)");
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.oneWallZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.65)");
+      drawDeploymentZoneMask(ctx, enemyDeploymentVisibility.clearZones || [], W, H, enemyDeployPath, enemyDeploymentRangeRadius, side, "rgba(153,20,23,.65)");
     }
 
     if (deepstrikeVisible && deepstrikeRangeRadius !== null) {
@@ -2874,6 +3340,21 @@ export default function InteractiveLOSTool() {
       drawDeepstrikeOverlay(ctx, exclusions, deepstrikeRangeRadius, W, H);
     }
 
+    ctx.restore();
+
+    if (Number.isFinite(rangeRadius)) {
+      ctx.save();
+      ctx.setLineDash([8 / camera.scale, 8 / camera.scale]);
+      ctx.lineWidth = 2 / camera.scale;
+      ctx.strokeStyle = "rgba(34,197,94,.90)";
+      rangeMarkers.forEach((marker) => {
+        ctx.beginPath();
+        ctx.arc(marker.x, marker.y, rangeRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     // Footprints are drawn after the LOS overlays with a near-solid fill.
     // This masks any small visibility edge/ray artifacts inside footprints.
     // Footprints should not dim valid LOS inside them.
@@ -2882,7 +3363,8 @@ export default function InteractiveLOSTool() {
     state.current.layoutTerrain.forEach((layoutTerrain) => {
       const definition = TERRAIN_FOOTPRINTS[layoutTerrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
       const visualPoly = terrainLocalPolygonToWorld(layoutTerrain, layoutTerrain.outer || definition.outer);
-      drawPoly(ctx, visualPoly, "rgba(196,152,43,.30)", "rgba(255,255,255,.84)", true, camera.scale, false);
+      const grouped = Boolean(layoutTerrainGroupFor(layoutTerrain.id));
+      drawPoly(ctx, visualPoly, "rgba(196,152,43,.30)", grouped ? "rgba(0,0,0,0)" : "rgba(255,255,255,.84)", true, camera.scale, false);
       const lightPoly = terrainLocalPolygonToWorld(layoutTerrain, definition.light);
       const densePoly = terrainLocalPolygonToWorld(layoutTerrain, definition.dense);
       if (lightPoly.length) drawPoly(ctx, lightPoly, "rgba(222,145,25,.42)", "rgba(250,204,21,.75)", true, camera.scale, false);
@@ -2899,29 +3381,33 @@ export default function InteractiveLOSTool() {
         ctx,
         poly,
         generatedLayoutFootprint ? "rgba(0,0,0,0)" : "rgba(18,18,18,.38)",
-        generatedLayoutFootprint ? "rgba(255,255,255,.96)" : "rgba(255,255,255,.22)",
+        generatedLayoutFootprint && String(poly.footprintGroupId || "").startsWith("layout-group:")
+          ? "rgba(0,0,0,0)"
+          : generatedLayoutFootprint ? "rgba(255,255,255,.96)" : "rgba(255,255,255,.22)",
         true,
         camera.scale,
         !generatedLayoutFootprint,
       );
 
-      if (oneWallPoly.length) {
-        ctx.save();
-        clipPoly(ctx, poly);
-        clipPoly(ctx, oneWallPoly);
-        ctx.fillStyle = "rgba(245, 190, 55, .34)";
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
-      }
-
-      if (clearPoly.length) {
-        ctx.save();
-        clipPoly(ctx, poly);
-        clipPoly(ctx, clearPoly);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = "rgba(255,255,255,.36)";
-        ctx.fillRect(0, 0, W, H);
-        ctx.restore();
+    });
+    drawGroupedTerrainOutlines(ctx, blockers, camera.scale);
+    state.current.layoutWalls.forEach((wall) => {
+      const polygon = layoutWallPolygonToWorld(wall);
+      ctx.save();
+      if (wall.floorState === "firstFloor") ctx.setLineDash([7 / camera.scale, 5 / camera.scale]);
+      drawPoly(ctx, polygon, wall.floorState === "firstFloor" ? "rgba(168,85,247,.24)" : "rgba(168,85,247,.82)", layoutEditMode && wall.id === selectedLayoutWallId ? "#f8fafc" : "#c084fc", true, camera.scale, false);
+      ctx.restore();
+    });
+    state.current.layoutTerrainFeatures.forEach((feature) => {
+      const poly = feature.points.map((point) => battlefieldPoint(point.x, point.y));
+      drawDecorativeTerrainFeature(ctx, poly, feature.kind, camera.scale);
+    });
+    state.current.layoutFeaturePieces.forEach((feature) => {
+      const definition = LAYOUT_FEATURE_TYPES[feature.type];
+      const polygon = layoutFeaturePolygonToWorld(feature);
+      drawDecorativeTerrainFeature(ctx, polygon, definition?.kind || "light", camera.scale);
+      if (feature.id === selectedLayoutFeatureId) {
+        drawPoly(ctx, polygon, "rgba(0,0,0,0)", "#f8fafc", true, camera.scale, false);
       }
     });
     if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
@@ -2931,9 +3417,13 @@ export default function InteractiveLOSTool() {
       const geometry = getStickyRulerGeometry(ruler);
       if (geometry) drawStickyRulerLine(ctx, geometry.a, geometry.b, pixelsPerInch, camera.scale);
     });
-    if (currentPoly.length) drawPoly(ctx, currentPoly, "rgba(255,255,255,.10)", "#fff", false, camera.scale);
+    if (currentPoly.length) {
+      const fill = mode === "denseTF" ? "rgba(34,197,94,.28)" : mode === "lightTF" ? "rgba(250,204,21,.30)" : "rgba(255,255,255,.10)";
+      const stroke = mode === "denseTF" ? "#22c55e" : mode === "lightTF" ? "#facc15" : "#fff";
+      drawPoly(ctx, currentPoly, fill, stroke, false, camera.scale);
+    }
 
-    walls.forEach((wall) => drawWall(ctx, wall, camera.scale));
+    walls.filter((wall) => !wall.generatedLayoutWall).forEach((wall) => drawWall(ctx, wall, camera.scale));
     if (wallPath.length) {
       for (let i = 0; i < wallPath.length - 1; i++) {
         drawWall(ctx, { a: wallPath[i], b: wallPath[i + 1] }, camera.scale, true);
@@ -2943,12 +3433,12 @@ export default function InteractiveLOSTool() {
       }
     }
 
-    if (deploymentPath?.length >= 2) drawDeploymentPath(ctx, deploymentPath, camera.scale, deploymentVisible, false, "home");
-    else if (deploymentLine) drawDeploymentLine(ctx, deploymentLine, camera.scale, deploymentVisible, false, "home");
-    if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true, "home");
-    if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(ctx, enemyDeploymentPath, camera.scale, enemyDeploymentVisible, false, "enemy");
-    else if (enemyDeploymentLine) drawDeploymentLine(ctx, enemyDeploymentLine, camera.scale, enemyDeploymentVisible, false, "enemy");
-    if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy");
+    if (deploymentPath?.length >= 2) drawDeploymentPath(ctx, deploymentPath, camera.scale, deploymentVisible, false, "home", fit, deploymentLabelPosition);
+    else if (deploymentLine) drawDeploymentLine(ctx, deploymentLine, camera.scale, deploymentVisible, false, "home", fit, deploymentLabelPosition);
+    if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true, "home", fit);
+    if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(ctx, enemyDeploymentPath, camera.scale, enemyDeploymentVisible, false, "enemy", fit, enemyDeploymentLabelPosition);
+    else if (enemyDeploymentLine) drawDeploymentLine(ctx, enemyDeploymentLine, camera.scale, enemyDeploymentVisible, false, "enemy", fit, enemyDeploymentLabelPosition);
+    if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy", fit);
     if (homeDeployPath.length >= 2 && !state.current.deploymentNoMansSide) {
       drawDeploymentSideArrows(ctx, homeDeployPath, camera.scale, "home");
     }
@@ -2971,12 +3461,19 @@ export default function InteractiveLOSTool() {
     });
 
     enemies.forEach((enemy, index) => {
-      const losState = enemyLOSState(enemy, visibility);
+      const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+      const losState = directEnemyLOSState(
+        enemy,
+        enemyBaseRadius(pixelsPerInch),
+        visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, true)),
+        blockers,
+        walls,
+      );
       const rangeActive = Number.isFinite(rangeRadius);
       const inRange = selectedUnitMembers.length
-        ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius))
-        : enemyInRange(enemy, light, rangeRadius);
-      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale, enemyRangeCounts[index]);
+        ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius, pixelsPerInch))
+        : enemyInRange(enemy, light, rangeRadius, pixelsPerInch);
+      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale, enemyRangeCounts[index], pixelsPerInch);
     });
 
     state.current.losMarkers.forEach((marker) => {
@@ -3070,6 +3567,18 @@ export default function InteractiveLOSTool() {
       }
     }
 
+    // Interactive wall controls are an overlay and must stay above objectives,
+    // LOS markers, unit labels, and other battlefield artwork.
+    const selectedWall = state.current.layoutWalls.find((wall) => wall.id === selectedLayoutWallId);
+    if (selectedWall) {
+      drawLayoutWallFloorControls(ctx, layoutWallFloorButtons(selectedWall), selectedWall.floorState || "ground", camera.scale);
+    }
+    const selectedTerrain = state.current.layoutTerrain.find((terrain) => terrain.id === selectedLayoutTerrainId);
+    const terrainRelation = selectedTerrain ? selectedTerrainRelation() : null;
+    if (selectedTerrain && terrainRelation) {
+      drawLayoutTerrainRelationControls(ctx, layoutTerrainRelationButtons(selectedTerrain), terrainRelation.same, camera.scale);
+    }
+
     ctx.restore();
   }
 
@@ -3079,13 +3588,21 @@ export default function InteractiveLOSTool() {
     if (!marker || marker.visible === false) return { clearZones, oneWallZones };
     const visibleMarkerCount = state.current.losMarkers.filter((item) => item.visible !== false).length;
     const useReducedSamples = !forceFullDetail && (interactive || visibleMarkerCount > 5);
-    const origins = getLOSOriginsForMarker(marker, useReducedSamples);
+    const origins = interactive
+      ? [{ x: marker.x, y: marker.y }]
+      : getLOSOriginsForMarker(marker, useReducedSamples);
     const blockers = interactive && state.current.interactiveBlockers.length
       ? state.current.interactiveBlockers
       : state.current.blockers;
+    const visibilityGeometry = getPreparedVisibilityGeometry(
+      blockers,
+      state.current.walls,
+      state.current.W,
+      state.current.H,
+    );
     origins.forEach((origin) => {
-      clearZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 0));
-      oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 1));
+      clearZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 0, visibilityGeometry));
+      oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 1, visibilityGeometry));
     });
     return { clearZones, oneWallZones };
   }
@@ -3095,8 +3612,8 @@ export default function InteractiveLOSTool() {
   }
 
   function rebuildCombinedVisibility(interactive = false) {
-    const clearZones = [];
-    const oneWallZones = [];
+    let clearZones = [];
+    let oneWallZones = [];
     state.current.losMarkers.forEach((marker) => {
       if (marker.visible === false) return;
       const cached = state.current.losVisibilityCache.get(marker.id);
@@ -3105,10 +3622,15 @@ export default function InteractiveLOSTool() {
       oneWallZones.push(...cached.oneWallZones);
     });
     state.current.visibility = { clearZones, oneWallZones };
-    state.current.combinedLosRender = {
-      oneWall: createZoneLayer(oneWallZones, state.current.W, state.current.H, "rgba(245, 190, 55, .16)", state.current.combinedLosRender.oneWall, interactive ? 0.5 : 1),
-      clear: createZoneLayer(clearZones, state.current.W, state.current.H, "rgba(255,255,255,.09)", state.current.combinedLosRender.clear, interactive ? 0.5 : 1),
-    };
+    const renderScale = interactive ? 0.7 : 1;
+    state.current.combinedLosRender = createCombinedLosLayers(
+      clearZones,
+      oneWallZones,
+      state.current.W,
+      state.current.H,
+      renderScale,
+      state.current.combinedLosBuffers,
+    );
   }
 
   function updateVisibility(markerId = null, recomputeDeployment = true, interactive = false) {
@@ -3177,6 +3699,28 @@ export default function InteractiveLOSTool() {
     };
   }
 
+  function validBoardPoint(point) {
+    return Number.isFinite(point?.x) && Number.isFinite(point?.y);
+  }
+
+  function mirroredBoardPoint(point) {
+    return {
+      x: BATTLEFIELD_WIDTH_INCHES - point.x,
+      y: BATTLEFIELD_HEIGHT_INCHES - point.y,
+    };
+  }
+
+  function setDeploymentLabelBoardPosition(kind, point) {
+    const mirrored = mirroredBoardPoint(point);
+    if (kind === "enemy") {
+      state.current.enemyDeploymentLabelPosition = { ...point };
+      state.current.deploymentLabelPosition = mirrored;
+    } else {
+      state.current.deploymentLabelPosition = { ...point };
+      state.current.enemyDeploymentLabelPosition = mirrored;
+    }
+  }
+
   function rotateLayoutPoint(x, y) {
     return { x: y, y: SOURCE_LAYOUT_WIDTH_INCHES - x };
   }
@@ -3208,20 +3752,94 @@ export default function InteractiveLOSTool() {
     return [terrain.mirrored ? -localX : localX, dx * sin + dy * cos];
   }
 
+  function layoutWallLocalPolygon(wall) {
+    const definition = LAYOUT_WALL_TYPES[wall.type] || LAYOUT_WALL_TYPES.AB;
+    const halfWidth = definition.width / 2;
+    const halfHeight = definition.height / 2;
+    const thickness = definition.thickness;
+    return [
+      [-halfWidth, -halfHeight],
+      [halfWidth, -halfHeight],
+      [halfWidth, halfHeight],
+      [halfWidth - thickness, halfHeight],
+      [halfWidth - thickness, -halfHeight + thickness],
+      [-halfWidth, -halfHeight + thickness],
+    ];
+  }
+
+  function layoutWallPolygonToWorld(wall) {
+    return terrainLocalPolygonToWorld(wall, layoutWallLocalPolygon(wall));
+  }
+
+  function layoutFeatureLocalPolygon(feature) {
+    const definition = LAYOUT_FEATURE_TYPES[feature.type] || LAYOUT_FEATURE_TYPES.largeLightL;
+    const halfWidth = definition.width / 2;
+    const halfHeight = definition.height / 2;
+    if (definition.shape === "l") {
+      const thickness = definition.thickness;
+      return [[-halfWidth, -halfHeight], [halfWidth, -halfHeight], [halfWidth, -halfHeight + thickness], [-halfWidth + thickness, -halfHeight + thickness], [-halfWidth + thickness, halfHeight], [-halfWidth, halfHeight]];
+    }
+    if (definition.shape === "u") {
+      const thickness = definition.thickness;
+      return [[-halfWidth, -halfHeight], [halfWidth, -halfHeight], [halfWidth, halfHeight], [halfWidth - thickness, halfHeight], [halfWidth - thickness, -halfHeight + thickness], [-halfWidth + thickness, -halfHeight + thickness], [-halfWidth + thickness, halfHeight], [-halfWidth, halfHeight]];
+    }
+    return [[-halfWidth, -halfHeight], [halfWidth, -halfHeight], [halfWidth, halfHeight], [-halfWidth, halfHeight]];
+  }
+
+  function layoutFeaturePolygonToWorld(feature) {
+    return terrainLocalPolygonToWorld(feature, layoutFeatureLocalPolygon(feature));
+  }
+
+  function rebuildLayoutWallGeometry() {
+    const manualWalls = state.current.walls.filter((wall) => !wall.generatedLayoutWall);
+    const generatedWalls = [];
+    state.current.layoutWalls.forEach((wall) => {
+      if (wall.floorState === "firstFloor") return;
+      const polygon = layoutWallPolygonToWorld(wall);
+      polygon.forEach((point, index) => {
+        generatedWalls.push({
+          a: point,
+          b: polygon[(index + 1) % polygon.length],
+          generatedLayoutWall: true,
+          wallPieceId: wall.id,
+        });
+      });
+    });
+    state.current.walls = [...manualWalls, ...generatedWalls];
+  }
+
+  function setSelectedWallFloorState(floorState) {
+    const wall = state.current.layoutWalls.find((item) => item.id === selectedLayoutWallId);
+    if (!wall) return;
+    wall.floorState = floorState;
+    rebuildLayoutWallGeometry();
+        setSelectedLayoutWallId(null);
+        setSelectedLayoutFeatureId(null);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${wall.type} wall set to ${floorState === "firstFloor" ? "1st Floor" : "Ground"}.`);
+  }
+
   function rebuildLayoutTerrainGeometry() {
     const blockers = [];
     const blockerIds = [];
     const trianglePolys = [];
+    const boundaryTolerance = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES * 0.08;
 
     state.current.layoutTerrain.forEach((terrain) => {
       const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
       const exactOutline = terrainLocalPolygonToWorld(terrain, terrain.outer || definition.outer);
-      if (terrain.shape === "right_triangle") {
-        trianglePolys.push({ id: terrain.id, poly: exactOutline });
-        return;
+      const group = state.current.layoutTerrainGroups.find((items) => items.includes(terrain.id));
+      exactOutline.footprintGroupId = group
+        ? `layout-group:${[...group].sort().join("|")}`
+        : terrain.id;
+      exactOutline.sharedBoundaryTolerance = boundaryTolerance;
+      if (terrain.shape === "right_triangle" && !group) trianglePolys.push({ id: terrain.id, poly: exactOutline });
+      else {
+        blockers.push(exactOutline);
+        blockerIds.push(terrain.id);
       }
-      blockers.push(exactOutline);
-      blockerIds.push(terrain.id);
     });
 
     if (trianglePolys.length === 2 && polygonsTouchOrNear(
@@ -3229,30 +3847,39 @@ export default function InteractiveLOSTool() {
       trianglePolys[1].poly,
       state.current.fit.w / BATTLEFIELD_WIDTH_INCHES,
     )) {
-      blockers.push(unionPolygonBoundary(trianglePolys[0].poly, trianglePolys[1].poly));
+      const trianglePair = unionPolygonBoundary(trianglePolys[0].poly, trianglePolys[1].poly);
+      trianglePair.footprintGroupId = "layout-triangle-pair";
+      blockers.push(trianglePair);
       blockerIds.push("layout-triangle-pair");
-    } else {
-      trianglePolys.forEach((triangle) => {
-        blockers.push(triangle.poly);
-        blockerIds.push(triangle.id);
-      });
-    }
+    } else trianglePolys.forEach((terrain) => {
+      blockers.push(terrain.poly);
+      blockerIds.push(terrain.id);
+    });
 
+    sealTouchingPolygonVertices(blockers, boundaryTolerance);
     state.current.blockers = blockers;
     state.current.blockerIds = blockerIds;
-    state.current.interactiveBlockers = blockers.map((poly) => simplifyClosedPolygon(poly, 2.5));
+    state.current.interactiveBlockers = blockers.map((poly) => {
+      const simplified = simplifyClosedPolygon(poly, 2.5);
+      simplified.footprintGroupId = poly.footprintGroupId;
+      simplified.sharedBoundaryTolerance = poly.sharedBoundaryTolerance;
+      return simplified;
+    });
   }
 
   function refreshActiveLayoutGeometry() {
     const preset = LAYOUT_PRESETS[state.current.activeLayoutKey];
     if (!preset) return;
     rebuildLayoutTerrainGeometry();
+    rebuildLayoutWallGeometry();
     const existingObjectives = state.current.layoutObjectives;
     state.current.layoutObjectives = preset.objectives.map((objective, index) => {
       const existing = existingObjectives.find((item) => item.id === `layout-objective-${index}`);
       const point = existing && Number.isFinite(existing.boardX) && Number.isFinite(existing.boardY)
         ? { x: existing.boardX, y: existing.boardY }
-        : rotateLayoutPoint(objective.x, objective.y);
+        : preset.portraitCoordinates
+          ? { x: objective.x, y: objective.y }
+          : rotateLayoutPoint(objective.x, objective.y);
       return {
         id: `layout-objective-${index}`,
         ...battlefieldPoint(point.x, point.y),
@@ -3275,12 +3902,31 @@ export default function InteractiveLOSTool() {
   }
 
   function rotateSelectedLayoutTerrain(deltaDegrees) {
+    const feature = state.current.layoutFeaturePieces.find((item) => item.id === selectedLayoutFeatureId);
+    if (feature) {
+      feature.rotation = ((feature.rotation || 0) + deltaDegrees + 360) % 360;
+      syncLinkedLayoutFeature(feature);
+      draw();
+      scheduleBrowserSave();
+      return;
+    }
+    const wall = state.current.layoutWalls.find((item) => item.id === selectedLayoutWallId);
+    if (wall) {
+      wall.rotation = ((wall.rotation || 0) + deltaDegrees + 360) % 360;
+      syncLinkedLayoutWall(wall);
+      rebuildLayoutWallGeometry();
+      updateVisibility();
+      draw();
+      scheduleBrowserSave();
+      return;
+    }
     const terrain = state.current.layoutTerrain.find((item) => item.id === selectedLayoutTerrainId);
     if (!terrain) {
       setStatus("Select a terrain footprint in Edit Layout mode first.");
       return;
     }
     terrain.rotation = (terrain.rotation + deltaDegrees + 360) % 360;
+    syncLinkedLayoutTerrain(terrain);
     rebuildLayoutTerrainGeometry();
     updateVisibility();
     draw();
@@ -3288,12 +3934,33 @@ export default function InteractiveLOSTool() {
   }
 
   function mirrorSelectedLayoutTerrain() {
+    const feature = state.current.layoutFeaturePieces.find((item) => item.id === selectedLayoutFeatureId);
+    if (feature) {
+      feature.mirrored = !feature.mirrored;
+      syncLinkedLayoutFeature(feature, true);
+      draw();
+      scheduleBrowserSave();
+      setStatus(`${LAYOUT_FEATURE_TYPES[feature.type]?.label || "Terrain feature"} ${feature.mirrored ? "mirrored" : "restored"}.`);
+      return;
+    }
+    const wall = state.current.layoutWalls.find((item) => item.id === selectedLayoutWallId);
+    if (wall) {
+      wall.mirrored = !wall.mirrored;
+      syncLinkedLayoutWall(wall, true);
+      rebuildLayoutWallGeometry();
+      updateVisibility();
+      draw();
+      scheduleBrowserSave();
+      setStatus(`${wall.type} wall ${wall.mirrored ? "mirrored" : "restored"}.`);
+      return;
+    }
     const terrain = state.current.layoutTerrain.find((item) => item.id === selectedLayoutTerrainId);
     if (!terrain) {
       setStatus("Select a terrain footprint in Edit Layout mode first.");
       return;
     }
     terrain.mirrored = !terrain.mirrored;
+    syncLinkedLayoutTerrain(terrain, true);
     rebuildLayoutTerrainGeometry();
     updateVisibility();
     draw();
@@ -3301,15 +3968,354 @@ export default function InteractiveLOSTool() {
     setStatus(`Selected terrain ${terrain.mirrored ? "mirrored" : "restored"}.`);
   }
 
+  function linkedLayoutTerrainId(id) {
+    const link = state.current.layoutTerrainLinks.find(([firstId, secondId]) => firstId === id || secondId === id);
+    if (!link) return null;
+    return link[0] === id ? link[1] : link[0];
+  }
+
+  function layoutTerrainGroupFor(id) {
+    return state.current.layoutTerrainGroups.find((group) => group.includes(id)) || null;
+  }
+
+  function adjacentLayoutTerrainFor(id) {
+    const terrain = state.current.layoutTerrain.find((item) => item.id === id);
+    if (!terrain) return null;
+    const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+    const polygon = terrainLocalPolygonToWorld(terrain, terrain.outer || definition.outer);
+    const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+    const tolerance = inchesToPixels * 0.08;
+    const minimumContact = inchesToPixels * 0.25;
+    let best = null;
+    state.current.layoutTerrain.forEach((candidate) => {
+      if (candidate.id === id) return;
+      const candidateDefinition = TERRAIN_FOOTPRINTS[candidate.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+      const candidatePolygon = terrainLocalPolygonToWorld(candidate, candidate.outer || candidateDefinition.outer);
+      const contact = approximatePolygonBoundaryContact(polygon, candidatePolygon, tolerance, inchesToPixels * 0.05);
+      if (contact >= minimumContact && (!best || contact > best.contact)) best = { terrain: candidate, contact };
+    });
+    return best?.terrain || null;
+  }
+
+  function selectedTerrainRelation() {
+    if (!selectedLayoutTerrainId) return null;
+    const group = layoutTerrainGroupFor(selectedLayoutTerrainId);
+    if (group) {
+      const partnerId = group.find((id) => id !== selectedLayoutTerrainId);
+      return { same: true, partner: state.current.layoutTerrain.find((terrain) => terrain.id === partnerId) || null };
+    }
+    const partner = adjacentLayoutTerrainFor(selectedLayoutTerrainId);
+    return partner ? { same: false, partner } : null;
+  }
+
+  function setSelectedTerrainFootprintRelation(sameFootprint) {
+    const relation = selectedTerrainRelation();
+    if (!selectedLayoutTerrainId || !relation?.partner) {
+      setStatus("Place two footprint outlines together for at least 0.25 inches first.");
+      return;
+    }
+    const selectedId = selectedLayoutTerrainId;
+    const partnerId = relation.partner.id;
+    const involvedGroups = state.current.layoutTerrainGroups.filter((group) => group.includes(selectedId) || group.includes(partnerId));
+    state.current.layoutTerrainGroups = state.current.layoutTerrainGroups.filter((group) => !involvedGroups.includes(group));
+    if (sameFootprint) {
+      const merged = [...new Set([selectedId, partnerId, ...involvedGroups.flat()])];
+      state.current.layoutTerrainGroups.push(merged);
+    } else {
+      involvedGroups.forEach((group) => {
+        const remainder = group.filter((id) => id !== selectedId);
+        if (remainder.length >= 2) state.current.layoutTerrainGroups.push(remainder);
+      });
+    }
+    rebuildLayoutTerrainGeometry();
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setLayoutTerrainRelationVersion((version) => version + 1);
+    setStatus(sameFootprint ? "The touching pieces now count as one footprint for LOS." : "The touching pieces now count as separate footprints for LOS.");
+  }
+
+  function linkedLayoutWallId(id) {
+    const link = state.current.layoutWallLinks.find(([firstId, secondId]) => firstId === id || secondId === id);
+    if (!link) return null;
+    return link[0] === id ? link[1] : link[0];
+  }
+
+  function linkedLayoutFeatureId(id) {
+    const link = state.current.layoutFeatureLinks.find(([firstId, secondId]) => firstId === id || secondId === id);
+    if (!link) return null;
+    return link[0] === id ? link[1] : link[0];
+  }
+
+  function syncLinkedLayoutTerrain(source, syncMirrored = false) {
+    const linkedId = linkedLayoutTerrainId(source.id);
+    if (!linkedId) return;
+    const linked = state.current.layoutTerrain.find((terrain) => terrain.id === linkedId);
+    if (!linked) return;
+    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
+    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.rotation = ((source.rotation || 0) + 180) % 360;
+    if (syncMirrored) linked.mirrored = source.mirrored === true;
+  }
+
+  function syncLinkedLayoutWall(source, syncMirrored = false) {
+    const linkedId = linkedLayoutWallId(source.id);
+    if (!linkedId) return;
+    const linked = state.current.layoutWalls.find((wall) => wall.id === linkedId);
+    if (!linked) return;
+    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
+    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.rotation = ((source.rotation || 0) + 180) % 360;
+    if (syncMirrored) linked.mirrored = source.mirrored === true;
+  }
+
+  function syncLinkedLayoutFeature(source, syncMirrored = false) {
+    const linkedId = linkedLayoutFeatureId(source.id);
+    if (!linkedId) return;
+    const linked = state.current.layoutFeaturePieces.find((feature) => feature.id === linkedId);
+    if (!linked) return;
+    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
+    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.rotation = ((source.rotation || 0) + 180) % 360;
+    if (syncMirrored) linked.mirrored = source.mirrored === true;
+  }
+
+  function beginLayoutTerrainLinking() {
+    if (!layoutEditMode || !state.current.layoutTerrain.length) {
+      setStatus("Apply a layout and enter Edit Layout mode before linking footprints.");
+      return;
+    }
+    const nextActive = !layoutLinkMode;
+    setLayoutLinkMode(nextActive);
+    setFirstLinkedTerrainId(null);
+    setFirstLinkedWallId(null);
+    setFirstLinkedFeatureId(null);
+    setStatus(nextActive ? "Link mode: select the controlling footprint, wall, or terrain feature first." : "Link mode cancelled.");
+  }
+
+  function selectTerrainForLink(terrain) {
+    if (firstLinkedWallId || firstLinkedFeatureId) {
+      setStatus("The linked pair must both be the same category and type.");
+      return;
+    }
+    if (linkedLayoutTerrainId(terrain.id)) {
+      setStatus("That terrain footprint is already linked. Remove links before pairing it again.");
+      return;
+    }
+    if (!firstLinkedTerrainId) {
+      setFirstLinkedTerrainId(terrain.id);
+      setSelectedLayoutTerrainId(terrain.id);
+      setStatus("First terrain selected. Now select its matching partner.");
+      draw();
+      return;
+    }
+    const first = state.current.layoutTerrain.find((item) => item.id === firstLinkedTerrainId);
+    if (!first || first.id === terrain.id) {
+      setStatus("Select a different matching terrain footprint as the partner.");
+      return;
+    }
+    if (first.shape !== terrain.shape || (first.mirrored === true) !== (terrain.mirrored === true)) {
+      setStatus("Only matching footprint types with the same mirrored state can be linked.");
+      return;
+    }
+    state.current.layoutTerrainLinks.push([first.id, terrain.id]);
+    syncLinkedLayoutTerrain(first);
+    rebuildLayoutTerrainGeometry();
+    updateVisibility();
+    setSelectedLayoutTerrainId(terrain.id);
+    setFirstLinkedTerrainId(null);
+    setLayoutLinkMode(false);
+    setStatus("Terrain footprints linked. Moving or rotating either one will update its partner.");
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function selectWallForLink(wall) {
+    if (firstLinkedTerrainId || firstLinkedFeatureId) {
+      setStatus("The linked pair must both be the same category and type.");
+      return;
+    }
+    if (linkedLayoutWallId(wall.id)) {
+      setStatus("That wall is already linked. Remove links before pairing it again.");
+      return;
+    }
+    if (!firstLinkedWallId) {
+      setFirstLinkedWallId(wall.id);
+      setSelectedLayoutWallId(wall.id);
+      setStatus("First wall selected. Now select its matching partner.");
+      draw();
+      return;
+    }
+    const first = state.current.layoutWalls.find((item) => item.id === firstLinkedWallId);
+    if (!first || first.id === wall.id) {
+      setStatus("Select a different matching wall as the partner.");
+      return;
+    }
+    if (first.type !== wall.type || (first.mirrored === true) !== (wall.mirrored === true)) {
+      setStatus("Only matching wall types with the same mirrored state can be linked.");
+      return;
+    }
+    state.current.layoutWallLinks.push([first.id, wall.id]);
+    syncLinkedLayoutWall(first);
+    rebuildLayoutWallGeometry();
+    updateVisibility();
+    setSelectedLayoutWallId(wall.id);
+    setFirstLinkedWallId(null);
+    setLayoutLinkMode(false);
+    setStatus("Walls linked. Moving or rotating either one will update its partner.");
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function selectFeatureForLink(feature) {
+    if (firstLinkedTerrainId || firstLinkedWallId) {
+      setStatus("The linked pair must both be the same category and type.");
+      return;
+    }
+    if (linkedLayoutFeatureId(feature.id)) {
+      setStatus("That terrain feature is already linked. Remove links before pairing it again.");
+      return;
+    }
+    if (!firstLinkedFeatureId) {
+      setFirstLinkedFeatureId(feature.id);
+      setSelectedLayoutFeatureId(feature.id);
+      setStatus("First terrain feature selected. Now select its matching partner.");
+      draw();
+      return;
+    }
+    const first = state.current.layoutFeaturePieces.find((item) => item.id === firstLinkedFeatureId);
+    if (!first || first.id === feature.id) {
+      setStatus("Select a different matching terrain feature as the partner.");
+      return;
+    }
+    if (first.type !== feature.type || (first.mirrored === true) !== (feature.mirrored === true)) {
+      setStatus("Only matching terrain feature types with the same mirrored state can be linked.");
+      return;
+    }
+    state.current.layoutFeatureLinks.push([first.id, feature.id]);
+    syncLinkedLayoutFeature(first);
+    setSelectedLayoutFeatureId(feature.id);
+    setFirstLinkedFeatureId(null);
+    setLayoutLinkMode(false);
+    setStatus("Terrain features linked. Moving or rotating either one will update its partner.");
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function removeLayoutTerrainLinks() {
+    state.current.layoutTerrainLinks = [];
+    state.current.layoutWallLinks = [];
+    state.current.layoutFeatureLinks = [];
+    setLayoutLinkMode(false);
+    setFirstLinkedTerrainId(null);
+    setFirstLinkedWallId(null);
+    setFirstLinkedFeatureId(null);
+    setStatus("All layout links removed. Existing positions were kept.");
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function addLayoutWall(type) {
+    const definition = LAYOUT_WALL_TYPES[type];
+    if (!definition) return;
+    const stagingPosition = nextLayoutStagingPosition(definition.width);
+    const wall = {
+      id: `layout-wall-${type}-${Date.now()}-${state.current.layoutWalls.length}`,
+      type,
+      x: stagingPosition.x,
+      y: stagingPosition.y,
+      rotation: 0,
+      mirrored: false,
+      floorState: "ground",
+    };
+    state.current.layoutWalls.push(wall);
+    setSelectedLayoutWallId(wall.id);
+    setSelectedLayoutTerrainId(null);
+    setSelectedLayoutObjectiveId(null);
+    setLayoutEditMode(true);
+    rebuildLayoutWallGeometry();
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${definition.label} wall added to the staging area left of the battlefield. Drag it into position.`);
+  }
+
+  function addLayoutFeature(type) {
+    const definition = LAYOUT_FEATURE_TYPES[type];
+    if (!definition) return;
+    const stagingPosition = nextLayoutStagingPosition(definition.width);
+    const feature = {
+      id: `layout-feature-${type}-${Date.now()}-${state.current.layoutFeaturePieces.length}`,
+      type,
+      x: stagingPosition.x,
+      y: stagingPosition.y,
+      rotation: 0,
+      mirrored: false,
+    };
+    state.current.layoutFeaturePieces.push(feature);
+    setSelectedLayoutFeatureId(feature.id);
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutTerrainId(null);
+    setSelectedLayoutObjectiveId(null);
+    setLayoutEditMode(true);
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${definition.button.replace("Add ", "")} added to the staging area left of the battlefield. Drag it into position.`);
+  }
+
+  function addLayoutObjective(allegiance, shape, label) {
+    if (!state.current.activeLayoutKey) {
+      setStatus("Apply the selected layout before adding objective markers.");
+      return;
+    }
+    const stagingPosition = nextLayoutStagingPosition(2.5);
+    const position = battlefieldPoint(stagingPosition.x, stagingPosition.y);
+    const objective = {
+      id: `layout-objective-${Date.now()}-${state.current.layoutObjectives.length}`,
+      ...position,
+      boardX: stagingPosition.x,
+      boardY: stagingPosition.y,
+      allegiance,
+      shape,
+    };
+    state.current.layoutObjectives.push(objective);
+    setSelectedLayoutObjectiveId(objective.id);
+    setSelectedLayoutTerrainId(null);
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutFeatureId(null);
+    setLayoutEditMode(true);
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${label} added to the staging area left of the battlefield. Drag it onto a terrain footprint.`);
+  }
+
+  function nextLayoutStagingPosition(pieceWidth = 2) {
+    const index = state.current.layoutStagingIndex || 0;
+    state.current.layoutStagingIndex = index + 1;
+    return {
+      x: -(pieceWidth / 2 + 0.75),
+      y: 5 + (index % 9) * 6,
+    };
+  }
+
   function saveLayoutFixture() {
     if (!state.current.layoutTerrain.length) {
       setStatus("Apply a layout before saving its fixture positions.");
       return;
     }
-    const key = `warhammer-layout-fixture:v7:${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
-    localStorage.setItem(key, JSON.stringify({
-      version: 7,
+    const key = `warhammer-layout-fixture:v11:${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
+    const fixture = {
+      version: 11,
       terrain: state.current.layoutTerrain.map(({ id, shape, x, y, rotation, mirrored }) => ({ id, shape, x, y, rotation, mirrored: mirrored === true })),
+      terrainLinks: state.current.layoutTerrainLinks.map((link) => [...link]),
+      terrainGroups: state.current.layoutTerrainGroups.map((group) => [...group]),
+      wallPieces: state.current.layoutWalls.map(({ id, type, x, y, rotation, mirrored, floorState }) => ({ id, type, x, y, rotation, mirrored: mirrored === true, floorState: floorState === "firstFloor" ? "firstFloor" : "ground" })),
+      wallLinks: state.current.layoutWallLinks.map((link) => [...link]),
+      terrainFeatures: state.current.layoutTerrainFeatures.map((feature) => ({ ...feature, points: feature.points.map((point) => ({ ...point })) })),
+      featurePieces: state.current.layoutFeaturePieces.map(({ id, type, x, y, rotation, mirrored }) => ({ id, type, x, y, rotation, mirrored: mirrored === true })),
+      featureLinks: state.current.layoutFeatureLinks.map((link) => [...link]),
+      deploymentLabelPosition: state.current.deploymentLabelPosition ? { ...state.current.deploymentLabelPosition } : null,
+      enemyDeploymentLabelPosition: state.current.enemyDeploymentLabelPosition ? { ...state.current.enemyDeploymentLabelPosition } : null,
       objectives: state.current.layoutObjectives.map((objective) => ({
         id: objective.id,
         boardX: Number.isFinite(objective.boardX) ? objective.boardX : worldToBattlefieldPoint(objective).x,
@@ -3317,19 +4323,20 @@ export default function InteractiveLOSTool() {
         allegiance: objective.allegiance,
         shape: objective.shape,
       })),
-      walls: state.current.walls.map((wall) => ({
+      walls: state.current.walls.filter((wall) => !wall.generatedLayoutWall).map((wall) => ({
         a: worldToBattlefieldPoint(wall.a),
         b: worldToBattlefieldPoint(wall.b),
       })),
-    }));
-    setStatus("Terrain and objective fixture positions saved. Generated gameplay footprints are included automatically.");
+    };
+    localStorage.setItem(key, JSON.stringify(fixture));
+    setStatus("Terrain, reusable walls, and objective fixture positions saved.");
   }
 
   function applySelectedLayout() {
     const layoutKey = `${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
     const preset = LAYOUT_PRESETS[layoutKey];
     if (!preset) {
-      setStatus("This layout preset has not been added yet. Page 9 Layout A is currently available for Take and Hold versus Take and Hold.");
+      setStatus("This layout preset has not been added yet. Layouts A and B are currently available for Take and Hold versus Take and Hold.");
       return;
     }
 
@@ -3341,19 +4348,28 @@ export default function InteractiveLOSTool() {
     if (hasExistingLayout && !window.confirm("Replace the current terrain, objectives, and deployment lines with this layout preset? Armies and planning tools will remain in place.")) return;
 
     calculateFit();
-    const fixtureKey = `warhammer-layout-fixture:v7:${layoutKey}`;
+    const fixtureKey = `warhammer-layout-fixture:v11:${layoutKey}`;
     let savedFixture = null;
     try {
-      const savedFixtureText = localStorage.getItem(fixtureKey)
-        || localStorage.getItem(`warhammer-layout-fixture:v6:${layoutKey}`)
-        || localStorage.getItem(`warhammer-layout-fixture:v5:${layoutKey}`);
+      const savedFixtureText = localStorage.getItem(fixtureKey);
       savedFixture = JSON.parse(savedFixtureText || "null");
-    } catch {
-      savedFixture = null;
-    }
+    } catch {}
     const savedTerrain = Array.isArray(savedFixture) ? savedFixture : savedFixture?.terrain;
+    const savedTerrainLinks = Array.isArray(savedFixture?.terrainLinks) ? savedFixture.terrainLinks : (preset.terrainLinks || []);
+    const savedTerrainGroups = Array.isArray(savedFixture?.terrainGroups) ? savedFixture.terrainGroups : (preset.terrainGroups || []);
+    const savedWallLinks = Array.isArray(savedFixture?.wallLinks) ? savedFixture.wallLinks : (preset.wallLinks || []);
+    const savedFeatureLinks = Array.isArray(savedFixture?.featureLinks) ? savedFixture.featureLinks : (preset.featureLinks || []);
     const savedObjectives = Array.isArray(savedFixture?.objectives) ? savedFixture.objectives : null;
-    const savedWalls = Array.isArray(savedFixture?.walls) ? savedFixture.walls : [];
+    const savedWalls = Array.isArray(savedFixture?.walls) ? savedFixture.walls : (preset.walls || []);
+    const savedWallPieces = Array.isArray(savedFixture?.wallPieces) ? savedFixture.wallPieces : null;
+    const savedTerrainFeatures = [];
+    const savedFeaturePieces = Array.isArray(savedFixture?.featurePieces) ? savedFixture.featurePieces : (preset.featurePieces || []);
+    const savedDeploymentLabelPosition = validBoardPoint(savedFixture?.deploymentLabelPosition)
+      ? savedFixture.deploymentLabelPosition
+      : validBoardPoint(preset.deploymentLabelPosition) ? preset.deploymentLabelPosition : null;
+    const savedEnemyDeploymentLabelPosition = validBoardPoint(savedFixture?.enemyDeploymentLabelPosition)
+      ? savedFixture.enemyDeploymentLabelPosition
+      : validBoardPoint(preset.enemyDeploymentLabelPosition) ? preset.enemyDeploymentLabelPosition : null;
     const legacyFixture = Array.isArray(savedFixture);
     state.current.layoutTerrain = Array.isArray(savedTerrain) && savedTerrain.length === preset.terrain.length
       ? savedTerrain.map((terrain) => {
@@ -3382,6 +4398,12 @@ export default function InteractiveLOSTool() {
           mirrored: terrain.mirrored === true,
         };
       });
+    state.current.layoutTerrainLinks = savedTerrainLinks
+      .filter((link) => Array.isArray(link) && link.length === 2)
+      .map((link) => [...link]);
+    state.current.layoutTerrainGroups = savedTerrainGroups
+      .filter((group) => Array.isArray(group) && group.length >= 2)
+      .map((group) => [...group]);
     state.current.layoutObjectives = savedObjectives?.length === preset.objectives.length
       ? savedObjectives.map((objective, index) => ({
         id: objective.id || `layout-objective-${index}`,
@@ -3391,19 +4413,56 @@ export default function InteractiveLOSTool() {
         shape: objective.shape || (preset.objectives[index].allegiance === "neutral" && index !== 2 ? "diamond" : "circle"),
       }))
       : [];
+    const presetWallPieces = preset.wallPieces || DEFAULT_LAYOUT_WALL_SET;
+    state.current.layoutWalls = savedWallPieces?.length
+      ? savedWallPieces.map((wall, index) => ({
+        id: wall.id || `layout-wall-${wall.type}-${index}`,
+        type: wall.type,
+        x: wall.x,
+        y: wall.y,
+        rotation: wall.rotation || 0,
+        mirrored: wall.mirrored === true,
+        floorState: wall.floorState === "firstFloor" ? "firstFloor" : "ground",
+      }))
+      : presetWallPieces.map((wall, index) => ({
+        id: `layout-wall-${wall.type}-${index}`,
+        type: wall.type,
+        x: wall.x,
+        y: wall.y,
+        rotation: wall.rotation || 0,
+        mirrored: wall.mirrored === true,
+        floorState: "ground",
+      }));
+    state.current.layoutWallLinks = savedWallLinks
+      .filter((link) => Array.isArray(link) && link.length === 2)
+      .map((link) => [...link]);
+    state.current.layoutTerrainFeatures = savedTerrainFeatures.map((feature) => ({
+      ...feature,
+      points: feature.points.map((point) => ({ ...point })),
+    }));
+    state.current.layoutFeaturePieces = savedFeaturePieces.map((feature) => ({
+      ...feature,
+      mirrored: feature.mirrored === true,
+    }));
+    state.current.layoutFeatureLinks = savedFeatureLinks
+      .filter((link) => Array.isArray(link) && link.length === 2)
+      .map((link) => [...link]);
     state.current.activeLayoutKey = layoutKey;
     refreshActiveLayoutGeometry();
     state.current.walls = savedWalls.map((wall) => ({
       a: battlefieldPoint(wall.a.x, wall.a.y),
       b: battlefieldPoint(wall.b.x, wall.b.y),
     }));
+    rebuildLayoutWallGeometry();
     state.current.deploymentVisible = false;
     state.current.deploymentNoMansSide = null;
+    state.current.deploymentLabelPosition = savedDeploymentLabelPosition ? { ...savedDeploymentLabelPosition } : null;
     state.current.deploymentDraft = [];
     state.current.deploymentPreview = null;
 
     state.current.enemyDeploymentVisible = false;
     state.current.enemyDeploymentNoMansSide = null;
+    state.current.enemyDeploymentLabelPosition = savedEnemyDeploymentLabelPosition ? { ...savedEnemyDeploymentLabelPosition } : null;
     state.current.enemyDeploymentDraft = [];
     state.current.enemyDeploymentPreview = null;
 
@@ -3412,7 +4471,12 @@ export default function InteractiveLOSTool() {
     setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
     setLayoutEditMode(true);
     setSelectedLayoutTerrainId(null);
+    setSelectedLayoutWallId(null);
     setSelectedLayoutObjectiveId(null);
+    setLayoutLinkMode(false);
+    setFirstLinkedTerrainId(null);
+    setFirstLinkedWallId(null);
+    setFirstLinkedFeatureId(null);
     state.current.camera = { scale: 1, x: 0, y: 0 };
     updateVisibility();
     draw();
@@ -3436,11 +4500,12 @@ export default function InteractiveLOSTool() {
     ]
     : [];
   const selectedLayoutPreset = LAYOUT_PRESETS[`${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`];
+  const activeTerrainRelation = layoutTerrainRelationVersion >= 0 ? selectedTerrainRelation() : null;
 
   return (
     <div style={styles.appShell}>
       <div style={styles.body}>
-        <div style={{ ...styles.sidebarShell, width: sidebarCollapsed ? 0 : 270 }}>
+        <div style={{ ...styles.sidebarShell, width: sidebarCollapsed ? 0 : 360 }}>
           <aside style={{ ...styles.sidebar, transform: sidebarCollapsed ? "translateX(-100%)" : "translateX(0)" }}>
           <button onClick={() => fileRef.current?.click()} style={styles.uploadButton}>Upload map</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
@@ -3529,6 +4594,12 @@ export default function InteractiveLOSTool() {
                   {selectedLayoutPreset ? "Apply Layout" : "Layout coming soon"}
                 </ToolButton>
                 <div style={styles.layoutEditorControls}>
+                  <ToolButton onClick={() => addLayoutObjective("home", "circle", "Home objective marker")}>Home objective</ToolButton>
+                  <ToolButton onClick={() => addLayoutObjective("enemy", "circle", "Enemy objective marker")}>Enemy objective</ToolButton>
+                  <ToolButton onClick={() => addLayoutObjective("neutral", "diamond", "Expansion objective marker")}>Expansion objective</ToolButton>
+                  <ToolButton onClick={() => addLayoutObjective("neutral", "circle", "Central objective marker")}>Central objective</ToolButton>
+                </div>
+                <div style={styles.layoutEditorControls}>
                   <ToolButton active={layoutEditMode} onClick={() => {
                     if (!state.current.layoutTerrain.length) {
                       setStatus("Apply the selected layout before editing its terrain.");
@@ -3536,11 +4607,37 @@ export default function InteractiveLOSTool() {
                     }
                     setLayoutEditMode((editing) => !editing);
                     setSelectedLayoutTerrainId(null);
+                    setSelectedLayoutWallId(null);
+                    setSelectedLayoutFeatureId(null);
                     setSelectedLayoutObjectiveId(null);
-                  }}>{layoutEditMode ? "Finish editing" : "Edit terrain"}</ToolButton>
-                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(-15)}>Rotate left</ToolButton>
-                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(15)}>Rotate right</ToolButton>
+                    setLayoutLinkMode(false);
+                    setFirstLinkedTerrainId(null);
+                    setFirstLinkedWallId(null);
+                    setFirstLinkedFeatureId(null);
+                  }}>{layoutEditMode ? "Finish editing" : "Edit layout"}</ToolButton>
+                  <ToolButton active={layoutLinkMode} onClick={beginLayoutTerrainLinking}>Link</ToolButton>
+                  <ToolButton onClick={removeLayoutTerrainLinks}>Remove links</ToolButton>
+                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(-1)}>Rotate left 1 degree</ToolButton>
+                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(1)}>Rotate right 1 degree</ToolButton>
                   <ToolButton onClick={mirrorSelectedLayoutTerrain}>Mirror</ToolButton>
+                  {selectedLayoutTerrainId && activeTerrainRelation && (
+                    <>
+                      <ToolButton active={activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(true)}>Same footprint</ToolButton>
+                      <ToolButton active={!activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(false)}>Separate footprints</ToolButton>
+                    </>
+                  )}
+                  {selectedLayoutWallId && (
+                    <>
+                      <ToolButton onClick={() => setSelectedWallFloorState("ground")}>Ground</ToolButton>
+                      <ToolButton onClick={() => setSelectedWallFloorState("firstFloor")}>1st Floor</ToolButton>
+                    </>
+                  )}
+                  {Object.entries(LAYOUT_FEATURE_TYPES).map(([type, definition]) => (
+                    <ToolButton key={type} onClick={() => addLayoutFeature(type)}>{definition.button}</ToolButton>
+                  ))}
+                  {Object.keys(LAYOUT_WALL_TYPES).map((type) => (
+                    <ToolButton key={type} onClick={() => addLayoutWall(type)}>Add {type} wall</ToolButton>
+                  ))}
                   <ToolButton onClick={restorePresetDeploymentLines}>Restore deploy lines</ToolButton>
                   <ToolButton onClick={saveLayoutFixture}>Save Layout Fixture</ToolButton>
                 </div>
@@ -4034,7 +5131,7 @@ const styles = {
     zIndex: 4,
   },
   sidebar: {
-    width: 270,
+    width: 360,
     height: "100%",
     boxSizing: "border-box",
     flexShrink: 0,
@@ -4890,11 +5987,70 @@ function computeVisibilityZones(source, blockers, walls, W, H) {
   };
 }
 
-function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls) {
+const visibilityGeometryCache = new Map();
+const footprintBoundarySegmentCache = new WeakMap();
+
+function visibilityGeometryKey(blockers, walls, W, H) {
+  let hash = 2166136261;
+  const mix = (value) => {
+    hash ^= Math.round(value * 100);
+    hash = Math.imul(hash, 16777619);
+  };
+  mix(W);
+  mix(H);
+  blockers.forEach((poly) => {
+    mix(poly.length);
+    const groupId = String(poly.footprintGroupId || "");
+    for (let index = 0; index < groupId.length; index += 1) mix(groupId.charCodeAt(index));
+    poly.forEach((point) => {
+      mix(point.x);
+      mix(point.y);
+    });
+  });
+  walls.forEach((wall) => {
+    mix(wall.a.x);
+    mix(wall.a.y);
+    mix(wall.b.x);
+    mix(wall.b.y);
+  });
+  return `${blockers.length}:${walls.length}:${hash >>> 0}`;
+}
+
+function getPreparedVisibilityGeometry(blockers, walls, W, H) {
+  const key = visibilityGeometryKey(blockers, walls, W, H);
+  const cached = visibilityGeometryCache.get(key);
+  if (cached) return cached;
+
+  const bounds = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+  const footprintSegments = getFootprintBoundarySegments(blockers);
+  const vertices = [
+    ...bounds,
+    ...footprintSegments.flatMap((segment) => [segment.a, segment.b]),
+    ...walls.flatMap((wall) => [wall.a, wall.b]),
+  ];
+  const segments = [];
+  addSegments(bounds, segments, { type: "bounds" });
+  footprintSegments.forEach((segment) => {
+    segments.push({
+      a: segment.a,
+      b: segment.b,
+      meta: { type: "footprint", index: segment.index, groupKey: segment.groupKey },
+    });
+  });
+  walls.forEach((wall, index) => segments.push({ a: wall.a, b: wall.b, meta: { type: "wall", index } }));
+  const geometry = { bounds, vertices, segments };
+  visibilityGeometryCache.set(key, geometry);
+  if (visibilityGeometryCache.size > 6) {
+    visibilityGeometryCache.delete(visibilityGeometryCache.keys().next().value);
+  }
+  return geometry;
+}
+
+function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null) {
   if (!source || !W || !H) return [];
   const eps = 0.0001;
-  const bounds = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
-  const vertices = [...bounds, ...blockers.flat(), ...walls.flatMap((w) => [w.a, w.b])];
+  const geometry = preparedGeometry || getPreparedVisibilityGeometry(blockers, walls, W, H);
+  const { vertices, segments } = geometry;
   const angles = [];
   vertices.forEach((v) => {
     const a = Math.atan2(v.y - source.y, v.x - source.x);
@@ -4903,13 +6059,8 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
 
   const containingBlockers = new Set();
   blockers.forEach((poly, index) => {
-    if (pointInPoly(source, poly)) containingBlockers.add(index);
+    if (pointInPoly(source, poly)) containingBlockers.add(footprintSurfaceKey(blockers, index));
   });
-
-  const segments = [];
-  addSegments(bounds, segments, { type: "bounds" });
-  blockers.forEach((poly, index) => addSegments(poly, segments, { type: "footprint", index }));
-  walls.forEach((wall, index) => segments.push({ a: wall.a, b: wall.b, meta: { type: "wall", index } }));
 
   const hits = [];
   angles.forEach((a) => {
@@ -4926,7 +6077,7 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
       const previous = uniqueIntersections[uniqueIntersections.length - 1];
       const sameDistance = previous && Math.abs(previous.t - hit.t) < 0.001;
       const sameSurface = previous && previous.meta.type === hit.meta.type
-        && previous.meta.index === hit.meta.index;
+        && (previous.meta.groupKey || previous.meta.index) === (hit.meta.groupKey || hit.meta.index);
       if (!sameDistance || !sameSurface) uniqueIntersections.push(hit);
     });
 
@@ -4945,7 +6096,17 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
       }
 
       if (hit.meta.type === "footprint") {
-        if (!containingBlockers.has(hit.meta.index)) footprintWallsCrossed += 1;
+        const surfaceKey = hit.meta.groupKey || footprintSurfaceKey(blockers, hit.meta.index);
+        const sampleDistance = 0.25;
+        const before = { x: hit.x - ray.x * sampleDistance, y: hit.y - ray.y * sampleDistance };
+        const after = { x: hit.x + ray.x * sampleDistance, y: hit.y + ray.y * sampleDistance };
+        const beforeInside = pointInFootprintSurface(before, blockers, surfaceKey);
+        const afterInside = pointInFootprintSurface(after, blockers, surfaceKey);
+        if (beforeInside === afterInside) continue;
+        if (containingBlockers.has(surfaceKey) && beforeInside) {
+          containingBlockers.delete(surfaceKey);
+        }
+        footprintWallsCrossed += 1;
         if (footprintWallsCrossed > allowedFootprintWalls) {
           chosen = hit;
           break;
@@ -4960,28 +6121,126 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
   return sanitizeVisibilityPolygon(source, hits, W, H);
 }
 
-function enemyLOSState(enemy, visibility) {
-  const clearZones = visibility.clearZones || [];
-  const oneWallZones = visibility.oneWallZones || [];
-  if (clearZones.some((poly) => enemyTouchedByPoly(enemy, poly))) return "clear";
-  if (oneWallZones.some((poly) => enemyTouchedByPoly(enemy, poly))) return "oneWall";
+function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls) {
+  if (!origins.length) return "blocked";
+  let centerHasOneWallPath = false;
+  for (const origin of origins) {
+    const state = classifySightSegment(origin, enemy, blockers, walls);
+    if (state === "clear") return "clear";
+    if (state === "oneWall") centerHasOneWallPath = true;
+  }
+  if (centerHasOneWallPath) return "oneWall";
+
+  // A base whose centre is blocked can still be visible at its edge. Require a
+  // small continuous arc rather than allowing one corner-grazing sample to
+  // promote the whole enemy marker.
+  const targetSamples = 32;
+  for (const origin of origins) {
+    const edgeStates = [];
+    for (let index = 0; index < targetSamples; index += 1) {
+      const angle = index / targetSamples * Math.PI * 2;
+      const target = {
+        x: enemy.x + Math.cos(angle) * enemyRadius,
+        y: enemy.y + Math.sin(angle) * enemyRadius,
+      };
+      edgeStates.push(classifySightSegment(origin, target, blockers, walls));
+    }
+    if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) return "clear";
+    if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) return "oneWall";
+  }
   return "blocked";
+}
+
+function hasAdjacentEnemyEdgeSamples(states, targetState) {
+  return states.some((state, index) => (
+    state === targetState
+    && states[(index + 1) % states.length] === targetState
+  ));
+}
+
+function classifySightSegment(origin, target, blockers, walls) {
+  for (const wall of walls) {
+    const hit = segmentIntersectionParameters(origin, target, wall.a, wall.b);
+    if (hit && hit.t > 0.0001 && hit.t < 0.9999) return "blocked";
+  }
+
+  const intersectionsBySurface = new Map();
+  blockers.forEach((polygon, index) => {
+    intersectionsBySurface.set(footprintSurfaceKey(blockers, index), []);
+  });
+  getFootprintBoundarySegments(blockers).forEach((segment) => {
+    const hit = segmentIntersectionParameters(origin, target, segment.a, segment.b);
+    if (!hit || hit.t <= 0.0001 || hit.t >= 0.9999) return;
+    intersectionsBySurface.get(segment.groupKey)?.push(hit.t);
+  });
+
+  let footprintCrossings = 0;
+  for (const [surfaceKey, intersections] of intersectionsBySurface) {
+    const occupiedIntervals = sightSegmentTerrainIntervals(
+      origin,
+      target,
+      blockers,
+      surfaceKey,
+      intersections,
+    );
+    occupiedIntervals.forEach((interval) => {
+      const touchesOrigin = interval.start <= 0.0001;
+      const touchesTarget = interval.end >= 0.9999;
+      if (touchesOrigin && touchesTarget) return;
+      footprintCrossings += touchesOrigin || touchesTarget ? 1 : 2;
+    });
+    if (footprintCrossings > 1) return "blocked";
+  }
+  return footprintCrossings === 1 ? "oneWall" : "clear";
+}
+
+function sightSegmentTerrainIntervals(origin, target, blockers, surfaceKey, intersections) {
+  const cuts = [0, ...intersections, 1]
+    .sort((left, right) => left - right)
+    .filter((value, index, values) => index === 0 || Math.abs(value - values[index - 1]) > 0.0005);
+  const occupied = [];
+  for (let index = 0; index < cuts.length - 1; index += 1) {
+    const start = cuts[index];
+    const end = cuts[index + 1];
+    if (end - start <= 0.00001) continue;
+    const midpoint = (start + end) / 2;
+    const sample = {
+      x: origin.x + (target.x - origin.x) * midpoint,
+      y: origin.y + (target.y - origin.y) * midpoint,
+    };
+    if (!pointInFootprintSurface(sample, blockers, surfaceKey)) continue;
+    const previous = occupied[occupied.length - 1];
+    if (previous && Math.abs(previous.end - start) <= 0.0005) previous.end = end;
+    else occupied.push({ start, end });
+  }
+  return occupied;
 }
 
 function sanitizeVisibilityPolygon(source, hits, W, H) {
   const deduped = hits.filter((point, index, points) => index === 0 || dist(point, points[index - 1]) > 0.25);
-  if (deduped.length < 3) return deduped;
+  if (deduped.length < 3) {
+    deduped.source = { ...source };
+    return deduped;
+  }
   const maximumRadius = Math.hypot(W, H) * 1.05;
-  return deduped.filter((point, index, points) => {
+  const sanitized = deduped.filter((point, index, points) => {
     const previous = points[(index - 1 + points.length) % points.length];
     const next = points[(index + 1) % points.length];
     const radius = dist(source, point);
     if (!Number.isFinite(radius) || radius > maximumRadius) return false;
-    const neighbourRadius = Math.max(dist(source, previous), dist(source, next), 1);
+    const previousRadius = dist(source, previous);
+    const nextRadius = dist(source, next);
+    const minimumNeighbourRadius = Math.max(Math.min(previousRadius, nextRadius), 1);
+    const maximumNeighbourRadius = Math.max(previousRadius, nextRadius, 1);
     const angularGap = Math.abs(normalizeAngle(point.angle - previous.angle))
       + Math.abs(normalizeAngle(next.angle - point.angle));
-    return !(radius > neighbourRadius * 2.5 && angularGap < 0.002);
+    const neighboursAgree = maximumNeighbourRadius / minimumNeighbourRadius < 1.35;
+    const isolatedFarSpike = radius > maximumNeighbourRadius * 1.8;
+    const isolatedNearSpike = radius < minimumNeighbourRadius * 0.55;
+    return !(neighboursAgree && (isolatedFarSpike || isolatedNearSpike) && angularGap < 0.003);
   });
+  sanitized.source = { ...source };
+  return sanitized;
 }
 
 function normalizeAngle(angle) {
@@ -4991,31 +6250,195 @@ function normalizeAngle(angle) {
   return normalized;
 }
 
-function enemyInRange(enemy, light, rangeRadius) {
-  if (!Number.isFinite(rangeRadius)) return true;
-  const enemyRadius = 13;
-  return dist(enemy, light) <= rangeRadius + enemyRadius;
+function enemyBaseRadius(pixelsPerInch) {
+  return Number.isFinite(pixelsPerInch) && pixelsPerInch > 0
+    ? pixelsPerInch * (25 / 25.4) / 2
+    : 12.5;
 }
 
-function enemyTouchedByPoly(enemy, poly) {
-  if (!poly.length) return false;
-  const r = 13;
-  const testPoints = [
-    enemy,
-    { x: enemy.x + r, y: enemy.y },
-    { x: enemy.x - r, y: enemy.y },
-    { x: enemy.x, y: enemy.y + r },
-    { x: enemy.x, y: enemy.y - r },
-    { x: enemy.x + r * 0.7, y: enemy.y + r * 0.7 },
-    { x: enemy.x - r * 0.7, y: enemy.y + r * 0.7 },
-    { x: enemy.x + r * 0.7, y: enemy.y - r * 0.7 },
-    { x: enemy.x - r * 0.7, y: enemy.y - r * 0.7 },
-  ];
-  return testPoints.some((p) => pointInPoly(p, poly));
+function enemyInRange(enemy, light, rangeRadius, pixelsPerInch = null) {
+  if (!Number.isFinite(rangeRadius)) return true;
+  const enemyRadius = enemyBaseRadius(pixelsPerInch);
+  return dist(enemy, light) <= rangeRadius + enemyRadius;
 }
 
 function addSegments(poly, segments, meta) {
   for (let i = 0; i < poly.length; i++) segments.push({ a: poly[i], b: poly[(i + 1) % poly.length], meta });
+}
+
+function footprintSurfaceKey(blockers, index) {
+  const groupId = String(blockers[index]?.footprintGroupId || "");
+  return groupId.startsWith("layout-group:") ? groupId : `footprint:${index}`;
+}
+
+function pointInFootprintSurface(point, blockers, surfaceKey) {
+  if (String(surfaceKey).startsWith("layout-group:")) {
+    return blockers.some((polygon) => String(polygon.footprintGroupId || "") === surfaceKey && pointInPoly(point, polygon));
+  }
+  const index = Number(String(surfaceKey).replace("footprint:", ""));
+  return Number.isInteger(index) && blockers[index] ? pointInPoly(point, blockers[index]) : false;
+}
+
+function getFootprintBoundarySegments(blockers) {
+  const cached = footprintBoundarySegmentCache.get(blockers);
+  if (cached) return cached;
+
+  const groupedIndexes = new Map();
+  blockers.forEach((polygon, index) => {
+    const groupId = String(polygon.footprintGroupId || "");
+    if (!groupId.startsWith("layout-group:")) return;
+    if (!groupedIndexes.has(groupId)) groupedIndexes.set(groupId, []);
+    groupedIndexes.get(groupId).push(index);
+  });
+
+  const segments = [];
+  blockers.forEach((polygon, polygonIndex) => {
+    if (!polygon?.length) return;
+    const groupId = String(polygon.footprintGroupId || "");
+    const groupKey = footprintSurfaceKey(blockers, polygonIndex);
+    const partnerIndexes = (groupedIndexes.get(groupId) || []).filter((index) => index !== polygonIndex);
+    if (!partnerIndexes.length) {
+      for (let index = 0; index < polygon.length; index += 1) {
+        segments.push({ a: polygon[index], b: polygon[(index + 1) % polygon.length], index: polygonIndex, groupKey });
+      }
+      return;
+    }
+
+    for (let edgeIndex = 0; edgeIndex < polygon.length; edgeIndex += 1) {
+      const edgeStart = polygon[edgeIndex];
+      const edgeEnd = polygon[(edgeIndex + 1) % polygon.length];
+      const edgeLength = dist(edgeStart, edgeEnd);
+      const tolerance = Number.isFinite(polygon.sharedBoundaryTolerance)
+        ? polygon.sharedBoundaryTolerance
+        : 0.75;
+      const cuts = [0, 1];
+
+      partnerIndexes.forEach((partnerIndex) => {
+        const partner = blockers[partnerIndex];
+        for (let partnerEdgeIndex = 0; partnerEdgeIndex < partner.length; partnerEdgeIndex += 1) {
+          const partnerStart = partner[partnerEdgeIndex];
+          const partnerEnd = partner[(partnerEdgeIndex + 1) % partner.length];
+          const intersection = segmentIntersectionParameters(edgeStart, edgeEnd, partnerStart, partnerEnd);
+          if (intersection) cuts.push(intersection.t);
+
+          const partnerTolerance = Number.isFinite(partner.sharedBoundaryTolerance)
+            ? partner.sharedBoundaryTolerance
+            : tolerance;
+          const overlap = nearParallelEdgeOverlap(
+            edgeStart,
+            edgeEnd,
+            partnerStart,
+            partnerEnd,
+            Math.max(tolerance, partnerTolerance),
+          );
+          if (overlap) cuts.push(overlap.start, overlap.end);
+        }
+      });
+
+      const uniqueCuts = cuts
+        .map((value) => Math.max(0, Math.min(1, value)))
+        .sort((left, right) => left - right)
+        .filter((value, index, values) => index === 0 || Math.abs(value - values[index - 1]) > 0.00001);
+
+      for (let cutIndex = 0; cutIndex < uniqueCuts.length - 1; cutIndex += 1) {
+        const start = uniqueCuts[cutIndex];
+        const end = uniqueCuts[cutIndex + 1];
+        if ((end - start) * edgeLength <= 0.001) continue;
+        const midpoint = interpolatePoint(edgeStart, edgeEnd, (start + end) / 2);
+        const sharedBoundary = partnerIndexes.some((partnerIndex) => {
+          const partner = blockers[partnerIndex];
+          const partnerTolerance = Number.isFinite(partner.sharedBoundaryTolerance)
+            ? partner.sharedBoundaryTolerance
+            : tolerance;
+          return pointInPoly(midpoint, partner)
+            || pointNearParallelPolygonEdge(
+              midpoint,
+              edgeStart,
+              edgeEnd,
+              partner,
+              Math.max(tolerance, partnerTolerance),
+            );
+        });
+        if (sharedBoundary) continue;
+        segments.push({
+          a: interpolatePoint(edgeStart, edgeEnd, start),
+          b: interpolatePoint(edgeStart, edgeEnd, end),
+          index: polygonIndex,
+          groupKey,
+        });
+      }
+    }
+  });
+
+  groupedIndexes.forEach((indexes, groupId) => {
+    const groupedSegments = segments.filter((segment) => segment.groupKey === groupId);
+    if (!groupedSegments.length) return;
+    const tolerance = Math.max(...indexes.map((index) => blockers[index].sharedBoundaryTolerance || 0.75));
+    snapSegmentEndpoints(groupedSegments, Math.max(0.1, tolerance));
+  });
+
+  footprintBoundarySegmentCache.set(blockers, segments);
+  return segments;
+}
+
+function snapSegmentEndpoints(segments, tolerance) {
+  const points = segments.flatMap((segment) => [segment.a, segment.b]);
+  const assigned = new Set();
+  points.forEach((point, index) => {
+    if (assigned.has(index)) return;
+    const cluster = [index];
+    assigned.add(index);
+    for (let candidateIndex = index + 1; candidateIndex < points.length; candidateIndex += 1) {
+      if (assigned.has(candidateIndex) || dist(point, points[candidateIndex]) > tolerance) continue;
+      cluster.push(candidateIndex);
+      assigned.add(candidateIndex);
+    }
+    const center = cluster.reduce((sum, pointIndex) => ({
+      x: sum.x + points[pointIndex].x,
+      y: sum.y + points[pointIndex].y,
+    }), { x: 0, y: 0 });
+    center.x /= cluster.length;
+    center.y /= cluster.length;
+    cluster.forEach((pointIndex) => {
+      points[pointIndex].x = center.x;
+      points[pointIndex].y = center.y;
+    });
+  });
+}
+
+function nearParallelEdgeOverlap(a, b, c, d, tolerance) {
+  const ab = { x: b.x - a.x, y: b.y - a.y };
+  const cd = { x: d.x - c.x, y: d.y - c.y };
+  const abLength = Math.hypot(ab.x, ab.y);
+  const cdLength = Math.hypot(cd.x, cd.y);
+  if (abLength <= 0.001 || cdLength <= 0.001) return null;
+  const parallel = Math.abs((ab.x * cd.x + ab.y * cd.y) / (abLength * cdLength));
+  if (parallel < 0.985) return null;
+
+  const distanceToLine = (point) => Math.abs(cross(ab, { x: point.x - a.x, y: point.y - a.y })) / abLength;
+  if (Math.min(distanceToLine(c), distanceToLine(d)) > tolerance) return null;
+
+  const lengthSquared = abLength * abLength;
+  const project = (point) => ((point.x - a.x) * ab.x + (point.y - a.y) * ab.y) / lengthSquared;
+  const start = Math.max(0, Math.min(project(c), project(d)));
+  const end = Math.min(1, Math.max(project(c), project(d)));
+  return end - start > 0.00001 ? { start, end } : null;
+}
+
+function pointNearParallelPolygonEdge(point, edgeStart, edgeEnd, polygon, tolerance) {
+  for (let index = 0; index < polygon.length; index += 1) {
+    const overlap = nearParallelEdgeOverlap(
+      edgeStart,
+      edgeEnd,
+      polygon[index],
+      polygon[(index + 1) % polygon.length],
+      tolerance,
+    );
+    if (!overlap) continue;
+    const closest = closestPointOnSegment(point, polygon[index], polygon[(index + 1) % polygon.length]);
+    if (dist(point, closest) <= tolerance) return true;
+  }
+  return false;
 }
 function raySegmentIntersection(p, r, a, b) {
   const s = { x: b.x - a.x, y: b.y - a.y };
@@ -5025,26 +6448,6 @@ function raySegmentIntersection(p, r, a, b) {
   const t = cross(qp, s) / rxs;
   const u = cross(qp, r) / rxs;
   return t >= 0 && u >= 0 && u <= 1 ? { x: p.x + t * r.x, y: p.y + t * r.y, t } : null;
-}
-
-function convexHull(points) {
-  if (points.length <= 3) return points.map((point) => ({ ...point }));
-  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
-  const turn = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-  const lower = [];
-  for (const point of sorted) {
-    while (lower.length >= 2 && turn(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
-    lower.push(point);
-  }
-  const upper = [];
-  for (let index = sorted.length - 1; index >= 0; index--) {
-    const point = sorted[index];
-    while (upper.length >= 2 && turn(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
-    upper.push(point);
-  }
-  lower.pop();
-  upper.pop();
-  return [...lower, ...upper];
 }
 
 function simplifyClosedPolygon(points, tolerance = 2) {
@@ -5065,7 +6468,7 @@ function unionPolygonBoundary(first, second) {
     ...externalBoundarySegments(first, second),
     ...externalBoundarySegments(second, first),
   ];
-  if (!retained.length) return convexHull([...first, ...second]);
+  if (!retained.length) return first.map((point) => ({ ...point }));
 
   const unused = retained.map((segment) => ({ ...segment, used: false }));
   const start = unused[0];
@@ -5096,7 +6499,7 @@ function unionPolygonBoundary(first, second) {
     boundary.push({ ...best.point });
   }
 
-  return boundary.length >= 3 ? boundary : convexHull([...first, ...second]);
+  return boundary.length >= 3 ? boundary : first.map((point) => ({ ...point }));
 }
 
 function externalBoundarySegments(poly, other) {
@@ -5151,6 +6554,84 @@ function polygonsTouchOrNear(a, b, threshold) {
     || b.some((point) => pointNearPolygon(point, a, threshold));
 }
 
+function approximatePolygonBoundaryContact(first, second, tolerance, sampleStep) {
+  const sampledContact = (source, target) => {
+    let contact = 0;
+    for (let index = 0; index < source.length; index += 1) {
+      const a = source[index];
+      const b = source[(index + 1) % source.length];
+      const length = dist(a, b);
+      const samples = Math.max(1, Math.ceil(length / Math.max(sampleStep, 0.5)));
+      for (let sample = 0; sample < samples; sample += 1) {
+        const point = interpolatePoint(a, b, (sample + 0.5) / samples);
+        if (pointNearPolygon(point, target, tolerance)) contact += length / samples;
+      }
+    }
+    return contact;
+  };
+  return Math.max(sampledContact(first, second), sampledContact(second, first));
+}
+
+function sealTouchingPolygonVertices(polygons, tolerance) {
+  if (!Number.isFinite(tolerance) || tolerance <= 0) return;
+  for (let firstIndex = 0; firstIndex < polygons.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < polygons.length; secondIndex += 1) {
+      const first = polygons[firstIndex];
+      const second = polygons[secondIndex];
+      first.forEach((point) => {
+        let closest = null;
+        let closestDistance = tolerance;
+        for (let index = 0; index < second.length; index += 1) {
+          const candidate = closestPointOnSegment(point, second[index], second[(index + 1) % second.length]);
+          const distance = dist(point, candidate);
+          if (distance <= closestDistance) {
+            closest = candidate;
+            closestDistance = distance;
+          }
+        }
+        if (closest) {
+          point.x = closest.x;
+          point.y = closest.y;
+        }
+      });
+      second.forEach((point) => {
+        let closest = null;
+        let closestDistance = tolerance;
+        for (let index = 0; index < first.length; index += 1) {
+          const candidate = closestPointOnSegment(point, first[index], first[(index + 1) % first.length]);
+          const distance = dist(point, candidate);
+          if (distance <= closestDistance) {
+            closest = candidate;
+            closestDistance = distance;
+          }
+        }
+        if (closest) {
+          point.x = closest.x;
+          point.y = closest.y;
+        }
+      });
+    }
+  }
+}
+
+function drawGroupedTerrainOutlines(ctx, blockers, scale = 1) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,.96)";
+  ctx.lineWidth = 2 / scale;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  getFootprintBoundarySegments(blockers).forEach((segment) => {
+    const groupId = String(blockers[segment.index]?.footprintGroupId || "");
+    if (!groupId.startsWith("layout-group:")) return;
+    ctx.beginPath();
+    ctx.moveTo(segment.a.x, segment.a.y);
+    ctx.lineTo(segment.b.x, segment.b.y);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
 function drawBattlefieldGrid(ctx, fit, scale = 1) {
   if (!fit?.w || !fit?.h) return;
   const inch = fit.w / BATTLEFIELD_WIDTH_INCHES;
@@ -5164,7 +6645,7 @@ function drawBattlefieldGrid(ctx, fit, scale = 1) {
     ctx.moveTo(fit.x + x * inch, fit.y);
     ctx.lineTo(fit.x + x * inch, fit.y + fit.h);
     ctx.lineWidth = (x % 5 === 0 ? 1.25 : 0.65) / scale;
-    ctx.strokeStyle = x % 5 === 0 ? "rgba(15,23,42,.38)" : "rgba(15,23,42,.20)";
+    ctx.strokeStyle = x % 5 === 0 ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.14)";
     ctx.stroke();
   }
   for (let y = 0; y <= BATTLEFIELD_HEIGHT_INCHES; y++) {
@@ -5172,12 +6653,12 @@ function drawBattlefieldGrid(ctx, fit, scale = 1) {
     ctx.moveTo(fit.x, fit.y + y * inch);
     ctx.lineTo(fit.x + fit.w, fit.y + y * inch);
     ctx.lineWidth = (y % 5 === 0 ? 1.25 : 0.65) / scale;
-    ctx.strokeStyle = y % 5 === 0 ? "rgba(15,23,42,.38)" : "rgba(15,23,42,.20)";
+    ctx.strokeStyle = y % 5 === 0 ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.14)";
     ctx.stroke();
   }
 
   ctx.lineWidth = 3 / scale;
-  ctx.strokeStyle = "rgba(15,23,42,.88)";
+  ctx.strokeStyle = "rgba(255,255,255,.72)";
   ctx.strokeRect(fit.x, fit.y, fit.w, fit.h);
   ctx.restore();
 }
@@ -5291,6 +6772,59 @@ function drawPoly(ctx, poly, fill, stroke, closed, scale = 1, showPoints = true)
   ctx.stroke();
   if (showPoints) poly.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 5 / scale, 0, Math.PI * 2); ctx.fillStyle = stroke; ctx.fill(); });
 }
+
+function drawDecorativeTerrainFeature(ctx, poly, kind, scale = 1) {
+  if (!poly?.length) return;
+  const dense = kind === "dense";
+  drawPoly(
+    ctx,
+    poly,
+    "rgba(0,0,0,0)",
+    dense ? "rgba(22,163,74,.95)" : "rgba(244,114,182,.98)",
+    true,
+    scale,
+    false,
+  );
+}
+
+function drawLayoutWallFloorControls(ctx, buttons, activeFloorState, scale = 1) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${11 / scale}px system-ui`;
+  buttons.forEach((button) => {
+    const active = button.floorState === activeFloorState;
+    ctx.beginPath();
+    ctx.roundRect(button.x, button.y, button.width, button.height, 6 / scale);
+    ctx.fillStyle = active ? "rgba(34,197,94,.96)" : "rgba(15,23,42,.94)";
+    ctx.fill();
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = active ? "#86efac" : "#cbd5e1";
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
+  });
+  ctx.restore();
+}
+function drawLayoutTerrainRelationControls(ctx, buttons, sameFootprint, scale = 1) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${11 / scale}px system-ui`;
+  buttons.forEach((button) => {
+    const active = button.same === sameFootprint;
+    ctx.beginPath();
+    ctx.roundRect(button.x, button.y, button.width, button.height, 6 / scale);
+    ctx.fillStyle = active ? "rgba(34,197,94,.96)" : "rgba(15,23,42,.94)";
+    ctx.fill();
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = active ? "#86efac" : "#cbd5e1";
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(button.label, button.x + button.width / 2, button.y + button.height / 2);
+  });
+  ctx.restore();
+}
 function strokePoly(ctx, poly, stroke, width) {
   if (!poly.length) return;
   ctx.beginPath();
@@ -5302,12 +6836,7 @@ function strokePoly(ctx, poly, stroke, width) {
   ctx.stroke();
 }
 
-function drawZoneMask(ctx, zones, W, H, fillStyle) {
-  const layer = createZoneLayer(zones, W, H, fillStyle);
-  if (layer) ctx.drawImage(layer, 0, 0);
-}
-
-function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderScale = 1) {
+function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderScale = 1, reusableRenderCanvas = null) {
   const goodZones = zones.filter((poly) => poly?.length);
   if (!goodZones.length) return null;
 
@@ -5318,11 +6847,13 @@ function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderSc
   m.globalCompositeOperation = "source-over";
   m.clearRect(0, 0, W, H);
   const scale = Math.max(0.4, Math.min(1, renderScale));
-  const renderCanvas = scale === 1 ? mask : document.createElement("canvas");
+  const renderCanvas = scale === 1 ? mask : (reusableRenderCanvas || document.createElement("canvas"));
   if (scale !== 1) {
     m.globalCompositeOperation = "source-over";
-    renderCanvas.width = Math.max(1, Math.round(W * scale));
-    renderCanvas.height = Math.max(1, Math.round(H * scale));
+    const renderWidth = Math.max(1, Math.round(W * scale));
+    const renderHeight = Math.max(1, Math.round(H * scale));
+    if (renderCanvas.width !== renderWidth) renderCanvas.width = renderWidth;
+    if (renderCanvas.height !== renderHeight) renderCanvas.height = renderHeight;
   }
   const renderContext = renderCanvas.getContext("2d");
   renderContext.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
@@ -5332,11 +6863,7 @@ function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderSc
 
   renderContext.fillStyle = "#fff";
   goodZones.forEach((poly) => {
-    renderContext.beginPath();
-    renderContext.moveTo(poly[0].x, poly[0].y);
-    for (let i = 1; i < poly.length; i++) renderContext.lineTo(poly[i].x, poly[i].y);
-    renderContext.closePath();
-    renderContext.fill();
+    fillVisibilityZone(renderContext, poly);
   });
 
   renderContext.globalCompositeOperation = "source-in";
@@ -5352,17 +6879,174 @@ function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderSc
   return mask;
 }
 
+function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1, buffers = null) {
+  if (!clearZones.some((poly) => poly?.length) && !oneWallZones.some((poly) => poly?.length)) return null;
+  const reusableBuffers = buffers || {};
+  if (renderScale !== 1) {
+    reusableBuffers.clearRender = reusableBuffers.clearRender || document.createElement("canvas");
+    reusableBuffers.oneWallRender = reusableBuffers.oneWallRender || document.createElement("canvas");
+  }
+  let clearMask = createZoneLayer(
+    clearZones,
+    W,
+    H,
+    "#fff",
+    reusableBuffers.clearMask,
+    renderScale,
+    reusableBuffers.clearRender,
+  );
+  if (clearMask) reusableBuffers.clearMask = clearMask;
+  let oneWallMask = createZoneLayer(
+    oneWallZones,
+    W,
+    H,
+    "#fff",
+    reusableBuffers.oneWallMask,
+    renderScale,
+    reusableBuffers.oneWallRender,
+  );
+  if (oneWallMask) reusableBuffers.oneWallMask = oneWallMask;
+  const cleanupRadius = renderScale < 1 ? 1 : 2;
+  if (clearMask) {
+    const cleaned = cleanThinMaskArtifacts(
+      clearMask,
+      W,
+      H,
+      cleanupRadius,
+      reusableBuffers.clearCleanupA,
+      reusableBuffers.clearCleanupB,
+    );
+    reusableBuffers.clearCleanupA = cleaned.work;
+    reusableBuffers.clearCleanupB = cleaned.output;
+    clearMask = cleaned.output;
+  }
+  if (oneWallMask) {
+    const cleaned = cleanThinMaskArtifacts(
+      oneWallMask,
+      W,
+      H,
+      cleanupRadius,
+      reusableBuffers.oneWallCleanupA,
+      reusableBuffers.oneWallCleanupB,
+    );
+    reusableBuffers.oneWallCleanupA = cleaned.work;
+    reusableBuffers.oneWallCleanupB = cleaned.output;
+    oneWallMask = cleaned.output;
+  }
+  if (oneWallMask && clearMask) {
+    const context = oneWallMask.getContext("2d");
+    context.save();
+    context.globalCompositeOperation = "destination-out";
+    context.drawImage(clearMask, 0, 0);
+    context.restore();
+  }
+
+  reusableBuffers.oneWallColour = colorizeLosMask(
+    oneWallMask,
+    W,
+    H,
+    "rgba(245,190,55,.20)",
+    reusableBuffers.oneWallColour,
+  );
+  reusableBuffers.clearColour = colorizeLosMask(
+    clearMask,
+    W,
+    H,
+    "rgba(255,255,255,.20)",
+    reusableBuffers.clearColour,
+  );
+  return { clear: reusableBuffers.clearColour, oneWall: reusableBuffers.oneWallColour };
+}
+
+function cleanThinMaskArtifacts(mask, W, H, radius, reusableWork = null, reusableOutput = null) {
+  const work = reusableWork || document.createElement("canvas");
+  const output = reusableOutput || document.createElement("canvas");
+  if (work.width !== W) work.width = W;
+  if (work.height !== H) work.height = H;
+  if (output.width !== W) output.width = W;
+  if (output.height !== H) output.height = H;
+
+  const workContext = work.getContext("2d");
+  workContext.globalCompositeOperation = "source-over";
+  workContext.clearRect(0, 0, W, H);
+  workContext.drawImage(mask, 0, 0);
+  workContext.globalCompositeOperation = "destination-in";
+  const offsets = [
+    [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+    [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius],
+  ];
+  offsets.forEach(([x, y]) => workContext.drawImage(mask, x, y));
+
+  const outputContext = output.getContext("2d");
+  outputContext.globalCompositeOperation = "source-over";
+  outputContext.clearRect(0, 0, W, H);
+  outputContext.drawImage(work, 0, 0);
+  offsets.forEach(([x, y]) => outputContext.drawImage(work, x, y));
+  return { work, output };
+}
+
+function colorizeLosMask(mask, W, H, fillStyle, reusableCanvas = null) {
+  if (!mask) return null;
+  const layer = reusableCanvas || document.createElement("canvas");
+  if (layer.width !== W) layer.width = W;
+  if (layer.height !== H) layer.height = H;
+  const context = layer.getContext("2d");
+  context.globalCompositeOperation = "source-over";
+  context.clearRect(0, 0, W, H);
+  context.drawImage(mask, 0, 0);
+  context.globalCompositeOperation = "source-in";
+  context.fillStyle = fillStyle;
+  context.fillRect(0, 0, W, H);
+  context.globalCompositeOperation = "source-over";
+  return layer;
+}
+
+function clipOutsidePolygons(ctx, polygons, W, H) {
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  polygons.forEach((polygon) => {
+    if (!polygon?.length) return;
+    ctx.moveTo(polygon[0].x, polygon[0].y);
+    for (let index = 1; index < polygon.length; index += 1) ctx.lineTo(polygon[index].x, polygon[index].y);
+    ctx.closePath();
+  });
+  ctx.clip("evenodd");
+}
+
+function fillVisibilityZone(ctx, poly) {
+  const source = poly.source;
+  if (!source || poly.length < 3) {
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x, poly[0].y);
+    for (let index = 1; index < poly.length; index += 1) ctx.lineTo(poly[index].x, poly[index].y);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+
+  for (let index = 0; index < poly.length; index += 1) {
+    const first = poly[index];
+    const second = poly[(index + 1) % poly.length];
+    const firstRadius = dist(source, first);
+    const secondRadius = dist(source, second);
+    const minimumRadius = Math.max(1, Math.min(firstRadius, secondRadius));
+    const radiusRatio = Math.max(firstRadius, secondRadius) / minimumRadius;
+    const angularGap = Math.abs(normalizeAngle(second.angle - first.angle));
+    // Adjacent rays at an occluder corner can jump from the near edge to a far
+    // boundary. Connecting that discontinuity creates a false triangular wedge.
+    if (radiusRatio > 1.55 && angularGap < 0.025) continue;
+    ctx.beginPath();
+    ctx.moveTo(source.x, source.y);
+    ctx.lineTo(first.x, first.y);
+    ctx.lineTo(second.x, second.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, towardSide, fillStyle) {
-  if (!Number.isFinite(rangeRadius)) {
-    drawZoneMask(ctx, zones, W, H, fillStyle);
-    return;
-  }
-  if (!towardSide) {
-    drawZoneMask(ctx, zones, W, H, fillStyle);
-    return;
-  }
   const goodZones = zones.filter((poly) => poly?.length);
-  if (!goodZones.length || !Array.isArray(path) || path.length < 2) return;
+  if (!goodZones.length || !Array.isArray(path) || path.length < 2 || !towardSide) return;
 
   const mask = document.createElement("canvas");
   mask.width = W;
@@ -5382,22 +7066,31 @@ function drawDeploymentZoneMask(ctx, zones, W, H, path, rangeRadius, towardSide,
   allowed.width = W;
   allowed.height = H;
   const a = allowed.getContext("2d");
-  a.strokeStyle = "#fff";
   a.fillStyle = "#fff";
-  a.beginPath();
-  a.moveTo(path[0].x, path[0].y);
-  for (let i = 1; i < path.length; i++) a.lineTo(path[i].x, path[i].y);
-  a.lineWidth = rangeRadius * 2;
-  a.lineCap = "round";
-  a.lineJoin = "round";
-  a.stroke();
-  if (towardSide) fillDeploymentUnlimitedSide(a, path, -towardSide, W, H);
+  fillDeploymentUnlimitedSide(a, path, towardSide, W, H, rangeRadius);
   m.drawImage(allowed, 0, 0);
 
   m.globalCompositeOperation = "source-in";
   m.fillStyle = fillStyle;
   m.fillRect(0, 0, W, H);
   ctx.drawImage(mask, 0, 0);
+}
+
+function drawDeploymentAreaWash(ctx, path, noMansSide, W, H, fit, blockers, fillStyle) {
+  if (!Array.isArray(path) || path.length < 2 || !noMansSide) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(fit.x, fit.y, fit.w, fit.h);
+  blockers.forEach((poly) => {
+    if (!poly?.length) return;
+    ctx.moveTo(poly[0].x, poly[0].y);
+    for (let index = 1; index < poly.length; index += 1) ctx.lineTo(poly[index].x, poly[index].y);
+    ctx.closePath();
+  });
+  ctx.clip("evenodd");
+  ctx.fillStyle = fillStyle;
+  fillDeploymentUnlimitedSide(ctx, path, -noMansSide, W, H, Infinity);
+  ctx.restore();
 }
 
 function pathMidpointAndTangent(path) {
@@ -5432,14 +7125,68 @@ function pathMidpointAndTangent(path) {
   };
 }
 
-function fillDeploymentUnlimitedSide(ctx, path, side, W, H) {
-  const mid = pathMidpointAndTangent(path);
-  const normal = { x: -mid.tangent.y * side, y: mid.tangent.x * side };
-  const distance = Math.max(W, H) * 4;
+function fillDeploymentUnlimitedSide(ctx, path, side, W, H, rangeRadius = Infinity) {
+  const cleanPath = path.filter((point, index) => index === 0 || dist(point, path[index - 1]) > 0.001);
+  if (cleanPath.length < 2) return;
+
+  const farDistance = Math.max(W, H) * 4;
+  const depth = Number.isFinite(rangeRadius) ? Math.max(0, rangeRadius) : farDistance;
+  if (depth <= 0) return;
+
+  const extendedPath = cleanPath.map((point) => ({ ...point }));
+  const first = extendedPath[0];
+  const second = extendedPath[1];
+  const last = extendedPath[extendedPath.length - 1];
+  const penultimate = extendedPath[extendedPath.length - 2];
+  const firstLength = Math.max(dist(first, second), 0.001);
+  const lastLength = Math.max(dist(penultimate, last), 0.001);
+  first.x -= ((second.x - first.x) / firstLength) * farDistance;
+  first.y -= ((second.y - first.y) / firstLength) * farDistance;
+  last.x += ((last.x - penultimate.x) / lastLength) * farDistance;
+  last.y += ((last.y - penultimate.y) / lastLength) * farDistance;
+
+  const segmentNormals = [];
+  for (let index = 0; index < extendedPath.length - 1; index += 1) {
+    const start = extendedPath[index];
+    const end = extendedPath[index + 1];
+    const length = Math.max(dist(start, end), 0.001);
+    segmentNormals.push({
+      x: -((end.y - start.y) / length) * side,
+      y: ((end.x - start.x) / length) * side,
+    });
+  }
+
+  const offsetPath = extendedPath.map((point, index) => {
+    if (index === 0) {
+      const normal = segmentNormals[0];
+      return { x: point.x + normal.x * depth, y: point.y + normal.y * depth };
+    }
+    if (index === extendedPath.length - 1) {
+      const normal = segmentNormals[segmentNormals.length - 1];
+      return { x: point.x + normal.x * depth, y: point.y + normal.y * depth };
+    }
+
+    const previousNormal = segmentNormals[index - 1];
+    const nextNormal = segmentNormals[index];
+    const sum = { x: previousNormal.x + nextNormal.x, y: previousNormal.y + nextNormal.y };
+    const sumLength = Math.hypot(sum.x, sum.y);
+    if (sumLength <= 0.001) {
+      return { x: point.x + nextNormal.x * depth, y: point.y + nextNormal.y * depth };
+    }
+    const miter = { x: sum.x / sumLength, y: sum.y / sumLength };
+    const denominator = Math.max(0.25, miter.x * nextNormal.x + miter.y * nextNormal.y);
+    const miterDepth = Math.min(depth / denominator, depth * 4);
+    return { x: point.x + miter.x * miterDepth, y: point.y + miter.y * miterDepth };
+  });
+
   ctx.beginPath();
-  ctx.moveTo(path[0].x, path[0].y);
-  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-  for (let i = path.length - 1; i >= 0; i--) ctx.lineTo(path[i].x + normal.x * distance, path[i].y + normal.y * distance);
+  ctx.moveTo(extendedPath[0].x, extendedPath[0].y);
+  for (let index = 1; index < extendedPath.length; index += 1) {
+    ctx.lineTo(extendedPath[index].x, extendedPath[index].y);
+  }
+  for (let index = offsetPath.length - 1; index >= 0; index -= 1) {
+    ctx.lineTo(offsetPath[index].x, offsetPath[index].y);
+  }
   ctx.closePath();
   ctx.fill();
 }
@@ -5564,7 +7311,65 @@ function drawMeasurementLine(ctx, a, b, label, scale = 1) {
   ctx.restore();
 }
 
-function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = false, kind = "home") {
+function deploymentLabelWorldPoint(boardPosition, fit) {
+  if (!fit || !Number.isFinite(boardPosition?.x) || !Number.isFinite(boardPosition?.y)) return null;
+  return {
+    x: fit.x + (boardPosition.x / BATTLEFIELD_WIDTH_INCHES) * fit.w,
+    y: fit.y + (boardPosition.y / BATTLEFIELD_HEIGHT_INCHES) * fit.h,
+  };
+}
+
+function deploymentLineCaptionRect(ctx, label, path, fit, scale = 1, boardPosition = null) {
+  if (!fit || !path?.length) return null;
+  const customPoint = deploymentLabelWorldPoint(boardPosition, fit);
+  let midpoint = customPoint || path[0];
+  let isVertical = false;
+  let edge = midpoint.x <= fit.x + fit.w / 2 ? "left" : "right";
+  if (!customPoint) {
+    const segments = [];
+    let totalLength = 0;
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const a = path[index];
+      const b = path[index + 1];
+      const length = dist(a, b);
+      segments.push({ a, b, length });
+      totalLength += length;
+    }
+    let remaining = totalLength / 2;
+    for (const segment of segments) {
+      if (remaining <= segment.length || segment === segments[segments.length - 1]) {
+        const ratio = segment.length ? Math.min(1, remaining / segment.length) : 0;
+        midpoint = {
+          x: segment.a.x + (segment.b.x - segment.a.x) * ratio,
+          y: segment.a.y + (segment.b.y - segment.a.y) * ratio,
+        };
+        break;
+      }
+      remaining -= segment.length;
+    }
+    const minX = Math.min(...path.map((point) => point.x));
+    const maxX = Math.max(...path.map((point) => point.x));
+    const minY = Math.min(...path.map((point) => point.y));
+    const maxY = Math.max(...path.map((point) => point.y));
+    isVertical = maxY - minY > maxX - minX;
+    edge = Math.abs(midpoint.x - fit.x) <= Math.abs(midpoint.x - (fit.x + fit.w)) ? "left" : "right";
+  }
+  const inch = fit.w / BATTLEFIELD_WIDTH_INCHES;
+  const width = 4 * inch;
+  const height = 1 * inch;
+  const gap = 6 / scale;
+  const x = customPoint
+    ? midpoint.x - width / 2
+    : isVertical
+      ? edge === "left" ? fit.x - gap - width : fit.x + fit.w + gap
+      : midpoint.x - width / 2;
+  const y = customPoint
+    ? midpoint.y - height / 2
+    : isVertical ? midpoint.y - height / 2 : fit.y - gap - height;
+  return { x, y, width, height };
+}
+
+function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = false, kind = "home", fit = null, labelPosition = null) {
   if (!Array.isArray(path) || path.length < 2) return;
   const activeColor = kind === "enemy" ? "rgb(153,20,23)" : "#38bdf8";
   const previewColor = kind === "enemy" ? "rgba(153,20,23,.70)" : "rgba(125,211,252,.7)";
@@ -5579,13 +7384,11 @@ function drawDeploymentPath(ctx, path, scale = 1, visible = true, preview = fals
   if (preview) ctx.setLineDash([6 / scale, 4 / scale]);
   ctx.stroke();
 
-  const endpoints = [path[0], path[path.length - 1]];
-  const bottomEndpoint = endpoints[0].y >= endpoints[1].y ? endpoints[0] : endpoints[1];
-  drawMapCaption(ctx, kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 15 / scale, scale);
+  if (!preview) drawDeploymentLineCaption(ctx, kind === "enemy" ? "Enemy deploy line" : "Home deploy line", path, fit, scale, labelPosition);
   ctx.restore();
 }
 
-function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = false, kind = "home") {
+function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = false, kind = "home", fit = null, labelPosition = null) {
   if (!line?.a || !line?.b) return;
   const activeColor = kind === "enemy" ? "rgb(153,20,23)" : "#38bdf8";
   const previewColor = kind === "enemy" ? "rgba(153,20,23,.70)" : "rgba(125,211,252,.7)";
@@ -5598,9 +7401,27 @@ function drawDeploymentLine(ctx, line, scale = 1, visible = true, preview = fals
   ctx.strokeStyle = preview ? previewColor : activeColor;
   if (preview) ctx.setLineDash([6 / scale, 4 / scale]);
   ctx.stroke();
-  const bottomEndpoint = line.a.y >= line.b.y ? line.a : line.b;
-  drawMapCaption(ctx, kind === "enemy" ? "ENEMY DEPLOY LOS" : "HOME DEPLOY LOS", bottomEndpoint.x, bottomEndpoint.y + 15 / scale, scale);
+  if (!preview) drawDeploymentLineCaption(ctx, kind === "enemy" ? "Enemy deploy line" : "Home deploy line", [line.a, line.b], fit, scale, labelPosition);
   ctx.restore();
+}
+
+function drawDeploymentLineCaption(ctx, label, path, fit, scale = 1, labelPosition = null) {
+  const rect = deploymentLineCaptionRect(ctx, label, path, fit, scale, labelPosition);
+  if (!rect) return;
+  ctx.fillStyle = "rgba(15,23,42,.88)";
+  roundRect(ctx, rect.x, rect.y, rect.width, rect.height, 4 / scale, true, false);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let fontSize = rect.height * 0.48;
+  ctx.font = `bold ${fontSize}px system-ui`;
+  const maxTextWidth = rect.width - 6 / scale;
+  const measuredWidth = ctx.measureText(label).width;
+  if (measuredWidth > maxTextWidth) {
+    fontSize *= maxTextWidth / measuredWidth;
+    ctx.font = `bold ${fontSize}px system-ui`;
+  }
+  ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
 }
 
 function samplePathPoints(path, perSegment = 8) {
@@ -5648,8 +7469,8 @@ function drawWall(ctx, wall, scale = 1, preview = false) {
   ctx.restore();
 }
 
-function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1, rangeCount = 0) {
-  const r = 13 / scale;
+function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1, rangeCount = 0, pixelsPerInch = null) {
+  const r = enemyBaseRadius(pixelsPerInch);
   const visible = state === "clear";
   const oneWall = state === "oneWall";
   const blocked = state === "blocked";

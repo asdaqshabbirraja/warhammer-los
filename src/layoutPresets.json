@@ -1,0 +1,3417 @@
+{
+  "Take and Hold|Take and Hold|A": {
+    "source": "Event Companion page 9, Layout A",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "long_line",
+        "x": 7.05239212876172,
+        "y": 15.264307683769555,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": 37.06127758618293,
+        "y": 44.77201962121027,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": 20.040422689114493,
+        "y": 41.409560662742386,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": 24.05239212876171,
+        "y": 18.617403924519564,
+        "rotation": 180
+      },
+      {
+        "shape": "short_line",
+        "x": 7.0003001470094794,
+        "y": 29.148308738098606,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "shape": "short_line",
+        "x": 36.99969985299052,
+        "y": 30.851691261901394,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 10.034994642586023,
+        "y": 25.054836117530332,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 30.00616734113317,
+        "y": 11.021110197670403,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 15.014351297995912,
+        "y": 48.9892780473362,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 33.93950272715133,
+        "y": 34.97504971879691,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 17.530817881105495,
+        "y": 11.813179252589833,
+        "rotation": 90
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 36.496768492847714,
+        "y": 18.774435784410137,
+        "rotation": 270
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 8.526059703746252,
+        "y": 41.20790604441094,
+        "rotation": 90
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 26.491881684367108,
+        "y": 48.227582066791555,
+        "rotation": 270
+      },
+      {
+        "shape": "right_triangle",
+        "x": 21.549586299247288,
+        "y": 29.00571592315957,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": 22.314423385167423,
+        "y": 31.029390045780893,
+        "rotation": 180
+      }
+    ],
+    "terrainLinks": [
+      [
+        "layout-footprint-4",
+        "layout-footprint-5"
+      ]
+    ],
+    "terrainGroups": [
+      [
+        "layout-footprint-4",
+        "layout-footprint-6"
+      ],
+      [
+        "layout-footprint-5",
+        "layout-footprint-9"
+      ]
+    ],
+    "objectives": [
+      {
+        "x": 17.530817881105495,
+        "y": 11.813179252589833,
+        "allegiance": "enemy",
+        "shape": "circle"
+      },
+      {
+        "x": 36.496768492847714,
+        "y": 18.774435784410137,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 21.932004842207355,
+        "y": 30.017552984470225,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "x": 8.526059703746252,
+        "y": 41.20790604441094,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 26.491881684367108,
+        "y": 48.227582066791555,
+        "allegiance": "home",
+        "shape": "circle"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        12,
+        0
+      ],
+      [
+        12,
+        22
+      ],
+      [
+        20,
+        22
+      ],
+      [
+        20,
+        44
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        40,
+        0
+      ],
+      [
+        40,
+        22
+      ],
+      [
+        48,
+        22
+      ],
+      [
+        48,
+        44
+      ]
+    ],
+    "wallPieces": [
+      {
+        "type": "AB",
+        "x": 19.055887261208753,
+        "y": 27.576969161879767,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "type": "AB",
+        "x": 24.729478107900352,
+        "y": 32.49958837336628,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "type": "EF",
+        "x": 8.5300328676542,
+        "y": 38.285202220669184,
+        "rotation": 0
+      },
+      {
+        "type": "GH",
+        "x": 7.044949450741793,
+        "y": 43.52207532241292,
+        "rotation": 180
+      },
+      {
+        "type": "CD",
+        "x": 26.45525025073721,
+        "y": 44.30369817341944,
+        "rotation": 0
+      },
+      {
+        "type": "EF",
+        "x": 36.52490939018423,
+        "y": 21.736592388865574,
+        "rotation": 180
+      },
+      {
+        "type": "GH",
+        "x": 38.03246753246752,
+        "y": 16.577922077922082,
+        "rotation": 0
+      },
+      {
+        "type": "CD",
+        "x": 17.53896103896104,
+        "y": 15.740259740259747,
+        "rotation": 180
+      }
+    ],
+    "featurePieces": [
+      {
+        "id": "layout-feature-smallLightBarricade-0",
+        "type": "smallLightBarricade",
+        "x": 4.244126283566926,
+        "y": 15.11547189772076,
+        "rotation": 180
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1",
+        "type": "smallLightBarricade",
+        "x": 9.879889198011352,
+        "y": 15.075090107367505,
+        "rotation": 180
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-2",
+        "type": "smallDenseRectangle",
+        "x": 7.124168282193324,
+        "y": 15.295666432005806,
+        "rotation": 90
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-3",
+        "type": "smallLightBarricade",
+        "x": 39.83014005590919,
+        "y": 44.856735229529924,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-4",
+        "type": "smallLightBarricade",
+        "x": 34.268009056623676,
+        "y": 44.98481246167833,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-5",
+        "type": "smallDenseRectangle",
+        "x": 37.02546926584884,
+        "y": 44.792799360678146,
+        "rotation": 90
+      },
+      {
+        "id": "layout-feature-largeLightL-6",
+        "type": "largeLightL",
+        "x": 28.139221743604082,
+        "y": 52.694784489940574,
+        "rotation": 180
+      },
+      {
+        "id": "layout-feature-largeLightL-7",
+        "type": "largeLightL",
+        "x": 13.22581292345797,
+        "y": 48.724112850087494,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-8",
+        "type": "largeLightL",
+        "x": 16.78804129860957,
+        "y": 49.25667363108358,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-denseBarricade-9",
+        "type": "denseBarricade",
+        "x": 19.576016458460614,
+        "y": 41.51586102383555,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-smallLightL-10",
+        "type": "smallLightL",
+        "x": 26.26093482453941,
+        "y": 26.442462737111214,
+        "rotation": 90
+      },
+      {
+        "id": "layout-feature-smallLightL-11",
+        "type": "smallLightL",
+        "x": 17.58459180498868,
+        "y": 33.58348537912905,
+        "rotation": 270
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-12",
+        "type": "largeLightBarricade",
+        "x": 7.000857021779935,
+        "y": 29.033255450766372,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-13",
+        "type": "largeLightBarricade",
+        "x": 37.01941616144711,
+        "y": 30.975798692701076,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-largeLightL-14",
+        "type": "largeLightL",
+        "x": 16.024654642880975,
+        "y": 7.556283672823936,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-largeLightL-15",
+        "type": "largeLightL",
+        "x": 31.5443362240211,
+        "y": 11.07680791725717,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-16",
+        "type": "largeLightL",
+        "x": 28.46794963841048,
+        "y": 11.015867181427302,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-denseBarricade-17",
+        "type": "denseBarricade",
+        "x": 24.423983541539386,
+        "y": 18.484138976164452,
+        "rotation": 180
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-18",
+        "type": "largeDenseRectangle",
+        "x": 33.88537389659484,
+        "y": 35.04087196491197,
+        "rotation": 0
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-19",
+        "type": "largeDenseRectangle",
+        "x": 10.04823813477534,
+        "y": 24.996645971379618,
+        "rotation": 0
+      }
+    ],
+    "featureLinks": [
+      [
+        "layout-feature-denseBarricade-9",
+        "layout-feature-denseBarricade-17"
+      ]
+    ],
+    "walls": []
+  },
+  "Take and Hold|Take and Hold|B": {
+    "source": "Event Companion page 10, Layout B",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "medium_rectangle",
+        "x": 17.883105345282775,
+        "y": 17.227256327460267,
+        "rotation": 240,
+        "mirrored": true
+      },
+      {
+        "shape": "long_line",
+        "x": 9.268231479309414,
+        "y": 15.372141875984546,
+        "rotation": 292
+      },
+      {
+        "shape": "short_line",
+        "x": 8.139781945895592,
+        "y": 7.612050901171912,
+        "rotation": 35,
+        "mirrored": true
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 25.223083666113414,
+        "y": 10.525144970990366,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 37.43147142036204,
+        "y": 9.953814376017682,
+        "rotation": 60,
+        "mirrored": true
+      },
+      {
+        "shape": "short_line",
+        "x": 36.868528579637974,
+        "y": 16.111171477827828,
+        "rotation": 55
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 7.507536717251384,
+        "y": 30.210661752326452,
+        "rotation": 270
+      },
+      {
+        "shape": "right_triangle",
+        "x": 22.969199961188846,
+        "y": 29.59261180097551,
+        "rotation": 90
+      },
+      {
+        "shape": "right_triangle",
+        "x": 20.97092307412707,
+        "y": 30.37744971668244,
+        "rotation": 270
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 36.492463282748616,
+        "y": 29.789338247673548,
+        "rotation": 90
+      },
+      {
+        "shape": "short_line",
+        "x": 7.1314714203620255,
+        "y": 43.888828522172176,
+        "rotation": 235
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 6.568528579637963,
+        "y": 50.04618562398232,
+        "rotation": 240,
+        "mirrored": true
+      },
+      {
+        "shape": "short_line",
+        "x": 35.86021805410441,
+        "y": 52.38794909882809,
+        "rotation": 215,
+        "mirrored": true
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 18.776916333886586,
+        "y": 49.47485502900963,
+        "rotation": 180
+      },
+      {
+        "shape": "long_line",
+        "x": 34.731768520690586,
+        "y": 44.627858124015454,
+        "rotation": 112
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 26.116894654717225,
+        "y": 42.77274367253973,
+        "rotation": 60,
+        "mirrored": true
+      }
+    ],
+    "objectives": [
+      {
+        "x": 7.283807264278951,
+        "y": 29.77616061310087,
+        "allegiance": "enemy",
+        "shape": "circle"
+      },
+      {
+        "x": 25.26444284072406,
+        "y": 10.202285796379714,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 21.970061517657953,
+        "y": 29.98503075882898,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "x": 19,
+        "y": 49.5,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 36.77546328274862,
+        "y": 29.790838247673545,
+        "allegiance": "home",
+        "shape": "circle"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        60,
+        32
+      ],
+      [
+        0,
+        32
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        60,
+        12
+      ],
+      [
+        0,
+        12
+      ]
+    ],
+    "wallPieces": [
+      {
+        "type": "AB",
+        "x": 24.073049777901375,
+        "y": 32.973984538969574,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "type": "AB",
+        "x": 19.926950222098625,
+        "y": 27.026015461030426,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "type": "CD",
+        "x": 34.72353368908465,
+        "y": 27.467680175937243,
+        "rotation": 270
+      },
+      {
+        "type": "CD",
+        "x": 9.276466310915353,
+        "y": 32.53231982406275,
+        "rotation": 90
+      },
+      {
+        "type": "EF",
+        "x": 22.09055345492713,
+        "y": 10.390557952792065,
+        "rotation": 270
+      },
+      {
+        "type": "EF",
+        "x": 21.90944654507287,
+        "y": 49.609442047207935,
+        "rotation": 90
+      },
+      {
+        "type": "GH",
+        "x": 16.450997365848394,
+        "y": 47.94023193674576,
+        "rotation": 270
+      },
+      {
+        "type": "GH",
+        "x": 27.549002634151606,
+        "y": 12.05976806325424,
+        "rotation": 90
+      }
+    ],
+    "featurePieces": [
+      {
+        "id": "layout-b-feature-0",
+        "type": "smallLightBarricade",
+        "x": 7.898518892112939,
+        "y": 17.891057750765896,
+        "rotation": 113
+      },
+      {
+        "id": "layout-b-feature-1",
+        "type": "smallLightBarricade",
+        "x": 36.10148110788706,
+        "y": 42.108942249234104,
+        "rotation": 293
+      },
+      {
+        "id": "layout-b-feature-2",
+        "type": "smallLightBarricade",
+        "x": 33.854594144393594,
+        "y": 47.34968820007045,
+        "rotation": 292
+      },
+      {
+        "id": "layout-b-feature-3",
+        "type": "smallLightBarricade",
+        "x": 10.145405855606406,
+        "y": 12.650311799929547,
+        "rotation": 112
+      },
+      {
+        "id": "layout-b-feature-4",
+        "type": "smallDenseRectangle",
+        "x": 34.740251659456135,
+        "y": 44.61106878783547,
+        "rotation": 22
+      },
+      {
+        "id": "layout-b-feature-5",
+        "type": "smallDenseRectangle",
+        "x": 9.259748340543865,
+        "y": 15.388931212164529,
+        "rotation": 202
+      },
+      {
+        "id": "layout-b-feature-6",
+        "type": "largeLightBarricade",
+        "x": 8.019532949123416,
+        "y": 7.641929838737163,
+        "rotation": 215
+      },
+      {
+        "id": "layout-b-feature-7",
+        "type": "largeLightBarricade",
+        "x": 35.980467050876584,
+        "y": 52.35807016126284,
+        "rotation": 35
+      },
+      {
+        "id": "layout-b-feature-8",
+        "type": "largeDenseRectangle",
+        "x": 26.096493907891404,
+        "y": 42.77939804817927,
+        "rotation": 59
+      },
+      {
+        "id": "layout-b-feature-9",
+        "type": "largeDenseRectangle",
+        "x": 17.903506092108596,
+        "y": 17.220601951820733,
+        "rotation": 239
+      },
+      {
+        "id": "layout-b-feature-10",
+        "type": "denseBarricade",
+        "x": 7.18628897854575,
+        "y": 43.76014393375411,
+        "rotation": 55
+      },
+      {
+        "id": "layout-b-feature-11",
+        "type": "denseBarricade",
+        "x": 36.81371102145425,
+        "y": 16.239856066245892,
+        "rotation": 235
+      },
+      {
+        "id": "layout-b-feature-12",
+        "type": "largeLightL",
+        "x": 4.914498324290243,
+        "y": 50.703031477057685,
+        "rotation": 240,
+        "mirrored": true
+      },
+      {
+        "id": "layout-b-feature-13",
+        "type": "largeLightL",
+        "x": 8.25725277547032,
+        "y": 49.408614870030924,
+        "rotation": 60,
+        "mirrored": true
+      },
+      {
+        "id": "layout-b-feature-14",
+        "type": "largeLightL",
+        "x": 39.08550167570976,
+        "y": 9.296968522942315,
+        "rotation": 60,
+        "mirrored": true
+      },
+      {
+        "id": "layout-b-feature-15",
+        "type": "largeLightL",
+        "x": 35.74274722452968,
+        "y": 10.591385129969076,
+        "rotation": 240,
+        "mirrored": true
+      },
+      {
+        "id": "layout-b-feature-16",
+        "type": "smallLightL",
+        "x": 18.28872918728643,
+        "y": 34.4632760848658,
+        "rotation": 270
+      },
+      {
+        "id": "layout-b-feature-17",
+        "type": "smallLightL",
+        "x": 25.71127081271357,
+        "y": 25.536723915134203,
+        "rotation": 90
+      },
+      {
+        "id": "layout-b-feature-18",
+        "type": "largeLightL",
+        "x": 9.57878034904536,
+        "y": 26.352129936048687,
+        "rotation": 90
+      },
+      {
+        "id": "layout-b-feature-19",
+        "type": "largeLightL",
+        "x": 34.42121965095464,
+        "y": 33.647870063951316,
+        "rotation": 270
+      }
+    ],
+    "walls": []
+  },
+  "Take and Hold|Take and Hold|C": {
+    "source": "Event Companion page 11, Layout C",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "large_rectangle",
+        "x": 10.390243317285034,
+        "y": 9.514735204757983,
+        "rotation": 315
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 13.006355543077042,
+        "y": 19.98497509110024,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "shape": "long_line",
+        "x": 21.206653819752784,
+        "y": 13.98457731210243,
+        "rotation": 323
+      },
+      {
+        "shape": "short_line",
+        "x": 8.031268728587527,
+        "y": 24.114983521545035,
+        "rotation": 180
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 34.46851134188471,
+        "y": 10.769862984292757,
+        "rotation": 270
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 33.00041764113423,
+        "y": 26.971166366435696,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "shape": "short_line",
+        "x": 35.99807666474218,
+        "y": 22.865796125545295,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "shape": "right_triangle",
+        "x": 21.643271803081255,
+        "y": 29.020733656083813,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": 22.442764551334378,
+        "y": 31.023700154209926,
+        "rotation": 180
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 10.999582358865773,
+        "y": 33.028833633564304,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "shape": "short_line",
+        "x": 8.001923335257821,
+        "y": 37.134203874454705,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 9.531488658115293,
+        "y": 49.23013701570724,
+        "rotation": 90
+      },
+      {
+        "shape": "short_line",
+        "x": 35.96873127141247,
+        "y": 35.885016478454965,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": 30.993644456922958,
+        "y": 40.01502490889976,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "shape": "long_line",
+        "x": 22.793346180247216,
+        "y": 46.01542268789757,
+        "rotation": 143
+      },
+      {
+        "shape": "large_rectangle",
+        "x": 33.609756682714966,
+        "y": 50.48526479524202,
+        "rotation": 135
+      }
+    ],
+    "terrainLinks": [
+      [
+        "layout-footprint-15",
+        "layout-footprint-0"
+      ],
+      [
+        "layout-footprint-13",
+        "layout-footprint-1"
+      ],
+      [
+        "layout-footprint-12",
+        "layout-footprint-3"
+      ],
+      [
+        "layout-footprint-11",
+        "layout-footprint-4"
+      ],
+      [
+        "layout-footprint-6",
+        "layout-footprint-10"
+      ],
+      [
+        "layout-footprint-5",
+        "layout-footprint-9"
+      ],
+      [
+        "layout-footprint-14",
+        "layout-footprint-2"
+      ]
+    ],
+    "terrainGroups": [
+      [
+        "layout-footprint-9",
+        "layout-footprint-10"
+      ],
+      [
+        "layout-footprint-5",
+        "layout-footprint-6"
+      ]
+    ],
+    "objectives": [
+      {
+        "x": 10.387414890160287,
+        "y": 9.514028097976796,
+        "allegiance": "enemy",
+        "shape": "circle"
+      },
+      {
+        "x": 34.18551134188471,
+        "y": 10.768362984292756,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 22.079892912217833,
+        "y": 30.031957164887125,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "x": 9.814488658115287,
+        "y": 49.23163701570724,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "x": 34,
+        "y": 50.6,
+        "allegiance": "home",
+        "shape": "circle"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        60,
+        22
+      ],
+      [
+        39,
+        22
+      ],
+      [
+        38.9658,
+        21.2156
+      ],
+      [
+        38.8633,
+        20.4377
+      ],
+      [
+        38.6933,
+        19.6706
+      ],
+      [
+        38.4572,
+        18.9213
+      ],
+      [
+        38.1557,
+        18.1925
+      ],
+      [
+        37.7942,
+        17.5
+      ],
+      [
+        37.3724,
+        16.8431
+      ],
+      [
+        36.8944,
+        16.2351
+      ],
+      [
+        36.364,
+        15.636
+      ],
+      [
+        35.7649,
+        15.1056
+      ],
+      [
+        35.1569,
+        14.6276
+      ],
+      [
+        34.5,
+        14.2058
+      ],
+      [
+        33.8075,
+        13.8443
+      ],
+      [
+        33.0787,
+        13.5428
+      ],
+      [
+        32.3294,
+        13.3067
+      ],
+      [
+        31.5623,
+        13.1367
+      ],
+      [
+        30.7844,
+        13.0342
+      ],
+      [
+        30,
+        13
+      ],
+      [
+        30,
+        0
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        30,
+        44
+      ],
+      [
+        30,
+        31
+      ],
+      [
+        29.2156,
+        30.9658
+      ],
+      [
+        28.4377,
+        30.8633
+      ],
+      [
+        27.6706,
+        30.6933
+      ],
+      [
+        26.9213,
+        30.4572
+      ],
+      [
+        26.1925,
+        30.1557
+      ],
+      [
+        25.5,
+        29.7942
+      ],
+      [
+        24.8431,
+        29.3724
+      ],
+      [
+        24.2351,
+        28.8944
+      ],
+      [
+        23.636,
+        28.364
+      ],
+      [
+        23.1056,
+        27.7649
+      ],
+      [
+        22.6276,
+        27.1569
+      ],
+      [
+        22.2058,
+        26.5
+      ],
+      [
+        21.8443,
+        25.8075
+      ],
+      [
+        21.5428,
+        25.0787
+      ],
+      [
+        21.3067,
+        24.3294
+      ],
+      [
+        21.1367,
+        23.5623
+      ],
+      [
+        21.0342,
+        22.7844
+      ],
+      [
+        21,
+        22
+      ],
+      [
+        0,
+        22
+      ]
+    ],
+    "wallPieces": [
+      {
+        "type": "AB",
+        "x": 19.09092075784928,
+        "y": 27.399636421735057,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "type": "AB",
+        "x": 24.90907924215072,
+        "y": 32.60036357826495,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "type": "CD",
+        "x": 34.040170929843306,
+        "y": 47.466436150162686,
+        "rotation": 314
+      },
+      {
+        "type": "CD",
+        "x": 9.959829070156694,
+        "y": 12.533563849837314,
+        "rotation": 134
+      },
+      {
+        "type": "GH",
+        "x": 30.819521704993683,
+        "y": 53.29496393250234,
+        "rotation": 135
+      },
+      {
+        "type": "GH",
+        "x": 13.180478295006317,
+        "y": 6.705036067497659,
+        "rotation": 315
+      },
+      {
+        "type": "EF",
+        "x": 9.572988028892903,
+        "y": 46.29586286887564,
+        "rotation": 0
+      },
+      {
+        "type": "EF",
+        "x": 34.4270119711071,
+        "y": 13.704137131124362,
+        "rotation": 180
+      }
+    ],
+    "featurePieces": [
+      {
+        "id": "layout-c-feature-0",
+        "type": "smallLightL",
+        "x": 26.365588044535283,
+        "y": 26.23130894633519,
+        "rotation": 90
+      },
+      {
+        "id": "layout-c-feature-1",
+        "type": "smallLightL",
+        "x": 17.634411955464717,
+        "y": 33.76869105366481,
+        "rotation": 270
+      },
+      {
+        "id": "layout-c-feature-2",
+        "type": "largeLightL",
+        "x": 31.029255093692633,
+        "y": 38.315314452256175,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "id": "layout-c-feature-3",
+        "type": "largeLightL",
+        "x": 30.999349107213845,
+        "y": 41.73884096350971,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "id": "layout-c-feature-4",
+        "type": "largeLightL",
+        "x": 13.000650892786155,
+        "y": 18.26115903649029,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "id": "layout-c-feature-5",
+        "type": "largeLightL",
+        "x": 12.970744906307367,
+        "y": 21.684685547743825,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "id": "layout-c-feature-6",
+        "type": "denseBarricade",
+        "x": 7.5294954605701605,
+        "y": 24.00948114712871,
+        "rotation": 180
+      },
+      {
+        "id": "layout-c-feature-7",
+        "type": "denseBarricade",
+        "x": 36.47050453942984,
+        "y": 35.99051885287129,
+        "rotation": 0
+      },
+      {
+        "id": "layout-c-feature-8",
+        "type": "smallLightBarricade",
+        "x": 23.498125599459577,
+        "y": 12.27077529936706,
+        "rotation": 142
+      },
+      {
+        "id": "layout-c-feature-9",
+        "type": "smallLightBarricade",
+        "x": 18.963902777845913,
+        "y": 15.736853337157875,
+        "rotation": 142
+      },
+      {
+        "id": "layout-c-feature-10",
+        "type": "smallLightBarricade",
+        "x": 20.501874400540423,
+        "y": 47.72922470063294,
+        "rotation": 322
+      },
+      {
+        "id": "layout-c-feature-11",
+        "type": "smallLightBarricade",
+        "x": 25.036097222154087,
+        "y": 44.263146662842125,
+        "rotation": 322
+      },
+      {
+        "id": "layout-c-feature-12",
+        "type": "smallDenseRectangle",
+        "x": 21.196137596883684,
+        "y": 14.000854166958156,
+        "rotation": 232
+      },
+      {
+        "id": "layout-c-feature-13",
+        "type": "smallDenseRectangle",
+        "x": 22.803862403116316,
+        "y": 45.999145833041844,
+        "rotation": 52
+      },
+      {
+        "id": "layout-c-feature-14",
+        "type": "largeDenseRectangle",
+        "x": 10.969141401593447,
+        "y": 33.02165065425706,
+        "rotation": 180
+      },
+      {
+        "id": "layout-c-feature-15",
+        "type": "largeDenseRectangle",
+        "x": 33.03085859840655,
+        "y": 26.978349345742945,
+        "rotation": 0
+      },
+      {
+        "id": "layout-c-feature-16",
+        "type": "largeLightBarricade",
+        "x": 7.942445745550131,
+        "y": 37.03558630440659,
+        "rotation": 180
+      },
+      {
+        "id": "layout-c-feature-17",
+        "type": "largeLightBarricade",
+        "x": 36.05755425444987,
+        "y": 22.96441369559341,
+        "rotation": 0
+      }
+    ],
+    "walls": []
+  },
+  "Take and Hold|Purge the Foe|A": {
+    "source": "Event Companion page 12, Layout A",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "id": "layout-footprint-0",
+        "shape": "long_line",
+        "x": 7.05239212876172,
+        "y": 15.264307683769555,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-1",
+        "shape": "long_line",
+        "x": 37.06127758618293,
+        "y": 44.77201962121027,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-2",
+        "shape": "short_line",
+        "x": 20.040422689114493,
+        "y": 41.409560662742386,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-3",
+        "shape": "short_line",
+        "x": 24.05239212876171,
+        "y": 18.617403924519564,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-4",
+        "shape": "short_line",
+        "x": 7.019780666489999,
+        "y": 29.148308738098606,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-5",
+        "shape": "short_line",
+        "x": 37.001353076993226,
+        "y": 30.855387242332572,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-6",
+        "shape": "medium_rectangle",
+        "x": 10.034994642586023,
+        "y": 25.054836117530332,
+        "rotation": 180,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-7",
+        "shape": "medium_rectangle",
+        "x": 30.00616734113317,
+        "y": 11.021110197670403,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-8",
+        "shape": "medium_rectangle",
+        "x": 15.014351297995912,
+        "y": 48.9892780473362,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-9",
+        "shape": "medium_rectangle",
+        "x": 33.93950272715133,
+        "y": 34.97504971879691,
+        "rotation": 0,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-10",
+        "shape": "large_rectangle",
+        "x": 17.530817881105495,
+        "y": 11.813179252589833,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-11",
+        "shape": "large_rectangle",
+        "x": 36.496768492847714,
+        "y": 18.774435784410137,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-12",
+        "shape": "large_rectangle",
+        "x": 8.526059703746252,
+        "y": 41.20790604441094,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-13",
+        "shape": "large_rectangle",
+        "x": 26.491881684367108,
+        "y": 48.227582066791555,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-14",
+        "shape": "right_triangle",
+        "x": 21.549586299247288,
+        "y": 29.00571592315957,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-15",
+        "shape": "right_triangle",
+        "x": 22.314423385167423,
+        "y": 31.029390045780893,
+        "rotation": 180,
+        "mirrored": false
+      }
+    ],
+    "terrainLinks": [],
+    "terrainGroups": [],
+    "objectives": [
+      {
+        "id": "layout-objective-0",
+        "x": 17.530817881105495,
+        "y": 11.813179252589833,
+        "allegiance": "enemy",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1",
+        "x": 36.496768492847714,
+        "y": 18.774435784410137,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "id": "layout-objective-2",
+        "x": 21.932004842207355,
+        "y": 30.017552984470225,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-3",
+        "x": 8.526059703746252,
+        "y": 41.20790604441094,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "id": "layout-objective-4",
+        "x": 26.491881684367108,
+        "y": 48.227582066791555,
+        "allegiance": "home",
+        "shape": "circle"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        60,
+        36
+      ],
+      [
+        30,
+        36
+      ],
+      [
+        30,
+        30
+      ],
+      [
+        0,
+        30
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        60,
+        14
+      ],
+      [
+        30,
+        14
+      ],
+      [
+        30,
+        8
+      ],
+      [
+        0,
+        8
+      ]
+    ],
+    "wallPieces": [
+      {
+        "id": "layout-wall-AB-0",
+        "type": "AB",
+        "x": 19.055887261208753,
+        "y": 27.576969161879767,
+        "rotation": 0,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-AB-1",
+        "type": "AB",
+        "x": 24.729478107900352,
+        "y": 32.49958837336628,
+        "rotation": 180,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-2",
+        "type": "EF",
+        "x": 8.5300328676542,
+        "y": 38.285202220669184,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-3",
+        "type": "GH",
+        "x": 7.044949450741793,
+        "y": 43.52207532241292,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-4",
+        "type": "CD",
+        "x": 26.45525025073721,
+        "y": 44.30369817341944,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-5",
+        "type": "EF",
+        "x": 36.52490939018423,
+        "y": 21.736592388865574,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-6",
+        "type": "GH",
+        "x": 38.03246753246752,
+        "y": 16.577922077922082,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-7",
+        "type": "CD",
+        "x": 17.53896103896104,
+        "y": 15.740259740259747,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      }
+    ],
+    "wallLinks": [],
+    "featurePieces": [
+      {
+        "id": "layout-feature-smallLightBarricade-0",
+        "type": "smallLightBarricade",
+        "x": 4.244126283566926,
+        "y": 15.11547189772076,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1",
+        "type": "smallLightBarricade",
+        "x": 9.879889198011352,
+        "y": 15.075090107367505,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-2",
+        "type": "smallDenseRectangle",
+        "x": 7.124168282193324,
+        "y": 15.295666432005806,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-3",
+        "type": "smallLightBarricade",
+        "x": 39.83014005590919,
+        "y": 44.856735229529924,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-4",
+        "type": "smallLightBarricade",
+        "x": 34.268009056623676,
+        "y": 44.98481246167833,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-5",
+        "type": "smallDenseRectangle",
+        "x": 37.02546926584884,
+        "y": 44.792799360678146,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-6",
+        "type": "largeLightL",
+        "x": 28.139221743604082,
+        "y": 52.694784489940574,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-7",
+        "type": "largeLightL",
+        "x": 13.22581292345797,
+        "y": 48.724112850087494,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-8",
+        "type": "largeLightL",
+        "x": 16.78804129860957,
+        "y": 49.25667363108358,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-denseBarricade-9",
+        "type": "denseBarricade",
+        "x": 19.576016458460614,
+        "y": 41.51586102383555,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightL-10",
+        "type": "smallLightL",
+        "x": 26.26093482453941,
+        "y": 26.442462737111214,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightL-11",
+        "type": "smallLightL",
+        "x": 17.58459180498868,
+        "y": 33.58348537912905,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-12",
+        "type": "largeLightBarricade",
+        "x": 7.000857021779935,
+        "y": 29.033255450766372,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-13",
+        "type": "largeLightBarricade",
+        "x": 37.01941616144711,
+        "y": 30.975798692701076,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-14",
+        "type": "largeLightL",
+        "x": 16.024654642880975,
+        "y": 7.556283672823936,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-15",
+        "type": "largeLightL",
+        "x": 31.5443362240211,
+        "y": 11.07680791725717,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-16",
+        "type": "largeLightL",
+        "x": 28.46794963841048,
+        "y": 11.015867181427302,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-denseBarricade-17",
+        "type": "denseBarricade",
+        "x": 24.423983541539386,
+        "y": 18.484138976164452,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-18",
+        "type": "largeDenseRectangle",
+        "x": 33.88537389659484,
+        "y": 35.04087196491197,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-19",
+        "type": "largeDenseRectangle",
+        "x": 10.04823813477534,
+        "y": 24.996645971379618,
+        "rotation": 0,
+        "mirrored": false
+      }
+    ],
+    "featureLinks": [],
+    "walls": []
+  },
+  "Take and Hold|Purge the Foe|B": {
+    "source": "Event Companion page 13, Layout B",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "id": "layout-footprint-0",
+        "shape": "large_rectangle",
+        "x": 9.802966710684615,
+        "y": 49.45915160064638,
+        "rotation": 0,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-1",
+        "shape": "large_rectangle",
+        "x": 34.197033289315385,
+        "y": 10.540848399353619,
+        "rotation": 180,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-2",
+        "shape": "large_rectangle",
+        "x": 35.448581727363894,
+        "y": 49.22691302573279,
+        "rotation": 270,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-3",
+        "shape": "large_rectangle",
+        "x": 8.551418272636106,
+        "y": 10.773086974267208,
+        "rotation": 90,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-4",
+        "shape": "medium_rectangle",
+        "x": 24.997988149953603,
+        "y": 42.9812909851557,
+        "rotation": 90,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-5",
+        "shape": "medium_rectangle",
+        "x": 19.002011850046397,
+        "y": 17.018709014844298,
+        "rotation": 270,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-6",
+        "shape": "medium_rectangle",
+        "x": 36.98565985077961,
+        "y": 32.0297213378786,
+        "rotation": 270,
+        "width": 4,
+        "height": 6,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-7",
+        "shape": "medium_rectangle",
+        "x": 7.014340149220388,
+        "y": 27.9702786621214,
+        "rotation": 90,
+        "width": 4,
+        "height": 6,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-8",
+        "shape": "long_line",
+        "x": 34.381540336104315,
+        "y": 23.28627571365315,
+        "rotation": 140,
+        "width": 10,
+        "height": 2.5,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-9",
+        "shape": "long_line",
+        "x": 9.618459663895685,
+        "y": 36.713724286346846,
+        "rotation": 320,
+        "width": 10,
+        "height": 2.5,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-10",
+        "shape": "short_line",
+        "x": 32.90409935721625,
+        "y": 36.994330324018634,
+        "rotation": 270,
+        "width": 6,
+        "height": 2,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-11",
+        "shape": "short_line",
+        "x": 20.8920328108833,
+        "y": 48.01659535757206,
+        "rotation": 270,
+        "width": 6,
+        "height": 2,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-12",
+        "shape": "short_line",
+        "x": 11.095900642783747,
+        "y": 23.005669675981366,
+        "rotation": 90,
+        "width": 6,
+        "height": 2,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-13",
+        "shape": "short_line",
+        "x": 23.1079671891167,
+        "y": 11.983404642427942,
+        "rotation": 90,
+        "width": 6,
+        "height": 2,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-14",
+        "shape": "right_triangle",
+        "x": 20.996627107748335,
+        "y": 30.38665960890934,
+        "rotation": 270,
+        "width": 11.5,
+        "height": 8,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-15",
+        "shape": "right_triangle",
+        "x": 23.003372892251665,
+        "y": 29.61334039109066,
+        "rotation": 90,
+        "width": 11.5,
+        "height": 8,
+        "mirrored": false
+      }
+    ],
+    "terrainLinks": [
+      [
+        "layout-footprint-15",
+        "layout-footprint-14"
+      ],
+      [
+        "layout-footprint-2",
+        "layout-footprint-3"
+      ],
+      [
+        "layout-footprint-4",
+        "layout-footprint-5"
+      ],
+      [
+        "layout-footprint-11",
+        "layout-footprint-13"
+      ],
+      [
+        "layout-footprint-6",
+        "layout-footprint-7"
+      ],
+      [
+        "layout-footprint-10",
+        "layout-footprint-12"
+      ],
+      [
+        "layout-footprint-1",
+        "layout-footprint-0"
+      ],
+      [
+        "layout-footprint-8",
+        "layout-footprint-9"
+      ]
+    ],
+    "terrainGroups": [
+      [
+        "layout-footprint-15",
+        "layout-footprint-14"
+      ]
+    ],
+    "objectives": [
+      {
+        "id": "layout-objective-1781559273708-0",
+        "x": 35.16558172736389,
+        "y": 49.2254130257328,
+        "allegiance": "home",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1781559277488-1",
+        "x": 8.834418272636103,
+        "y": 10.77458697426721,
+        "allegiance": "enemy",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1781559281132-2",
+        "x": 22,
+        "y": 30,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1781559310094-4",
+        "x": 9.804466710684613,
+        "y": 49.17615160064638,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "id": "layout-objective-1781559310599-5",
+        "x": 34.195533289315385,
+        "y": 10.823848399353619,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        30,
+        44
+      ],
+      [
+        30,
+        31
+      ],
+      [
+        29.2156,
+        30.9658
+      ],
+      [
+        28.4377,
+        30.8633
+      ],
+      [
+        27.6706,
+        30.6933
+      ],
+      [
+        26.9213,
+        30.4572
+      ],
+      [
+        26.1925,
+        30.1557
+      ],
+      [
+        25.5,
+        29.7942
+      ],
+      [
+        24.8431,
+        29.3724
+      ],
+      [
+        24.2351,
+        28.8944
+      ],
+      [
+        23.636,
+        28.364
+      ],
+      [
+        23.1056,
+        27.7649
+      ],
+      [
+        22.6276,
+        27.1569
+      ],
+      [
+        22.2058,
+        26.5
+      ],
+      [
+        21.8443,
+        25.8075
+      ],
+      [
+        21.5428,
+        25.0787
+      ],
+      [
+        21.3067,
+        24.3294
+      ],
+      [
+        21.1367,
+        23.5623
+      ],
+      [
+        21.0342,
+        22.7844
+      ],
+      [
+        21,
+        22
+      ],
+      [
+        0,
+        22
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        60,
+        22
+      ],
+      [
+        39,
+        22
+      ],
+      [
+        38.9658,
+        21.2156
+      ],
+      [
+        38.8633,
+        20.4377
+      ],
+      [
+        38.6933,
+        19.6706
+      ],
+      [
+        38.4572,
+        18.9213
+      ],
+      [
+        38.1557,
+        18.1925
+      ],
+      [
+        37.7942,
+        17.5
+      ],
+      [
+        37.3724,
+        16.8431
+      ],
+      [
+        36.8944,
+        16.2351
+      ],
+      [
+        36.364,
+        15.636
+      ],
+      [
+        35.7649,
+        15.1056
+      ],
+      [
+        35.1569,
+        14.6276
+      ],
+      [
+        34.5,
+        14.2058
+      ],
+      [
+        33.8075,
+        13.8443
+      ],
+      [
+        33.0787,
+        13.5428
+      ],
+      [
+        32.3294,
+        13.3067
+      ],
+      [
+        31.5623,
+        13.1367
+      ],
+      [
+        30.7844,
+        13.0342
+      ],
+      [
+        30,
+        13
+      ],
+      [
+        30,
+        0
+      ]
+    ],
+    "deploymentLabelPosition": {
+      "x": 46.0730393258275,
+      "y": 29.982811115761926
+    },
+    "enemyDeploymentLabelPosition": {
+      "x": -2.0730393258275015,
+      "y": 30.017188884238074
+    },
+    "wallPieces": [
+      {
+        "id": "layout-wall-AB-1781556369297-0",
+        "type": "AB",
+        "x": 23.99066540681792,
+        "y": 33.2218169504844,
+        "rotation": 180,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-AB-1781556375684-1",
+        "type": "AB",
+        "x": 20.00933459318208,
+        "y": 26.778183049515597,
+        "rotation": 0,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-1781556431409-2",
+        "type": "CD",
+        "x": 33.77426864215371,
+        "y": 46.83853876207015,
+        "rotation": 270,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-1781556432383-3",
+        "type": "CD",
+        "x": 10.225731357846293,
+        "y": 13.16146123792985,
+        "rotation": 90,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-1781556485668-4",
+        "type": "EF",
+        "x": 31.945083015773164,
+        "y": 11.312087887436832,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-1781556486684-5",
+        "type": "EF",
+        "x": 12.054916984226837,
+        "y": 48.68791211256317,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-1781556531600-6",
+        "type": "GH",
+        "x": 38.068897525600796,
+        "y": 10.390706351440613,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-1781556532321-7",
+        "type": "GH",
+        "x": 5.931102474399205,
+        "y": 49.60929364855939,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      }
+    ],
+    "wallLinks": [
+      [
+        "layout-wall-AB-1781556375684-1",
+        "layout-wall-AB-1781556369297-0"
+      ],
+      [
+        "layout-wall-CD-1781556431409-2",
+        "layout-wall-CD-1781556432383-3"
+      ],
+      [
+        "layout-wall-EF-1781556486684-5",
+        "layout-wall-EF-1781556485668-4"
+      ],
+      [
+        "layout-wall-GH-1781556532321-7",
+        "layout-wall-GH-1781556531600-6"
+      ]
+    ],
+    "featurePieces": [
+      {
+        "id": "layout-feature-smallLightL-1781556620100-0",
+        "type": "smallLightL",
+        "x": 18.500132731974507,
+        "y": 34.20474088861566,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightL-1781556620474-1",
+        "type": "smallLightL",
+        "x": 25.499867268025493,
+        "y": 25.79525911138434,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781556648170-2",
+        "type": "smallLightBarricade",
+        "x": 7.46789499007906,
+        "y": 38.495852345961985,
+        "rotation": 140,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781556648492-3",
+        "type": "smallLightBarricade",
+        "x": 11.783889923709985,
+        "y": 34.98333044056889,
+        "rotation": 141,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781556649097-4",
+        "type": "smallLightBarricade",
+        "x": 36.53210500992094,
+        "y": 21.504147654038015,
+        "rotation": 320,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781556649524-5",
+        "type": "smallLightBarricade",
+        "x": 32.216110076290015,
+        "y": 25.016669559431108,
+        "rotation": 321,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-1781556708399-6",
+        "type": "smallDenseRectangle",
+        "x": 9.64058836330345,
+        "y": 36.72707697687217,
+        "rotation": 230,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-1781556708797-7",
+        "type": "smallDenseRectangle",
+        "x": 34.35941163669655,
+        "y": 23.27292302312783,
+        "rotation": 50,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-denseBarricade-1781556783323-8",
+        "type": "denseBarricade",
+        "x": 10.99726298441935,
+        "y": 22.476131978820703,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-denseBarricade-1781556783668-9",
+        "type": "denseBarricade",
+        "x": 33.00273701558065,
+        "y": 37.5238680211793,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-1781556824170-10",
+        "type": "largeLightBarricade",
+        "x": 22.958796271372425,
+        "y": 11.978991206855312,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-1781556824554-11",
+        "type": "largeLightBarricade",
+        "x": 21.041203728627575,
+        "y": 48.02100879314469,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-1781556849587-12",
+        "type": "largeDenseRectangle",
+        "x": 25.017979059443974,
+        "y": 42.97469647539649,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-1781556850268-13",
+        "type": "largeDenseRectangle",
+        "x": 18.982020940556026,
+        "y": 17.02530352460351,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-1781556881716-14",
+        "type": "largeLightL",
+        "x": 8.486602098669323,
+        "y": 27.992075149059943,
+        "rotation": 90,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781556882178-15",
+        "type": "largeLightL",
+        "x": 5.446602993641811,
+        "y": 28.003901049727588,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781556882541-16",
+        "type": "largeLightL",
+        "x": 35.51339790133068,
+        "y": 32.00792485094006,
+        "rotation": 270,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781556882868-17",
+        "type": "largeLightL",
+        "x": 38.55339700635819,
+        "y": 31.996098950272412,
+        "rotation": 90,
+        "mirrored": true
+      }
+    ],
+    "featureLinks": [
+      [
+        "layout-feature-smallLightL-1781556620100-0",
+        "layout-feature-smallLightL-1781556620474-1"
+      ],
+      [
+        "layout-feature-smallLightBarricade-1781556649524-5",
+        "layout-feature-smallLightBarricade-1781556648492-3"
+      ],
+      [
+        "layout-feature-smallLightBarricade-1781556649097-4",
+        "layout-feature-smallLightBarricade-1781556648170-2"
+      ],
+      [
+        "layout-feature-smallDenseRectangle-1781556708797-7",
+        "layout-feature-smallDenseRectangle-1781556708399-6"
+      ],
+      [
+        "layout-feature-denseBarricade-1781556783668-9",
+        "layout-feature-denseBarricade-1781556783323-8"
+      ],
+      [
+        "layout-feature-largeLightBarricade-1781556824554-11",
+        "layout-feature-largeLightBarricade-1781556824170-10"
+      ],
+      [
+        "layout-feature-largeDenseRectangle-1781556849587-12",
+        "layout-feature-largeDenseRectangle-1781556850268-13"
+      ],
+      [
+        "layout-feature-largeLightL-1781556882541-16",
+        "layout-feature-largeLightL-1781556881716-14"
+      ],
+      [
+        "layout-feature-largeLightL-1781556882868-17",
+        "layout-feature-largeLightL-1781556882178-15"
+      ]
+    ],
+    "walls": []
+  },
+  "Take and Hold|Purge the Foe|C": {
+    "source": "Event Companion page 14, Layout C",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "id": "layout-footprint-0",
+        "shape": "large_rectangle",
+        "x": 7.803842166340312,
+        "y": 37.48208870958908,
+        "rotation": 180,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-1",
+        "shape": "large_rectangle",
+        "x": 36.19615783365969,
+        "y": 22.51791129041092,
+        "rotation": 0,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-2",
+        "shape": "large_rectangle",
+        "x": 33.181695182154414,
+        "y": 49.48997233251265,
+        "rotation": 0,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-3",
+        "shape": "large_rectangle",
+        "x": 10.818304817845586,
+        "y": 10.51002766748735,
+        "rotation": 180,
+        "width": 11.5,
+        "height": 7,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-4",
+        "shape": "medium_rectangle",
+        "x": 29.587784123882187,
+        "y": 11.29220779220779,
+        "rotation": 317,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-5",
+        "shape": "medium_rectangle",
+        "x": 14.412215876117815,
+        "y": 48.70779220779221,
+        "rotation": 137,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-6",
+        "shape": "medium_rectangle",
+        "x": 33.997853425104104,
+        "y": 37.98615063525517,
+        "rotation": 0,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-7",
+        "shape": "medium_rectangle",
+        "x": 10.002146574895896,
+        "y": 22.01384936474483,
+        "rotation": 180,
+        "width": 4,
+        "height": 6,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-8",
+        "shape": "long_line",
+        "x": 21.959186039728134,
+        "y": 42.700473567535546,
+        "rotation": 180,
+        "width": 10,
+        "height": 2.5,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-9",
+        "shape": "long_line",
+        "x": 22.040813960271866,
+        "y": 17.299526432464454,
+        "rotation": 0,
+        "width": 10,
+        "height": 2.5,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-10",
+        "shape": "short_line",
+        "x": 35.9448051948052,
+        "y": 10.831168831168839,
+        "rotation": 319,
+        "width": 6,
+        "height": 2,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-11",
+        "shape": "short_line",
+        "x": 8.055194805194802,
+        "y": 49.16883116883116,
+        "rotation": 139,
+        "width": 6,
+        "height": 2,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-12",
+        "shape": "short_line",
+        "x": 6.998221514678512,
+        "y": 26.140325914575683,
+        "rotation": 180,
+        "width": 6,
+        "height": 2,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-13",
+        "shape": "short_line",
+        "x": 37.00177848532149,
+        "y": 33.85967408542432,
+        "rotation": 0,
+        "width": 6,
+        "height": 2,
+        "mirrored": true
+      },
+      {
+        "id": "layout-footprint-14",
+        "shape": "right_triangle",
+        "x": 22.198165447033794,
+        "y": 30.98001866707343,
+        "rotation": 180,
+        "width": 11.5,
+        "height": 8,
+        "mirrored": false
+      },
+      {
+        "id": "layout-footprint-15",
+        "shape": "right_triangle",
+        "x": 21.423286770027392,
+        "y": 28.947715008425597,
+        "rotation": 0,
+        "width": 11.5,
+        "height": 8,
+        "mirrored": false
+      }
+    ],
+    "terrainLinks": [
+      [
+        "layout-footprint-2",
+        "layout-footprint-3"
+      ],
+      [
+        "layout-footprint-8",
+        "layout-footprint-9"
+      ],
+      [
+        "layout-footprint-6",
+        "layout-footprint-7"
+      ],
+      [
+        "layout-footprint-13",
+        "layout-footprint-12"
+      ],
+      [
+        "layout-footprint-0",
+        "layout-footprint-1"
+      ],
+      [
+        "layout-footprint-5",
+        "layout-footprint-4"
+      ],
+      [
+        "layout-footprint-11",
+        "layout-footprint-10"
+      ]
+    ],
+    "terrainGroups": [
+      [
+        "layout-footprint-6",
+        "layout-footprint-13"
+      ],
+      [
+        "layout-footprint-7",
+        "layout-footprint-12"
+      ]
+    ],
+    "objectives": [
+      {
+        "id": "layout-objective-1781560579329-0",
+        "x": 21.82176326996881,
+        "y": 29.952829676311296,
+        "allegiance": "neutral",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1781560588655-1",
+        "x": 7.802342166340311,
+        "y": 37.76508870958908,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "id": "layout-objective-1781560589137-2",
+        "x": 36.19765783365969,
+        "y": 22.234911290410924,
+        "allegiance": "neutral",
+        "shape": "diamond"
+      },
+      {
+        "id": "layout-objective-1781560596338-3",
+        "x": 33.183195182154414,
+        "y": 49.20697233251265,
+        "allegiance": "home",
+        "shape": "circle"
+      },
+      {
+        "id": "layout-objective-1781560600149-4",
+        "x": 10.816804817845588,
+        "y": 10.793027667487351,
+        "allegiance": "enemy",
+        "shape": "circle"
+      }
+    ],
+    "homeDeploymentPath": [
+      [
+        18,
+        44
+      ],
+      [
+        18,
+        0
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        42,
+        0
+      ],
+      [
+        42,
+        44
+      ]
+    ],
+    "deploymentLabelPosition": {
+      "x": 46.18245316142233,
+      "y": 41.97027782472907
+    },
+    "enemyDeploymentLabelPosition": {
+      "x": -2.1824531614223304,
+      "y": 18.029722175270933
+    },
+    "wallPieces": [
+      {
+        "id": "layout-wall-AB-1781560608306-0",
+        "type": "AB",
+        "x": 19.500072229683227,
+        "y": 27.749354471835794,
+        "rotation": 0,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-AB-1781560609800-1",
+        "type": "AB",
+        "x": 24.499927770316773,
+        "y": 32.250645528164206,
+        "rotation": 180,
+        "mirrored": true,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-1781560744857-2",
+        "type": "CD",
+        "x": 14.701548934835955,
+        "y": 10.550397963455367,
+        "rotation": 90,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-CD-1781560746113-3",
+        "type": "CD",
+        "x": 29.298451065164045,
+        "y": 49.44960203654463,
+        "rotation": 270,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-1781560779365-4",
+        "type": "EF",
+        "x": 33.98635116210094,
+        "y": 23.28776956296477,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-EF-1781560780662-5",
+        "type": "EF",
+        "x": 10.013648837899064,
+        "y": 36.71223043703523,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-1781560823171-6",
+        "type": "GH",
+        "x": 3.9279220460061057,
+        "y": 37.51712669419279,
+        "rotation": 180,
+        "mirrored": false,
+        "floorState": "ground"
+      },
+      {
+        "id": "layout-wall-GH-1781560824150-7",
+        "type": "GH",
+        "x": 40.0720779539939,
+        "y": 22.48287330580721,
+        "rotation": 0,
+        "mirrored": false,
+        "floorState": "ground"
+      }
+    ],
+    "wallLinks": [
+      [
+        "layout-wall-AB-1781560609800-1",
+        "layout-wall-AB-1781560608306-0"
+      ],
+      [
+        "layout-wall-CD-1781560746113-3",
+        "layout-wall-CD-1781560744857-2"
+      ],
+      [
+        "layout-wall-EF-1781560780662-5",
+        "layout-wall-EF-1781560779365-4"
+      ],
+      [
+        "layout-wall-GH-1781560823171-6",
+        "layout-wall-GH-1781560824150-7"
+      ]
+    ],
+    "featurePieces": [
+      {
+        "id": "layout-feature-smallLightL-1781560882588-0",
+        "type": "smallLightL",
+        "x": 17.474722992660006,
+        "y": 33.566800562328424,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightL-1781560883362-1",
+        "type": "smallLightL",
+        "x": 26.525277007339994,
+        "y": 26.433199437671576,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781560913291-2",
+        "type": "smallLightBarricade",
+        "x": 24.7568764671051,
+        "y": 42.797305130398804,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781560914247-3",
+        "type": "smallLightBarricade",
+        "x": 19.2431235328949,
+        "y": 17.202694869601196,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781560914614-4",
+        "type": "smallLightBarricade",
+        "x": 24.797682401501643,
+        "y": 17.209520683637777,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallLightBarricade-1781560914903-5",
+        "type": "smallLightBarricade",
+        "x": 19.202317598498357,
+        "y": 42.79047931636222,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-1781560978848-6",
+        "type": "smallDenseRectangle",
+        "x": 22.035322882459013,
+        "y": 42.69694489507351,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-smallDenseRectangle-1781560979294-7",
+        "type": "smallDenseRectangle",
+        "x": 21.964677117540987,
+        "y": 17.303055104926493,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-denseBarricade-1781561033600-8",
+        "type": "denseBarricade",
+        "x": 6.0992966505035735,
+        "y": 47.661443919059955,
+        "rotation": 319,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-denseBarricade-1781561034154-9",
+        "type": "denseBarricade",
+        "x": 37.900703349496425,
+        "y": 12.338556080940045,
+        "rotation": 139,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561078723-10",
+        "type": "largeLightL",
+        "x": 37.53082351608906,
+        "y": 47.98208807847881,
+        "rotation": 90,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561079205-11",
+        "type": "largeLightL",
+        "x": 6.4691764839109425,
+        "y": 12.01791192152119,
+        "rotation": 270,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561079571-12",
+        "type": "largeLightL",
+        "x": 15.446763223500325,
+        "y": 50.004592123669866,
+        "rotation": 137,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561081569-13",
+        "type": "largeLightL",
+        "x": 28.553236776499674,
+        "y": 9.995407876330134,
+        "rotation": 317,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561081868-14",
+        "type": "largeLightL",
+        "x": 30.58844813523067,
+        "y": 12.571137870977537,
+        "rotation": 136,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeLightL-1781561082141-15",
+        "type": "largeLightL",
+        "x": 13.411551864769327,
+        "y": 47.42886212902246,
+        "rotation": 316,
+        "mirrored": true
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-1781561164870-16",
+        "type": "largeDenseRectangle",
+        "x": 9.996488784550543,
+        "y": 21.99125546769224,
+        "rotation": 180,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeDenseRectangle-1781561165717-17",
+        "type": "largeDenseRectangle",
+        "x": 34.00351121544946,
+        "y": 38.00874453230776,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-1781561168233-18",
+        "type": "largeLightBarricade",
+        "x": 37.01279959066138,
+        "y": 33.95941395399776,
+        "rotation": 0,
+        "mirrored": false
+      },
+      {
+        "id": "layout-feature-largeLightBarricade-1781561168559-19",
+        "type": "largeLightBarricade",
+        "x": 6.9872004093386195,
+        "y": 26.04058604600224,
+        "rotation": 180,
+        "mirrored": false
+      }
+    ],
+    "featureLinks": [
+      [
+        "layout-feature-smallLightL-1781560882588-0",
+        "layout-feature-smallLightL-1781560883362-1"
+      ],
+      [
+        "layout-feature-smallLightBarricade-1781560914903-5",
+        "layout-feature-smallLightBarricade-1781560914614-4"
+      ],
+      [
+        "layout-feature-smallLightBarricade-1781560913291-2",
+        "layout-feature-smallLightBarricade-1781560914247-3"
+      ],
+      [
+        "layout-feature-smallDenseRectangle-1781560978848-6",
+        "layout-feature-smallDenseRectangle-1781560979294-7"
+      ],
+      [
+        "layout-feature-denseBarricade-1781561033600-8",
+        "layout-feature-denseBarricade-1781561034154-9"
+      ],
+      [
+        "layout-feature-largeLightL-1781561082141-15",
+        "layout-feature-largeLightL-1781561081868-14"
+      ],
+      [
+        "layout-feature-largeLightL-1781561079571-12",
+        "layout-feature-largeLightL-1781561081569-13"
+      ],
+      [
+        "layout-feature-largeLightL-1781561078723-10",
+        "layout-feature-largeLightL-1781561079205-11"
+      ],
+      [
+        "layout-feature-largeDenseRectangle-1781561165717-17",
+        "layout-feature-largeDenseRectangle-1781561164870-16"
+      ],
+      [
+        "layout-feature-largeLightBarricade-1781561168233-18",
+        "layout-feature-largeLightBarricade-1781561168559-19"
+      ]
+    ],
+    "walls": []
+  },
+  "Take and Hold|Disruption|A": {
+    "source": "Event Companion page 15, Layout A starter",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      }
+    ],
+    "terrainLinks": [],
+    "terrainGroups": [],
+    "objectives": [],
+    "homeDeploymentPath": [
+      [
+        60,
+        36
+      ],
+      [
+        30,
+        36
+      ],
+      [
+        30,
+        30
+      ],
+      [
+        0,
+        30
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        0,
+        8
+      ],
+      [
+        30,
+        8
+      ],
+      [
+        30,
+        14
+      ],
+      [
+        60,
+        14
+      ]
+    ],
+    "wallPieces": [],
+    "wallLinks": [],
+    "featurePieces": [],
+    "featureLinks": [],
+    "walls": []
+  },
+  "Take and Hold|Disruption|B": {
+    "source": "Event Companion page 16, Layout B starter",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      }
+    ],
+    "terrainLinks": [],
+    "terrainGroups": [],
+    "objectives": [],
+    "homeDeploymentPath": [
+      [
+        0,
+        0
+      ],
+      [
+        30,
+        44
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        60,
+        44
+      ],
+      [
+        30,
+        0
+      ]
+    ],
+    "wallPieces": [],
+    "wallLinks": [],
+    "featurePieces": [],
+    "featureLinks": [],
+    "walls": []
+  },
+  "Take and Hold|Disruption|C": {
+    "source": "Event Companion page 17, Layout C starter",
+    "portraitCoordinates": true,
+    "terrain": [
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "large_rectangle",
+        "x": -6.5,
+        "y": 7,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "medium_rectangle",
+        "x": -2.75,
+        "y": 19,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "long_line",
+        "x": -5.75,
+        "y": 30,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "short_line",
+        "x": -3.75,
+        "y": 39,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      },
+      {
+        "shape": "right_triangle",
+        "x": -6.5,
+        "y": 51,
+        "rotation": 0
+      }
+    ],
+    "terrainLinks": [],
+    "terrainGroups": [],
+    "objectives": [],
+    "homeDeploymentPath": [
+      [
+        18,
+        44
+      ],
+      [
+        18,
+        0
+      ]
+    ],
+    "enemyDeploymentPath": [
+      [
+        42,
+        0
+      ],
+      [
+        42,
+        44
+      ]
+    ],
+    "wallPieces": [],
+    "wallLinks": [],
+    "featurePieces": [],
+    "featureLinks": [],
+    "walls": []
+  }
+}
