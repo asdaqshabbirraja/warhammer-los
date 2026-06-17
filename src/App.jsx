@@ -2150,6 +2150,18 @@ export default function InteractiveLOSTool() {
           scheduleBrowserSave();
           return;
         }
+        const layoutWallIndex = findLayoutWallAtPoint(p);
+        if (layoutWallIndex >= 0) {
+          const [removedWall] = state.current.layoutWalls.splice(layoutWallIndex, 1);
+          state.current.layoutWallLinks = state.current.layoutWallLinks.filter((link) => !link.includes(removedWall.id));
+          setSelectedLayoutWallId(null);
+          rebuildLayoutWallGeometry();
+          updateVisibility();
+          setStatus(`${removedWall.type} wall erased.`);
+          draw();
+          scheduleBrowserSave();
+          return;
+        }
         const featurePieceIndex = state.current.layoutFeaturePieces.findIndex((feature) => pointInPoly(p, layoutFeaturePolygonToWorld(feature)));
         if (featurePieceIndex >= 0) {
           state.current.layoutFeaturePieces.splice(featurePieceIndex, 1);
@@ -2636,8 +2648,39 @@ export default function InteractiveLOSTool() {
     }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
   }
 
+  function layoutTerrainAtPoint(point) {
+    return state.current.layoutTerrain.find((terrain) => pointInPoly(point, layoutTerrainPolygon(terrain)));
+  }
+
+  function touchingRightTriangleFor(terrain) {
+    if (terrain?.shape !== "right_triangle") return null;
+    const polygon = layoutTerrainPolygon(terrain);
+    const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+    return state.current.layoutTerrain.find((candidate) => (
+      candidate.id !== terrain.id
+      && candidate.shape === "right_triangle"
+      && polygonsTouchOrNear(polygon, layoutTerrainPolygon(candidate), inchesToPixels)
+    ));
+  }
+
+  function isolatedRightTriangleCentroid(terrain) {
+    const definition = TERRAIN_FOOTPRINTS.right_triangle;
+    const w = definition.width / 2;
+    const h = definition.height / 2;
+    const cleanTriangle = [
+      [-w, -h],
+      [w, -h],
+      [-w, h],
+    ];
+    const world = terrainLocalPolygonToWorld(terrain, cleanTriangle);
+    return {
+      x: (world[0].x + world[1].x + world[2].x) / 3,
+      y: (world[0].y + world[1].y + world[2].y) / 3,
+    };
+  }
+
   function groupedLayoutTerrainPolygonsForPoint(point) {
-    const containingTerrain = state.current.layoutTerrain.find((terrain) => pointInPoly(point, layoutTerrainPolygon(terrain)));
+    const containingTerrain = layoutTerrainAtPoint(point);
     if (!containingTerrain) return [];
     const group = layoutTerrainGroupFor(containingTerrain.id);
     if (group) {
@@ -2648,12 +2691,7 @@ export default function InteractiveLOSTool() {
     }
     if (containingTerrain.shape === "right_triangle") {
       const containingPolygon = layoutTerrainPolygon(containingTerrain);
-      const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
-      const touchingTriangle = state.current.layoutTerrain.find((terrain) => (
-        terrain.id !== containingTerrain.id
-        && terrain.shape === "right_triangle"
-        && polygonsTouchOrNear(containingPolygon, layoutTerrainPolygon(terrain), inchesToPixels)
-      ));
+      const touchingTriangle = touchingRightTriangleFor(containingTerrain);
       if (touchingTriangle) return [containingPolygon, layoutTerrainPolygon(touchingTriangle)];
     }
     return [layoutTerrainPolygon(containingTerrain)];
@@ -2662,11 +2700,17 @@ export default function InteractiveLOSTool() {
   function snapObjectiveToTerrainCenter(objectiveIndex) {
     const objective = state.current.layoutObjectives[objectiveIndex];
     if (!objective) return;
+    const containingTerrain = layoutTerrainAtPoint(objective);
+    const isolatedTriangleCenter = containingTerrain?.shape === "right_triangle"
+      && !layoutTerrainGroupFor(containingTerrain.id)
+      && !touchingRightTriangleFor(containingTerrain)
+      ? isolatedRightTriangleCentroid(containingTerrain)
+      : null;
     const groupedPolygons = groupedLayoutTerrainPolygonsForPoint(objective);
     const footprint = state.current.blockers.find((poly) => pointInPoly(objective, poly));
-    if (!groupedPolygons.length && !footprint?.length) return;
+    if (!isolatedTriangleCenter && !groupedPolygons.length && !footprint?.length) return;
     const bounds = groupedPolygons.length ? polygonBounds(groupedPolygons) : polygonBounds([footprint]);
-    const center = {
+    const center = isolatedTriangleCenter || {
       x: (bounds.minX + bounds.maxX) / 2,
       y: (bounds.minY + bounds.maxY) / 2,
     };
@@ -4359,7 +4403,7 @@ export default function InteractiveLOSTool() {
     const savedTerrainGroups = Array.isArray(savedFixture?.terrainGroups) ? savedFixture.terrainGroups : (preset.terrainGroups || []);
     const savedWallLinks = Array.isArray(savedFixture?.wallLinks) ? savedFixture.wallLinks : (preset.wallLinks || []);
     const savedFeatureLinks = Array.isArray(savedFixture?.featureLinks) ? savedFixture.featureLinks : (preset.featureLinks || []);
-    const savedObjectives = Array.isArray(savedFixture?.objectives) ? savedFixture.objectives : null;
+    const savedObjectives = Array.isArray(savedFixture?.objectives) ? savedFixture.objectives : (preset.objectives || []);
     const savedWalls = Array.isArray(savedFixture?.walls) ? savedFixture.walls : (preset.walls || []);
     const savedWallPieces = Array.isArray(savedFixture?.wallPieces) ? savedFixture.wallPieces : null;
     const savedTerrainFeatures = [];
