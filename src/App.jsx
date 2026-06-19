@@ -145,6 +145,22 @@ const DEFAULT_LAYOUT_WALL_SET = [
 const MAP_DB_NAME = "warhammer-los-maps";
 const MAP_STORE_NAME = "maps";
 
+function layoutPresetFor(defender, attacker, variant) {
+  const exactKey = `${defender}|${attacker}|${variant}`;
+  const exactPreset = LAYOUT_PRESETS[exactKey];
+  if (exactPreset) return { key: exactKey, preset: exactPreset, reversed: false };
+  const reversedKey = `${attacker}|${defender}|${variant}`;
+  const reversedPreset = LAYOUT_PRESETS[reversedKey];
+  return reversedPreset ? { key: reversedKey, preset: reversedPreset, reversed: true } : { key: exactKey, preset: null, reversed: false };
+}
+
+function layoutPresetForKey(layoutKey) {
+  if (LAYOUT_PRESETS[layoutKey]) return LAYOUT_PRESETS[layoutKey];
+  const [defender, attacker, variant] = String(layoutKey || "").split("|");
+  if (!defender || !attacker || !variant) return null;
+  return layoutPresetFor(defender, attacker, variant).preset;
+}
+
 function openMapDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(MAP_DB_NAME, 1);
@@ -248,9 +264,28 @@ export default function InteractiveLOSTool() {
   const [showNewGamePrompt, setShowNewGamePrompt] = useState(false);
   const [expandedMissionCards, setExpandedMissionCards] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [customGridWidth, setCustomGridWidth] = useState(44);
+  const [customGridLength, setCustomGridLength] = useState(60);
+  const [showLightTerrainFeatures, setShowLightTerrainFeatures] = useState(true);
+  const [showDenseTerrainFeatures, setShowDenseTerrainFeatures] = useState(true);
+  const [mapSectionOpen, setMapSectionOpen] = useState({
+    modify: false,
+    upload: false,
+    create: false,
+    edit: false,
+  });
+  const [editSubsectionOpen, setEditSubsectionOpen] = useState({
+    features: false,
+    walls: false,
+    freeDraw: false,
+    manipulation: false,
+    deployment: false,
+    objectives: false,
+  });
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
     layout: true,
+    createUpload: false,
     army: true,
     scale: true,
     markers: true,
@@ -261,6 +296,8 @@ export default function InteractiveLOSTool() {
   const state = useRef({
     W: 900,
     H: 600,
+    boardWidthInches: BATTLEFIELD_WIDTH_INCHES,
+    boardHeightInches: BATTLEFIELD_HEIGHT_INCHES,
     fit: { x: 0, y: 0, w: 0, h: 0 },
     camera: { scale: 1, x: 0, y: 0 },
     light: { x: 450, y: 300 },
@@ -373,7 +410,7 @@ export default function InteractiveLOSTool() {
   useEffect(() => {
     draw();
     scheduleBrowserSave();
-  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId]);
+  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId, selectedLayoutObjectiveId, showLightTerrainFeatures, showDenseTerrainFeatures]);
 
   useEffect(() => {
     if (!layoutSaveReadyRef.current) {
@@ -381,7 +418,7 @@ export default function InteractiveLOSTool() {
       return;
     }
     scheduleBrowserSave();
-  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible]);
+  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible, showLightTerrainFeatures, showDenseTerrainFeatures]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -399,7 +436,7 @@ export default function InteractiveLOSTool() {
     calculateFit();
     if (state.current.activeLayoutKey) {
       refreshActiveLayoutGeometry();
-      setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
+      setPixelsPerInch(state.current.fit.w / boardWidthInches());
     }
     updateVisibility();
     draw();
@@ -407,17 +444,27 @@ export default function InteractiveLOSTool() {
 
   function calculateFit() {
     const { W, H } = state.current;
+    const boardWidth = boardWidthInches();
+    const boardHeight = boardHeightInches();
     const padding = 18;
     const s = Math.min(
-      Math.max(1, W - padding * 2) / BATTLEFIELD_WIDTH_INCHES,
-      Math.max(1, H - padding * 2) / BATTLEFIELD_HEIGHT_INCHES,
+      Math.max(1, W - padding * 2) / boardWidth,
+      Math.max(1, H - padding * 2) / boardHeight,
     );
     state.current.fit = {
-      x: (W - BATTLEFIELD_WIDTH_INCHES * s) / 2,
-      y: (H - BATTLEFIELD_HEIGHT_INCHES * s) / 2,
-      w: BATTLEFIELD_WIDTH_INCHES * s,
-      h: BATTLEFIELD_HEIGHT_INCHES * s,
+      x: (W - boardWidth * s) / 2,
+      y: (H - boardHeight * s) / 2,
+      w: boardWidth * s,
+      h: boardHeight * s,
     };
+  }
+
+  function boardWidthInches() {
+    return Number(state.current.boardWidthInches) || BATTLEFIELD_WIDTH_INCHES;
+  }
+
+  function boardHeightInches() {
+    return Number(state.current.boardHeightInches) || BATTLEFIELD_HEIGHT_INCHES;
   }
 
   function uploadImage(e) {
@@ -495,6 +542,8 @@ export default function InteractiveLOSTool() {
       version: 11,
       battlefieldOrientation: "portrait-44x60",
       layoutGeometryVersion: "wartoken-json-v1",
+      boardWidthInches: boardWidthInches(),
+      boardHeightInches: boardHeightInches(),
       savedAt: new Date().toISOString(),
       mapStorageKey: null,
       light: getActiveLosPoint(),
@@ -514,6 +563,8 @@ export default function InteractiveLOSTool() {
       layoutTerrainFeatures: state.current.layoutTerrainFeatures,
       layoutFeaturePieces: state.current.layoutFeaturePieces,
       layoutFeatureLinks: state.current.layoutFeatureLinks,
+      showLightTerrainFeatures,
+      showDenseTerrainFeatures,
       activeLayoutKey: state.current.activeLayoutKey,
       deploymentLine: state.current.deploymentLine,
       deploymentPath: state.current.deploymentPath,
@@ -547,6 +598,10 @@ export default function InteractiveLOSTool() {
 
   async function applySaveData(data, message = "Browser save restored.") {
     if (!data) return;
+    state.current.boardWidthInches = Number(data.boardWidthInches) || BATTLEFIELD_WIDTH_INCHES;
+    state.current.boardHeightInches = Number(data.boardHeightInches) || BATTLEFIELD_HEIGHT_INCHES;
+    setCustomGridLength(state.current.boardWidthInches);
+    setCustomGridWidth(state.current.boardHeightInches);
     setActiveUnitSlot(null);
     setLayoutLinkMode(false);
     setFirstLinkedTerrainId(null);
@@ -556,6 +611,8 @@ export default function InteractiveLOSTool() {
     setAttackerForceDisposition(FORCE_DISPOSITIONS.includes(data.attackerForceDisposition) ? data.attackerForceDisposition : "Take and Hold");
     setSelectedLayoutVariant(["A", "B", "C"].includes(data.selectedLayoutVariant) ? data.selectedLayoutVariant : "A");
     setMissionCardsVisible(data.missionCardsVisible === true);
+    setShowLightTerrainFeatures(data.showLightTerrainFeatures !== false);
+    setShowDenseTerrainFeatures(data.showDenseTerrainFeatures !== false);
 
     if (Array.isArray(data.losMarkers)) {
       state.current.losMarkers = data.losMarkers.map((marker, index) => normalizeLosMarker(marker, index, data.rangeInches));
@@ -630,7 +687,7 @@ export default function InteractiveLOSTool() {
       : Array.isArray(data.layoutTerrain) && data.layoutTerrain.length
         ? `${data.defenderForceDisposition || "Take and Hold"}|${data.attackerForceDisposition || "Take and Hold"}|${data.selectedLayoutVariant || "A"}`
         : null;
-    const restoredPreset = LAYOUT_PRESETS[restoredLayoutKey];
+    const restoredPreset = layoutPresetForKey(restoredLayoutKey);
     if (!state.current.layoutWalls.length && restoredPreset) {
       state.current.layoutWalls = (restoredPreset.wallPieces || DEFAULT_LAYOUT_WALL_SET).map((wall, index) => ({
         id: `layout-wall-${wall.type}-${index}`,
@@ -718,7 +775,7 @@ export default function InteractiveLOSTool() {
         calculateFit();
         if (state.current.activeLayoutKey) {
           refreshActiveLayoutGeometry();
-          setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
+          setPixelsPerInch(state.current.fit.w / boardWidthInches());
           state.current.deploymentVisible = false;
           state.current.enemyDeploymentVisible = false;
           state.current.deploymentNoMansSide = null;
@@ -740,7 +797,7 @@ export default function InteractiveLOSTool() {
       calculateFit();
       if (state.current.activeLayoutKey) {
         refreshActiveLayoutGeometry();
-        setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
+        setPixelsPerInch(state.current.fit.w / boardWidthInches());
         state.current.deploymentVisible = false;
         state.current.enemyDeploymentVisible = false;
         state.current.deploymentNoMansSide = null;
@@ -888,6 +945,8 @@ export default function InteractiveLOSTool() {
   function createNewGame() {
     imgRef.current = null;
     state.current.savedImageSrc = null;
+    state.current.boardWidthInches = BATTLEFIELD_WIDTH_INCHES;
+    state.current.boardHeightInches = BATTLEFIELD_HEIGHT_INCHES;
     state.current.fit = { x: 0, y: 0, w: 0, h: 0 };
     state.current.camera = { scale: 1, x: 0, y: 0 };
     state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
@@ -939,6 +998,8 @@ export default function InteractiveLOSTool() {
     setFirstLinkedFeatureId(null);
 
     setSelectedSave("");
+    setCustomGridLength(BATTLEFIELD_WIDTH_INCHES);
+    setCustomGridWidth(BATTLEFIELD_HEIGHT_INCHES);
     setDefenderForceDisposition("Take and Hold");
     setAttackerForceDisposition("Take and Hold");
     setSelectedLayoutVariant("A");
@@ -1042,6 +1103,14 @@ export default function InteractiveLOSTool() {
 
   function toggleSidebarSection(key) {
     setSectionOpen((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function toggleMapSection(key) {
+    setMapSectionOpen((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function toggleEditSubsection(key) {
+    setEditSubsectionOpen((current) => ({ ...current, [key]: !current[key] }));
   }
 
   function refreshArmyPresets() {
@@ -1817,6 +1886,11 @@ export default function InteractiveLOSTool() {
       setSelectedTerrainFootprintRelation(terrainRelationChoice);
       return;
     }
+    const objectiveVisibilityChoice = selectedLayoutObjectiveId ? findLayoutObjectiveVisibilityButton(p) : null;
+    if (objectiveVisibilityChoice !== null) {
+      setSelectedLayoutObjectiveVisibility(objectiveVisibilityChoice);
+      return;
+    }
 
     if (selectedLayoutWallId && (mode === "denseTF" || mode === "lightTF")) {
       setSelectedLayoutWallId(null);
@@ -1877,6 +1951,21 @@ export default function InteractiveLOSTool() {
     if (selectedLayoutWallId) setSelectedLayoutWallId(null);
     if (selectedLayoutFeatureId) setSelectedLayoutFeatureId(null);
 
+    if (mode !== "denseTF" && mode !== "lightTF") {
+      const objectiveIndex = findLayoutObjectiveAtPoint(p);
+      if (objectiveIndex >= 0) {
+        const objective = state.current.layoutObjectives[objectiveIndex];
+        setSelectedLayoutObjectiveId(objective.id);
+        setSelectedLayoutTerrainId(null);
+        setSelectedLayoutWallId(null);
+        setSelectedLayoutFeatureId(null);
+        if (layoutEditMode) objectDragRef.current = { type: "layoutObjective", index: objectiveIndex };
+        setStatus(layoutEditMode ? "Objective marker selected. Drag it to reposition it." : "Objective marker selected. Use the eye controls to show or fade it.");
+        draw();
+        return;
+      }
+    }
+
     if (layoutEditMode && mode !== "denseTF" && mode !== "lightTF") {
       if (layoutLinkMode) {
         const linkTerrainIndex = findLayoutTerrainAtPoint(p);
@@ -1885,17 +1974,6 @@ export default function InteractiveLOSTool() {
         } else {
           setStatus("Link mode: click a terrain footprint.");
         }
-        return;
-      }
-      const objectiveIndex = findLayoutObjectiveAtPoint(p);
-      if (objectiveIndex >= 0) {
-        const objective = state.current.layoutObjectives[objectiveIndex];
-        setSelectedLayoutObjectiveId(objective.id);
-        setSelectedLayoutTerrainId(null);
-        setSelectedLayoutWallId(null);
-        objectDragRef.current = { type: "layoutObjective", index: objectiveIndex };
-        setStatus("Objective marker selected. Drag it to reposition it.");
-        draw();
         return;
       }
       const handle = findSelectedLayoutTerrainHandle(p);
@@ -2162,7 +2240,10 @@ export default function InteractiveLOSTool() {
           scheduleBrowserSave();
           return;
         }
-        const featurePieceIndex = state.current.layoutFeaturePieces.findIndex((feature) => pointInPoly(p, layoutFeaturePolygonToWorld(feature)));
+        const featurePieceIndex = state.current.layoutFeaturePieces.findIndex((feature) => (
+          terrainFeatureKindVisible(LAYOUT_FEATURE_TYPES[feature.type]?.kind || "light")
+          && pointInPoly(p, layoutFeaturePolygonToWorld(feature))
+        ));
         if (featurePieceIndex >= 0) {
           state.current.layoutFeaturePieces.splice(featurePieceIndex, 1);
           setSelectedLayoutFeatureId(null);
@@ -2172,7 +2253,8 @@ export default function InteractiveLOSTool() {
           return;
         }
         const decorativeIndex = state.current.layoutTerrainFeatures.findIndex((feature) => (
-          pointInPoly(p, feature.points.map((point) => battlefieldPoint(point.x, point.y)))
+          terrainFeatureKindVisible(feature.kind)
+          && pointInPoly(p, feature.points.map((point) => battlefieldPoint(point.x, point.y)))
         ));
         if (decorativeIndex >= 0) {
           state.current.layoutTerrainFeatures.splice(decorativeIndex, 1);
@@ -2291,7 +2373,7 @@ export default function InteractiveLOSTool() {
       if (enemy) state.current.enemies[dragged.index] = { ...enemy, x: p.x, y: p.y };
     } else if (dragged.type === "layoutTerrain") {
       const terrain = state.current.layoutTerrain[dragged.index];
-      const inch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      const inch = state.current.fit.w / boardWidthInches();
       if (terrain && inch) {
         terrain.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
         terrain.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
@@ -2300,7 +2382,7 @@ export default function InteractiveLOSTool() {
       }
     } else if (dragged.type === "layoutWall") {
       const wall = state.current.layoutWalls[dragged.index];
-      const inch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      const inch = state.current.fit.w / boardWidthInches();
       if (wall && inch) {
         wall.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
         wall.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
@@ -2309,7 +2391,7 @@ export default function InteractiveLOSTool() {
       }
     } else if (dragged.type === "layoutFeature") {
       const feature = state.current.layoutFeaturePieces[dragged.index];
-      const inch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+      const inch = state.current.fit.w / boardWidthInches();
       if (feature && inch) {
         feature.x = dragged.startX + (p.x - dragged.startPoint.x) / inch;
         feature.y = dragged.startY + (p.y - dragged.startPoint.y) / inch;
@@ -2452,7 +2534,11 @@ export default function InteractiveLOSTool() {
     if (target?.type === "footprint") {
       const index = state.current.blockerIds.indexOf(target.id);
       const poly = state.current.blockers[index];
-      return poly ? { poly } : null;
+      if (!poly) return null;
+      const groupKey = footprintSurfaceKey(state.current.blockers, index);
+      const segments = getFootprintBoundarySegments(state.current.blockers)
+        .filter((segment) => segment.groupKey === groupKey);
+      return segments.length ? { segments, poly } : { poly };
     }
     if (target?.type === "unit") {
       const members = getUnitMembers(Number(target.id));
@@ -2473,6 +2559,8 @@ export default function InteractiveLOSTool() {
     if (!from || !to) return null;
     if (from.unitMembers) return closestUnitStickyGeometry(from.unitMembers, to, true);
     if (to.unitMembers) return closestUnitStickyGeometry(to.unitMembers, from, false);
+    if (from.segments) return closestSegmentsToEllipsePoints(from.segments, to, true);
+    if (to.segments) return closestSegmentsToEllipsePoints(to.segments, from, false);
     if (from.poly) return closestPolygonToEllipsePoints(from.poly, to, true);
     if (to.poly) return closestPolygonToEllipsePoints(to.poly, from, false);
     return closestEllipseEdgePoints(from, to);
@@ -2531,7 +2619,9 @@ export default function InteractiveLOSTool() {
 
   function findLayoutFeatureAtPoint(p) {
     for (let index = state.current.layoutFeaturePieces.length - 1; index >= 0; index--) {
-      if (pointInPoly(p, layoutFeaturePolygonToWorld(state.current.layoutFeaturePieces[index]))) return index;
+      const feature = state.current.layoutFeaturePieces[index];
+      if (!terrainFeatureKindVisible(LAYOUT_FEATURE_TYPES[feature.type]?.kind || "light")) continue;
+      if (pointInPoly(p, layoutFeaturePolygonToWorld(feature))) return index;
     }
     return -1;
   }
@@ -2594,12 +2684,41 @@ export default function InteractiveLOSTool() {
   }
 
   function findLayoutObjectiveAtPoint(p) {
-    const pixelsPerInch = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+    const pixelsPerInch = state.current.fit.w / boardWidthInches();
     const radius = Math.max(16 / state.current.camera.scale, pixelsPerInch * 1.8);
     for (let index = state.current.layoutObjectives.length - 1; index >= 0; index--) {
       if (dist(p, state.current.layoutObjectives[index]) <= radius) return index;
     }
     return -1;
+  }
+
+  function layoutObjectiveVisibilityButtons(objective) {
+    const scale = state.current.camera.scale || 1;
+    const size = 26 / scale;
+    const gap = 6 / scale;
+    const y = objective.y - size * 1.55;
+    return [
+      { visible: true, x: objective.x - size - gap / 2, y, size },
+      { visible: false, x: objective.x + gap / 2, y, size },
+    ];
+  }
+
+  function findLayoutObjectiveVisibilityButton(p) {
+    const objective = state.current.layoutObjectives.find((item) => item.id === selectedLayoutObjectiveId);
+    if (!objective) return null;
+    const button = layoutObjectiveVisibilityButtons(objective).find((item) => (
+      p.x >= item.x && p.x <= item.x + item.size && p.y >= item.y && p.y <= item.y + item.size
+    ));
+    return button ? button.visible : null;
+  }
+
+  function setSelectedLayoutObjectiveVisibility(visible) {
+    const objective = state.current.layoutObjectives.find((item) => item.id === selectedLayoutObjectiveId);
+    if (!objective) return;
+    objective.visible = visible;
+    draw();
+    scheduleBrowserSave();
+    setStatus(`Objective marker ${visible ? "shown" : "faded"}.`);
   }
 
   function findDeploymentLabelAtPoint(p) {
@@ -2626,7 +2745,7 @@ export default function InteractiveLOSTool() {
       },
     ];
     for (const item of labels) {
-      const rect = deploymentLineCaptionRect(ctx, item.label, item.path, fit, camera.scale, item.position);
+      const rect = deploymentLineCaptionRect(ctx, item.label, item.path, fit, camera.scale, item.position, boardWidthInches(), boardHeightInches());
       if (rect && p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height) {
         return item.kind;
       }
@@ -2655,7 +2774,7 @@ export default function InteractiveLOSTool() {
   function touchingRightTriangleFor(terrain) {
     if (terrain?.shape !== "right_triangle") return null;
     const polygon = layoutTerrainPolygon(terrain);
-    const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+    const inchesToPixels = state.current.fit.w / boardWidthInches();
     return state.current.layoutTerrain.find((candidate) => (
       candidate.id !== terrain.id
       && candidate.shape === "right_triangle"
@@ -3157,7 +3276,7 @@ export default function InteractiveLOSTool() {
   }
 
   function restorePresetDeploymentLines() {
-    const preset = LAYOUT_PRESETS[state.current.activeLayoutKey];
+    const preset = layoutPresetForKey(state.current.activeLayoutKey);
     if (!preset) {
       setStatus("Apply an official layout before restoring its deployment lines.");
       return;
@@ -3184,7 +3303,7 @@ export default function InteractiveLOSTool() {
     state.current.enemyDeploymentNoMansSide = null;
     state.current.deploymentLabelPosition = validBoardPoint(preset.deploymentLabelPosition) ? { ...preset.deploymentLabelPosition } : null;
     state.current.enemyDeploymentLabelPosition = validBoardPoint(preset.enemyDeploymentLabelPosition) ? { ...preset.enemyDeploymentLabelPosition } : null;
-    setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
+    setPixelsPerInch(state.current.fit.w / boardWidthInches());
     updateVisibility();
     draw();
     scheduleBrowserSave();
@@ -3254,6 +3373,10 @@ export default function InteractiveLOSTool() {
     return !numeric || numeric <= 0 ? Infinity : numeric * pixelsPerInch;
   }
 
+  function terrainFeatureKindVisible(kind) {
+    return kind === "dense" ? showDenseTerrainFeatures : showLightTerrainFeatures;
+  }
+
   function draw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -3305,7 +3428,7 @@ export default function InteractiveLOSTool() {
       ctx.fillStyle = "rgba(15,18,22,.72)";
       ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
     }
-    drawBattlefieldGrid(ctx, fit, camera.scale);
+    drawBattlefieldGrid(ctx, fit, camera.scale, boardWidthInches(), boardHeightInches());
 
     if (homeDeployPath.length >= 2 && state.current.deploymentNoMansSide) {
       drawDeploymentAreaWash(
@@ -3442,11 +3565,11 @@ export default function InteractiveLOSTool() {
       drawPoly(ctx, polygon, wall.floorState === "firstFloor" ? "rgba(168,85,247,.24)" : "rgba(168,85,247,.82)", layoutEditMode && wall.id === selectedLayoutWallId ? "#f8fafc" : "#c084fc", true, camera.scale, false);
       ctx.restore();
     });
-    state.current.layoutTerrainFeatures.forEach((feature) => {
+    state.current.layoutTerrainFeatures.filter((feature) => terrainFeatureKindVisible(feature.kind)).forEach((feature) => {
       const poly = feature.points.map((point) => battlefieldPoint(point.x, point.y));
       drawDecorativeTerrainFeature(ctx, poly, feature.kind, camera.scale);
     });
-    state.current.layoutFeaturePieces.forEach((feature) => {
+    state.current.layoutFeaturePieces.filter((feature) => terrainFeatureKindVisible(LAYOUT_FEATURE_TYPES[feature.type]?.kind || "light")).forEach((feature) => {
       const definition = LAYOUT_FEATURE_TYPES[feature.type];
       const polygon = layoutFeaturePolygonToWorld(feature);
       drawDecorativeTerrainFeature(ctx, polygon, definition?.kind || "light", camera.scale);
@@ -3491,9 +3614,9 @@ export default function InteractiveLOSTool() {
     }
 
     layoutObjectives.forEach((objective) => {
-      drawLayoutObjective(ctx, objective, pixelsPerInch || fit.w / BATTLEFIELD_WIDTH_INCHES, camera.scale);
-      if (layoutEditMode && objective.id === selectedLayoutObjectiveId) {
-        const radius = Math.max(17 / camera.scale, (pixelsPerInch || fit.w / BATTLEFIELD_WIDTH_INCHES) * 1.8);
+      drawLayoutObjective(ctx, objective, pixelsPerInch || fit.w / boardWidthInches(), camera.scale);
+      if (objective.id === selectedLayoutObjectiveId) {
+        const radius = Math.max(17 / camera.scale, (pixelsPerInch || fit.w / boardWidthInches()) * 1.8);
         ctx.save();
         ctx.beginPath();
         ctx.arc(objective.x, objective.y, radius, 0, Math.PI * 2);
@@ -3503,6 +3626,10 @@ export default function InteractiveLOSTool() {
         ctx.restore();
       }
     });
+    const selectedObjective = state.current.layoutObjectives.find((objective) => objective.id === selectedLayoutObjectiveId);
+    if (selectedObjective) {
+      drawObjectiveVisibilityControls(ctx, layoutObjectiveVisibilityButtons(selectedObjective), selectedObjective.visible !== false, camera.scale);
+    }
 
     enemies.forEach((enemy, index) => {
       const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
@@ -3730,16 +3857,16 @@ export default function InteractiveLOSTool() {
   function battlefieldPoint(x, y) {
     const { fit } = state.current;
     return {
-      x: fit.x + (x / BATTLEFIELD_WIDTH_INCHES) * fit.w,
-      y: fit.y + (y / BATTLEFIELD_HEIGHT_INCHES) * fit.h,
+      x: fit.x + (x / boardWidthInches()) * fit.w,
+      y: fit.y + (y / boardHeightInches()) * fit.h,
     };
   }
 
   function worldToBattlefieldPoint(point) {
     const { fit } = state.current;
     return {
-      x: (point.x - fit.x) / fit.w * BATTLEFIELD_WIDTH_INCHES,
-      y: (point.y - fit.y) / fit.h * BATTLEFIELD_HEIGHT_INCHES,
+      x: (point.x - fit.x) / fit.w * boardWidthInches(),
+      y: (point.y - fit.y) / fit.h * boardHeightInches(),
     };
   }
 
@@ -3749,8 +3876,8 @@ export default function InteractiveLOSTool() {
 
   function mirroredBoardPoint(point) {
     return {
-      x: BATTLEFIELD_WIDTH_INCHES - point.x,
-      y: BATTLEFIELD_HEIGHT_INCHES - point.y,
+      x: boardWidthInches() - point.x,
+      y: boardHeightInches() - point.y,
     };
   }
 
@@ -3785,8 +3912,8 @@ export default function InteractiveLOSTool() {
 
   function worldPointToTerrainLocal(terrain, point) {
     const { fit } = state.current;
-    const battlefieldX = (point.x - fit.x) / fit.w * BATTLEFIELD_WIDTH_INCHES;
-    const battlefieldY = (point.y - fit.y) / fit.h * BATTLEFIELD_HEIGHT_INCHES;
+    const battlefieldX = (point.x - fit.x) / fit.w * boardWidthInches();
+    const battlefieldY = (point.y - fit.y) / fit.h * boardHeightInches();
     const dx = battlefieldX - terrain.x;
     const dy = battlefieldY - terrain.y;
     const angle = -(terrain.rotation || 0) * Math.PI / 180;
@@ -3869,7 +3996,7 @@ export default function InteractiveLOSTool() {
     const blockers = [];
     const blockerIds = [];
     const trianglePolys = [];
-    const boundaryTolerance = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES * 0.08;
+    const boundaryTolerance = state.current.fit.w / boardWidthInches() * 0.08;
 
     state.current.layoutTerrain.forEach((terrain) => {
       const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
@@ -3889,7 +4016,7 @@ export default function InteractiveLOSTool() {
     if (trianglePolys.length === 2 && polygonsTouchOrNear(
       trianglePolys[0].poly,
       trianglePolys[1].poly,
-      state.current.fit.w / BATTLEFIELD_WIDTH_INCHES,
+      state.current.fit.w / boardWidthInches(),
     )) {
       const trianglePair = unionPolygonBoundary(trianglePolys[0].poly, trianglePolys[1].poly);
       trianglePair.footprintGroupId = "layout-triangle-pair";
@@ -3912,25 +4039,29 @@ export default function InteractiveLOSTool() {
   }
 
   function refreshActiveLayoutGeometry() {
-    const preset = LAYOUT_PRESETS[state.current.activeLayoutKey];
+    const preset = layoutPresetForKey(state.current.activeLayoutKey);
     if (!preset) return;
     rebuildLayoutTerrainGeometry();
     rebuildLayoutWallGeometry();
     const existingObjectives = state.current.layoutObjectives;
-    state.current.layoutObjectives = preset.objectives.map((objective, index) => {
-      const existing = existingObjectives.find((item) => item.id === `layout-objective-${index}`);
+    state.current.layoutObjectives = (preset.objectives || []).map((objective, index) => {
+      const fallbackId = objective.id || `layout-objective-${index}`;
+      const existing = existingObjectives.find((item) => item.id === fallbackId || item.id === `layout-objective-${index}`);
       const point = existing && Number.isFinite(existing.boardX) && Number.isFinite(existing.boardY)
         ? { x: existing.boardX, y: existing.boardY }
-        : preset.portraitCoordinates
+        : Number.isFinite(objective.boardX) && Number.isFinite(objective.boardY)
+          ? { x: objective.boardX, y: objective.boardY }
+        : preset.portraitCoordinates && Number.isFinite(objective.x) && Number.isFinite(objective.y)
           ? { x: objective.x, y: objective.y }
           : rotateLayoutPoint(objective.x, objective.y);
       return {
-        id: `layout-objective-${index}`,
+        id: fallbackId,
         ...battlefieldPoint(point.x, point.y),
         boardX: point.x,
         boardY: point.y,
-        allegiance: objective.allegiance,
-        shape: objective.allegiance === "neutral" && index !== 2 ? "diamond" : "circle",
+        allegiance: objective.allegiance || "neutral",
+        shape: objective.shape || (objective.allegiance === "neutral" && index !== 2 ? "diamond" : "circle"),
+        visible: objective.visible !== false,
       };
     });
     state.current.deploymentPath = preset.homeDeploymentPath.map(([x, y]) => {
@@ -4027,7 +4158,7 @@ export default function InteractiveLOSTool() {
     if (!terrain) return null;
     const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
     const polygon = terrainLocalPolygonToWorld(terrain, terrain.outer || definition.outer);
-    const inchesToPixels = state.current.fit.w / BATTLEFIELD_WIDTH_INCHES;
+    const inchesToPixels = state.current.fit.w / boardWidthInches();
     const tolerance = inchesToPixels * 0.08;
     const minimumContact = inchesToPixels * 0.25;
     let best = null;
@@ -4096,8 +4227,8 @@ export default function InteractiveLOSTool() {
     if (!linkedId) return;
     const linked = state.current.layoutTerrain.find((terrain) => terrain.id === linkedId);
     if (!linked) return;
-    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
-    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.x = boardWidthInches() - source.x;
+    linked.y = boardHeightInches() - source.y;
     linked.rotation = ((source.rotation || 0) + 180) % 360;
     if (syncMirrored) linked.mirrored = source.mirrored === true;
   }
@@ -4107,8 +4238,8 @@ export default function InteractiveLOSTool() {
     if (!linkedId) return;
     const linked = state.current.layoutWalls.find((wall) => wall.id === linkedId);
     if (!linked) return;
-    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
-    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.x = boardWidthInches() - source.x;
+    linked.y = boardHeightInches() - source.y;
     linked.rotation = ((source.rotation || 0) + 180) % 360;
     if (syncMirrored) linked.mirrored = source.mirrored === true;
   }
@@ -4118,8 +4249,8 @@ export default function InteractiveLOSTool() {
     if (!linkedId) return;
     const linked = state.current.layoutFeaturePieces.find((feature) => feature.id === linkedId);
     if (!linked) return;
-    linked.x = BATTLEFIELD_WIDTH_INCHES - source.x;
-    linked.y = BATTLEFIELD_HEIGHT_INCHES - source.y;
+    linked.x = boardWidthInches() - source.x;
+    linked.y = boardHeightInches() - source.y;
     linked.rotation = ((source.rotation || 0) + 180) % 360;
     if (syncMirrored) linked.mirrored = source.mirrored === true;
   }
@@ -4321,6 +4452,7 @@ export default function InteractiveLOSTool() {
       boardY: stagingPosition.y,
       allegiance,
       shape,
+      visible: true,
     };
     state.current.layoutObjectives.push(objective);
     setSelectedLayoutObjectiveId(objective.id);
@@ -4366,6 +4498,7 @@ export default function InteractiveLOSTool() {
         boardY: Number.isFinite(objective.boardY) ? objective.boardY : worldToBattlefieldPoint(objective).y,
         allegiance: objective.allegiance,
         shape: objective.shape,
+        visible: objective.visible !== false,
       })),
       walls: state.current.walls.filter((wall) => !wall.generatedLayoutWall).map((wall) => ({
         a: worldToBattlefieldPoint(wall.a),
@@ -4376,9 +4509,10 @@ export default function InteractiveLOSTool() {
     setStatus("Terrain, reusable walls, and objective fixture positions saved.");
   }
 
-  function applySelectedLayout() {
-    const layoutKey = `${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
-    const preset = LAYOUT_PRESETS[layoutKey];
+  function applySelectedLayout(editable = false) {
+    const selectedLayout = layoutPresetFor(defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant);
+    const layoutKey = selectedLayout.key;
+    const preset = selectedLayout.preset;
     if (!preset) {
       setStatus("This layout preset has not been added yet. Layouts A and B are currently available for Take and Hold versus Take and Hold.");
       return;
@@ -4391,6 +4525,10 @@ export default function InteractiveLOSTool() {
       || state.current.layoutObjectives.length;
     if (hasExistingLayout && !window.confirm("Replace the current terrain, objectives, and deployment lines with this layout preset? Armies and planning tools will remain in place.")) return;
 
+    state.current.boardWidthInches = BATTLEFIELD_WIDTH_INCHES;
+    state.current.boardHeightInches = BATTLEFIELD_HEIGHT_INCHES;
+    setCustomGridLength(BATTLEFIELD_WIDTH_INCHES);
+    setCustomGridWidth(BATTLEFIELD_HEIGHT_INCHES);
     calculateFit();
     const fixtureKey = `warhammer-layout-fixture:v11:${layoutKey}`;
     let savedFixture = null;
@@ -4403,7 +4541,10 @@ export default function InteractiveLOSTool() {
     const savedTerrainGroups = Array.isArray(savedFixture?.terrainGroups) ? savedFixture.terrainGroups : (preset.terrainGroups || []);
     const savedWallLinks = Array.isArray(savedFixture?.wallLinks) ? savedFixture.wallLinks : (preset.wallLinks || []);
     const savedFeatureLinks = Array.isArray(savedFixture?.featureLinks) ? savedFixture.featureLinks : (preset.featureLinks || []);
-    const savedObjectives = Array.isArray(savedFixture?.objectives) ? savedFixture.objectives : (preset.objectives || []);
+    const presetObjectives = preset.objectives || [];
+    const savedObjectives = Array.isArray(savedFixture?.objectives) && savedFixture.objectives.length
+      ? savedFixture.objectives
+      : presetObjectives;
     const savedWalls = Array.isArray(savedFixture?.walls) ? savedFixture.walls : (preset.walls || []);
     const savedWallPieces = Array.isArray(savedFixture?.wallPieces) ? savedFixture.wallPieces : null;
     const savedTerrainFeatures = [];
@@ -4448,14 +4589,18 @@ export default function InteractiveLOSTool() {
     state.current.layoutTerrainGroups = savedTerrainGroups
       .filter((group) => Array.isArray(group) && group.length >= 2)
       .map((group) => [...group]);
-    state.current.layoutObjectives = savedObjectives?.length === preset.objectives.length
-      ? savedObjectives.map((objective, index) => ({
+    state.current.layoutObjectives = savedObjectives.length
+      ? savedObjectives.map((objective, index) => {
+        const fallback = presetObjectives[index] || objective;
+        return {
         id: objective.id || `layout-objective-${index}`,
-        boardX: objective.boardX,
-        boardY: objective.boardY,
-        allegiance: objective.allegiance || preset.objectives[index].allegiance,
-        shape: objective.shape || (preset.objectives[index].allegiance === "neutral" && index !== 2 ? "diamond" : "circle"),
-      }))
+        boardX: Number.isFinite(objective.boardX) ? objective.boardX : fallback.boardX ?? fallback.x,
+        boardY: Number.isFinite(objective.boardY) ? objective.boardY : fallback.boardY ?? fallback.y,
+        allegiance: objective.allegiance || fallback.allegiance,
+        shape: objective.shape || (fallback.allegiance === "neutral" && index !== 2 ? "diamond" : "circle"),
+        visible: objective.visible !== false,
+      };
+      })
       : [];
     const presetWallPieces = preset.wallPieces || DEFAULT_LAYOUT_WALL_SET;
     state.current.layoutWalls = savedWallPieces?.length
@@ -4512,8 +4657,8 @@ export default function InteractiveLOSTool() {
 
     setHomeDeploymentRangeInches("unlimited");
     setEnemyDeploymentRangeInches("unlimited");
-    setPixelsPerInch(state.current.fit.w / BATTLEFIELD_WIDTH_INCHES);
-    setLayoutEditMode(true);
+    setPixelsPerInch(state.current.fit.w / boardWidthInches());
+    setLayoutEditMode(editable);
     setSelectedLayoutTerrainId(null);
     setSelectedLayoutWallId(null);
     setSelectedLayoutObjectiveId(null);
@@ -4525,7 +4670,78 @@ export default function InteractiveLOSTool() {
     updateVisibility();
     draw();
     scheduleBrowserSave();
-    setStatus(`${preset.source} applied. Existing armies, rulers, and LOS markers were kept.`);
+    setStatus(`${preset.source} applied${selectedLayout.reversed ? " using the reversed force disposition map" : ""}${editable ? " for editing" : ""}. Existing armies, rulers, and LOS markers were kept.`);
+  }
+
+  function createBlankMapFromGridInputs() {
+    const width = Math.max(1, Number(customGridLength) || BATTLEFIELD_WIDTH_INCHES);
+    const height = Math.max(1, Number(customGridWidth) || BATTLEFIELD_HEIGHT_INCHES);
+    imgRef.current = null;
+    state.current.boardWidthInches = width;
+    state.current.boardHeightInches = height;
+    state.current.activeLayoutKey = null;
+    state.current.blockers = [];
+    state.current.blockerIds = [];
+    state.current.interactiveBlockers = [];
+    state.current.walls = [];
+    state.current.layoutTerrain = [];
+    state.current.layoutTerrainLinks = [];
+    state.current.layoutTerrainGroups = [];
+    state.current.layoutWalls = [];
+    state.current.layoutWallLinks = [];
+    state.current.layoutTerrainFeatures = [];
+    state.current.layoutFeaturePieces = [];
+    state.current.layoutFeatureLinks = [];
+    state.current.layoutObjectives = [];
+    state.current.deploymentLine = null;
+    state.current.deploymentPath = [];
+    state.current.deploymentDraft = [];
+    state.current.deploymentPreview = null;
+    state.current.enemyDeploymentLine = null;
+    state.current.enemyDeploymentPath = [];
+    state.current.enemyDeploymentDraft = [];
+    state.current.enemyDeploymentPreview = null;
+    state.current.currentPoly = [];
+    state.current.wallPath = [];
+    state.current.wallPreview = null;
+    state.current.camera = { scale: 1, x: 0, y: 0 };
+    calculateFit();
+    setPixelsPerInch(state.current.fit.w / boardWidthInches());
+    setLayoutEditMode(true);
+    setSelectedLayoutTerrainId(null);
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutFeatureId(null);
+    setSelectedLayoutObjectiveId(null);
+    setMode("pan");
+    setImageReady(false);
+    if (fileRef.current) fileRef.current.value = "";
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`Created a blank ${height}\" x ${width}\" grid. Each square is 1 inch.`);
+  }
+
+  function toggleLayoutEditing() {
+    if (layoutEditMode) {
+      setLayoutEditMode(false);
+      setSelectedLayoutTerrainId(null);
+      setSelectedLayoutWallId(null);
+      setSelectedLayoutFeatureId(null);
+      setSelectedLayoutObjectiveId(null);
+      setLayoutLinkMode(false);
+      setFirstLinkedTerrainId(null);
+      setFirstLinkedWallId(null);
+      setFirstLinkedFeatureId(null);
+      saveLayoutFixture();
+      return;
+    }
+    if (!state.current.layoutTerrain.length && !state.current.layoutWalls.length && !state.current.layoutFeaturePieces.length && !state.current.layoutObjectives.length) {
+      setStatus("Create, upload, or display a layout before editing layout objects.");
+      return;
+    }
+    setScaleInches(1);
+    setPixelsPerInch(state.current.fit.w / boardWidthInches());
+    setLayoutEditMode(true);
   }
 
   const sortedMarkers = sortedLosMarkers();
@@ -4543,7 +4759,7 @@ export default function InteractiveLOSTool() {
         : []),
     ]
     : [];
-  const selectedLayoutPreset = LAYOUT_PRESETS[`${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`];
+  const selectedLayoutPreset = layoutPresetFor(defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant).preset;
   const activeTerrainRelation = layoutTerrainRelationVersion >= 0 ? selectedTerrainRelation() : null;
 
   return (
@@ -4551,7 +4767,6 @@ export default function InteractiveLOSTool() {
       <div style={styles.body}>
         <div style={{ ...styles.sidebarShell, width: sidebarCollapsed ? 0 : 360 }}>
           <aside style={{ ...styles.sidebar, transform: sidebarCollapsed ? "translateX(-100%)" : "translateX(0)" }}>
-          <button onClick={() => fileRef.current?.click()} style={styles.uploadButton}>Upload map</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
 
           <div style={{ ...styles.sidebarSection, order: 1 }}>
@@ -4634,57 +4849,9 @@ export default function InteractiveLOSTool() {
                     {['A', 'B', 'C'].map((variant) => <option key={variant} value={variant}>Layout {variant}</option>)}
                   </select>
                 </label>
-                <ToolButton active={Boolean(selectedLayoutPreset)} onClick={applySelectedLayout}>
+                <ToolButton active={Boolean(selectedLayoutPreset)} onClick={() => applySelectedLayout(false)}>
                   {selectedLayoutPreset ? "Apply Layout" : "Layout coming soon"}
                 </ToolButton>
-                <div style={styles.layoutEditorControls}>
-                  <ToolButton onClick={() => addLayoutObjective("home", "circle", "Home objective marker")}>Home objective</ToolButton>
-                  <ToolButton onClick={() => addLayoutObjective("enemy", "circle", "Enemy objective marker")}>Enemy objective</ToolButton>
-                  <ToolButton onClick={() => addLayoutObjective("neutral", "diamond", "Expansion objective marker")}>Expansion objective</ToolButton>
-                  <ToolButton onClick={() => addLayoutObjective("neutral", "circle", "Central objective marker")}>Central objective</ToolButton>
-                </div>
-                <div style={styles.layoutEditorControls}>
-                  <ToolButton active={layoutEditMode} onClick={() => {
-                    if (!state.current.layoutTerrain.length) {
-                      setStatus("Apply the selected layout before editing its terrain.");
-                      return;
-                    }
-                    setLayoutEditMode((editing) => !editing);
-                    setSelectedLayoutTerrainId(null);
-                    setSelectedLayoutWallId(null);
-                    setSelectedLayoutFeatureId(null);
-                    setSelectedLayoutObjectiveId(null);
-                    setLayoutLinkMode(false);
-                    setFirstLinkedTerrainId(null);
-                    setFirstLinkedWallId(null);
-                    setFirstLinkedFeatureId(null);
-                  }}>{layoutEditMode ? "Finish editing" : "Edit layout"}</ToolButton>
-                  <ToolButton active={layoutLinkMode} onClick={beginLayoutTerrainLinking}>Link</ToolButton>
-                  <ToolButton onClick={removeLayoutTerrainLinks}>Remove links</ToolButton>
-                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(-1)}>Rotate left 1 degree</ToolButton>
-                  <ToolButton onClick={() => rotateSelectedLayoutTerrain(1)}>Rotate right 1 degree</ToolButton>
-                  <ToolButton onClick={mirrorSelectedLayoutTerrain}>Mirror</ToolButton>
-                  {selectedLayoutTerrainId && activeTerrainRelation && (
-                    <>
-                      <ToolButton active={activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(true)}>Same footprint</ToolButton>
-                      <ToolButton active={!activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(false)}>Separate footprints</ToolButton>
-                    </>
-                  )}
-                  {selectedLayoutWallId && (
-                    <>
-                      <ToolButton onClick={() => setSelectedWallFloorState("ground")}>Ground</ToolButton>
-                      <ToolButton onClick={() => setSelectedWallFloorState("firstFloor")}>1st Floor</ToolButton>
-                    </>
-                  )}
-                  {Object.entries(LAYOUT_FEATURE_TYPES).map(([type, definition]) => (
-                    <ToolButton key={type} onClick={() => addLayoutFeature(type)}>{definition.button}</ToolButton>
-                  ))}
-                  {Object.keys(LAYOUT_WALL_TYPES).map((type) => (
-                    <ToolButton key={type} onClick={() => addLayoutWall(type)}>Add {type} wall</ToolButton>
-                  ))}
-                  <ToolButton onClick={restorePresetDeploymentLines}>Restore deploy lines</ToolButton>
-                  <ToolButton onClick={saveLayoutFixture}>Save Layout Fixture</ToolButton>
-                </div>
                 <div style={styles.layoutMissionSummary}>
                   <span style={styles.layoutMissionLabel}>Primary Mission</span>
                   <strong>{selectedPrimaryMission}</strong>
@@ -4719,17 +4886,160 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
+          <div style={{ ...styles.sidebarSection, order: 8 }}>
+            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("createUpload")}>
+              <span style={styles.sectionTriangle}>{sectionOpen.createUpload ? "▾" : "▸"}</span>
+              <span>Create/Upload Map</span>
+            </button>
+            {sectionOpen.createUpload && (
+              <div style={styles.sectionContent}>
+                <MapSubsection
+                  title="Modify layout"
+                  summary="Load a preset, then unlock it if you want to change it."
+                  open={mapSectionOpen.modify}
+                  onToggle={() => toggleMapSection("modify")}
+                >
+                  <div style={styles.layoutField}>
+                    <span style={styles.markerDetailLabel}>Defender&apos;s Force Disposition</span>
+                    <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Defender's Force Disposition" />
+                  </div>
+                  <div style={styles.layoutField}>
+                    <span style={styles.markerDetailLabel}>Attacker&apos;s Force Disposition</span>
+                    <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Attacker's Force Disposition" />
+                  </div>
+                  <label style={styles.layoutField}>
+                    <span style={styles.markerDetailLabel}>Layout A/B/C</span>
+                    <select value={selectedLayoutVariant} onChange={(event) => setSelectedLayoutVariant(event.target.value)} style={styles.fullInput}>
+                      {['A', 'B', 'C'].map((variant) => <option key={variant} value={variant}>Layout {variant}</option>)}
+                    </select>
+                  </label>
+                  <div style={styles.layoutEditorControls}>
+                    <ToolButton active={Boolean(selectedLayoutPreset)} onClick={() => applySelectedLayout(false)}>
+                      {selectedLayoutPreset ? "Display layout to modify" : "Layout coming soon"}
+                    </ToolButton>
+                    <ToolButton active={layoutEditMode} onClick={() => {
+                      if (!state.current.activeLayoutKey) applySelectedLayout(true);
+                      else toggleLayoutEditing();
+                    }}>
+                      Modify Layout
+                    </ToolButton>
+                  </div>
+                </MapSubsection>
+
+                <MapSubsection
+                  title="Upload Map"
+                  summary="Use a custom image as the map background."
+                  open={mapSectionOpen.upload}
+                  onToggle={() => toggleMapSection("upload")}
+                >
+                  <ToolButton onClick={() => fileRef.current?.click()}>Upload map</ToolButton>
+                </MapSubsection>
+
+                <MapSubsection
+                  title="Create Map"
+                  summary="Build a blank grid where every square is 1 inch."
+                  open={mapSectionOpen.create}
+                  onToggle={() => toggleMapSection("create")}
+                >
+                  <div style={styles.sidebarRow}>
+                    <label style={styles.inlineNumberLabel}>
+                      W
+                      <input type="number" min="1" step="1" value={customGridWidth} onChange={(event) => setCustomGridWidth(Number(event.target.value))} style={styles.smallInput} title="Grid height from bottom to top" />
+                    </label>
+                    <label style={styles.inlineNumberLabel}>
+                      L
+                      <input type="number" min="1" step="1" value={customGridLength} onChange={(event) => setCustomGridLength(Number(event.target.value))} style={styles.smallInput} title="Grid length from left to right" />
+                    </label>
+                    <ToolButton onClick={createBlankMapFromGridInputs}>Create map</ToolButton>
+                  </div>
+                </MapSubsection>
+
+                <MapSubsection
+                  title="Edit Layout"
+                  summary="Move, add, rotate, mirror, link, and save layout objects."
+                  open={mapSectionOpen.edit}
+                  onToggle={() => toggleMapSection("edit")}
+                >
+                  <div style={styles.layoutEditorControls}>
+                    <ToolButton active={layoutEditMode} onClick={toggleLayoutEditing}>{layoutEditMode ? "Finish editing" : "Start editing"}</ToolButton>
+                    <ToolButton active={mode === "scale"} disabled={state.current.activeLayoutKey || !imgRef.current} onClick={() => setMode("scale")}>Set scale</ToolButton>
+                  </div>
+                  <EditControlSection title="Preset light and dense terrain features" open={editSubsectionOpen.features} onToggle={() => toggleEditSubsection("features")}>
+                    <div style={styles.layoutEditorControls}>
+                      {Object.entries(LAYOUT_FEATURE_TYPES).map(([type, definition]) => (
+                        <ToolButton key={type} onClick={() => addLayoutFeature(type)}>{definition.button}</ToolButton>
+                      ))}
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Preset walls" open={editSubsectionOpen.walls} onToggle={() => toggleEditSubsection("walls")}>
+                    <div style={styles.layoutEditorControls}>
+                      {Object.keys(LAYOUT_WALL_TYPES).map((type) => (
+                        <ToolButton key={type} onClick={() => addLayoutWall(type)}>Add {type} wall</ToolButton>
+                      ))}
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Free draw" open={editSubsectionOpen.freeDraw} onToggle={() => toggleEditSubsection("freeDraw")}>
+                    <div style={styles.layoutEditorControls}>
+                      <ToolButton active={mode === "wall"} onClick={() => { setLayoutEditMode(true); setMode("wall"); }}>Draw Wall (W)</ToolButton>
+                      <ToolButton active={mode === "block"} onClick={() => { setLayoutEditMode(true); setMode("block"); }}>Draw Footprint (F)</ToolButton>
+                      <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
+                      <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Manipulation" open={editSubsectionOpen.manipulation} onToggle={() => toggleEditSubsection("manipulation")}>
+                    <div style={styles.layoutEditorControls}>
+                      <ToolButton onClick={mirrorSelectedLayoutTerrain}>Mirror</ToolButton>
+                      <ToolButton active={layoutLinkMode} onClick={beginLayoutTerrainLinking}>Link</ToolButton>
+                      <ToolButton onClick={removeLayoutTerrainLinks}>Remove links</ToolButton>
+                      <ToolButton onClick={() => rotateSelectedLayoutTerrain(1)}>Rotate right 1 degree</ToolButton>
+                      <ToolButton onClick={() => rotateSelectedLayoutTerrain(-1)}>Rotate left 1 degree</ToolButton>
+                      {selectedLayoutTerrainId && activeTerrainRelation && (
+                        <>
+                          <ToolButton active={activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(true)}>Same footprint</ToolButton>
+                          <ToolButton active={!activeTerrainRelation.same} onClick={() => setSelectedTerrainFootprintRelation(false)}>Separate footprints</ToolButton>
+                        </>
+                      )}
+                      {selectedLayoutWallId && (
+                        <>
+                          <ToolButton onClick={() => setSelectedWallFloorState("ground")}>Ground</ToolButton>
+                          <ToolButton onClick={() => setSelectedWallFloorState("firstFloor")}>1st Floor</ToolButton>
+                        </>
+                      )}
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Deployment line" open={editSubsectionOpen.deployment} onToggle={() => toggleEditSubsection("deployment")}>
+                    <div style={styles.deploymentLineEditControls}>
+                      <div style={styles.actionPairRow}>
+                        <ToolButton active={mode === "deployHome"} onClick={() => { setLayoutEditMode(true); setMode("deployHome"); }}>Draw Home Deploy Line</ToolButton>
+                        <ToolButton onClick={() => clearDeploymentLOS("home")}>Clear Home Line</ToolButton>
+                      </div>
+                      <div style={styles.actionPairRow}>
+                        <ToolButton active={mode === "deployEnemy"} onClick={() => { setLayoutEditMode(true); setMode("deployEnemy"); }}>Draw Opponent&apos;s Deploy Line</ToolButton>
+                        <ToolButton onClick={() => clearDeploymentLOS("enemy")}>Clear Opp&apos;s line</ToolButton>
+                      </div>
+                      <ToolButton onClick={restorePresetDeploymentLines}>Restore deploy lines</ToolButton>
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Objectives" open={editSubsectionOpen.objectives} onToggle={() => toggleEditSubsection("objectives")}>
+                    <div style={styles.layoutEditorControls}>
+                      <ToolButton onClick={() => addLayoutObjective("home", "circle", "Home objective marker")}>Home objective</ToolButton>
+                      <ToolButton onClick={() => addLayoutObjective("enemy", "circle", "Enemy objective marker")}>Enemy objective</ToolButton>
+                      <ToolButton onClick={() => addLayoutObjective("neutral", "diamond", "Expansion objective marker")}>Expansion objective</ToolButton>
+                      <ToolButton onClick={() => addLayoutObjective("neutral", "circle", "Central objective marker")}>Central objective</ToolButton>
+                    </div>
+                  </EditControlSection>
+                </MapSubsection>
+              </div>
+            )}
+          </div>
+
           <div style={{ ...styles.sidebarSection, order: 6 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("scale")}>
               <span style={styles.sectionTriangle}>{sectionOpen.scale ? "▾" : "▸"}</span>
-              <span>Scale, Rulers &amp; Deepstrike</span>
+              <span>Rulers &amp; Deepstrike</span>
             </button>
             {sectionOpen.scale && (
               <div style={styles.sectionContent}>
-                <div style={styles.sidebarRow}>
-                  <input type="number" min="0.1" step="0.1" value={scaleInches} onChange={(e) => setScaleInches(Number(e.target.value))} style={styles.smallInput} title="Known distance in inches" />
-                  <ToolButton active={mode === "scale"} onClick={() => setMode("scale")}>Set scale</ToolButton>
-                </div>
                 <div style={styles.sidebarRow}>
                   <ToolButton active={mode === "ruler"} onClick={() => setMode("ruler")}>Ruler</ToolButton>
                   <ToolButton onClick={clearRulers}>Clear rulers</ToolButton>
@@ -5037,18 +5347,10 @@ export default function InteractiveLOSTool() {
           <div style={{ ...styles.sidebarSection, order: 7 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("draw")}>
               <span style={styles.sectionTriangle}>{sectionOpen.draw ? "▾" : "▸"}</span>
-              <span>Draw, Deploy & Enemies</span>
+              <span>Deploy &amp; Enemies</span>
             </button>
             {sectionOpen.draw && (
               <div style={styles.sectionContent}>
-                <div style={styles.actionPairRow}>
-                  <ToolButton active={mode === "block"} onClick={() => setMode("block")}>Draw Footprint (F)</ToolButton>
-                  <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
-                </div>
-                <div style={styles.actionPairRow}>
-                  <ToolButton active={mode === "wall"} onClick={() => setMode("wall")}>Draw Wall (W)</ToolButton>
-                  <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
-                </div>
                 <div style={styles.actionPairRow}>
                   <ToolButton active={mode === "enemy"} onClick={() => setMode("enemy")}>Add Enemy (E)</ToolButton>
                   <ToolButton onClick={clearEnemies}>Clear enemies</ToolButton>
@@ -5091,6 +5393,12 @@ export default function InteractiveLOSTool() {
         <main style={styles.mainArea}>
           <div style={styles.toolbar}>
             <ToolButton active={mode === "pan"} onClick={() => setMode("pan")}>Pan map (P)</ToolButton>
+            <ToolButton active={!showLightTerrainFeatures} onClick={() => setShowLightTerrainFeatures((visible) => !visible)}>
+              {showLightTerrainFeatures ? "Hide light terrain features" : "Show light terrain features"}
+            </ToolButton>
+            <ToolButton active={!showDenseTerrainFeatures} onClick={() => setShowDenseTerrainFeatures((visible) => !visible)}>
+              {showDenseTerrainFeatures ? "Hide dense terrain features" : "Show dense terrain features"}
+            </ToolButton>
             <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase (X)</ToolButton>
             <ToolButton onClick={undo}>Undo (Z)</ToolButton>
           </div>
@@ -5244,6 +5552,64 @@ const styles = {
     flexDirection: "column",
     gap: 8,
   },
+  mapSubsection: {
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: 12,
+    padding: 8,
+    background: "rgba(255,255,255,.04)",
+    marginBottom: 8,
+  },
+  mapSubsectionHeader: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 0",
+    border: 0,
+    background: "transparent",
+    color: "#f8fafc",
+    fontSize: 13,
+    fontWeight: 850,
+    textTransform: "uppercase",
+    letterSpacing: ".04em",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  mapSubsectionSummary: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: 800,
+    lineHeight: 1.25,
+    margin: "0 0 6px 22px",
+  },
+  mapSubsectionBody: {
+    display: "grid",
+    gap: 8,
+    marginTop: 6,
+  },
+  editControlSection: {
+    borderTop: "1px solid rgba(255,255,255,.10)",
+    paddingTop: 7,
+  },
+  editControlHeader: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 0",
+    border: 0,
+    background: "transparent",
+    color: "#e2e8f0",
+    fontSize: 12,
+    fontWeight: 850,
+    textAlign: "left",
+    cursor: "pointer",
+    textTransform: "uppercase",
+    letterSpacing: ".03em",
+  },
+  editControlBody: {
+    marginTop: 6,
+  },
   layoutField: {
     display: "grid",
     gap: 2,
@@ -5252,6 +5618,10 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 5,
+  },
+  deploymentLineEditControls: {
+    display: "grid",
+    gap: 6,
   },
   forceDispositionSelectWrap: {
     position: "relative",
@@ -5543,6 +5913,14 @@ const styles = {
     gap: 6,
     alignItems: "center",
     marginBottom: 8,
+  },
+  inlineNumberLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 800,
   },
   actionPairRow: {
     display: "grid",
@@ -5852,9 +6230,10 @@ const styles = {
   },
 };
 
-function ToolButton({ active, onClick, children }) {
+function ToolButton({ active, disabled, onClick, children }) {
   return (
     <button
+      disabled={disabled}
       onClick={onClick}
       style={{
         padding: "8px 10px",
@@ -5862,13 +6241,39 @@ function ToolButton({ active, onClick, children }) {
         border: active ? "1px solid #60a5fa" : "1px solid rgba(255,255,255,.18)",
         background: active ? "rgba(37,99,235,.35)" : "rgba(255,255,255,.08)",
         color: "white",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
         whiteSpace: "nowrap",
         fontWeight: active ? 700 : 500,
+        opacity: disabled ? 0.45 : 1,
       }}
     >
       {children}
     </button>
+  );
+}
+
+function MapSubsection({ title, summary, open, onToggle, children }) {
+  return (
+    <div style={styles.mapSubsection}>
+      <button type="button" onClick={onToggle} style={styles.mapSubsectionHeader}>
+        <span style={styles.sectionTriangle}>{open ? "▾" : "▸"}</span>
+        <span>{title}</span>
+      </button>
+      <div style={styles.mapSubsectionSummary}>{summary}</div>
+      {open && <div style={styles.mapSubsectionBody}>{children}</div>}
+    </div>
+  );
+}
+
+function EditControlSection({ title, open, onToggle, children }) {
+  return (
+    <div style={styles.editControlSection}>
+      <button type="button" onClick={onToggle} style={styles.editControlHeader}>
+        <span style={styles.sectionTriangle}>{open ? "▾" : "▸"}</span>
+        <span>{title}</span>
+      </button>
+      {open && <div style={styles.editControlBody}>{children}</div>}
+    </div>
   );
 }
 
@@ -6676,15 +7081,15 @@ function drawGroupedTerrainOutlines(ctx, blockers, scale = 1) {
   ctx.restore();
 }
 
-function drawBattlefieldGrid(ctx, fit, scale = 1) {
+function drawBattlefieldGrid(ctx, fit, scale = 1, boardWidth = BATTLEFIELD_WIDTH_INCHES, boardHeight = BATTLEFIELD_HEIGHT_INCHES) {
   if (!fit?.w || !fit?.h) return;
-  const inch = fit.w / BATTLEFIELD_WIDTH_INCHES;
+  const inch = fit.w / boardWidth;
   ctx.save();
   ctx.beginPath();
   ctx.rect(fit.x, fit.y, fit.w, fit.h);
   ctx.clip();
 
-  for (let x = 0; x <= BATTLEFIELD_WIDTH_INCHES; x++) {
+  for (let x = 0; x <= boardWidth; x++) {
     ctx.beginPath();
     ctx.moveTo(fit.x + x * inch, fit.y);
     ctx.lineTo(fit.x + x * inch, fit.y + fit.h);
@@ -6692,12 +7097,13 @@ function drawBattlefieldGrid(ctx, fit, scale = 1) {
     ctx.strokeStyle = x % 5 === 0 ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.14)";
     ctx.stroke();
   }
-  for (let y = 0; y <= BATTLEFIELD_HEIGHT_INCHES; y++) {
+  for (let y = 0; y <= boardHeight; y++) {
     ctx.beginPath();
     ctx.moveTo(fit.x, fit.y + y * inch);
     ctx.lineTo(fit.x + fit.w, fit.y + y * inch);
-    ctx.lineWidth = (y % 5 === 0 ? 1.25 : 0.65) / scale;
-    ctx.strokeStyle = y % 5 === 0 ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.14)";
+    const distanceFromBottom = boardHeight - y;
+    ctx.lineWidth = (distanceFromBottom % 5 === 0 ? 1.25 : 0.65) / scale;
+    ctx.strokeStyle = distanceFromBottom % 5 === 0 ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.14)";
     ctx.stroke();
   }
 
@@ -6726,6 +7132,7 @@ function drawLayoutObjective(ctx, objective, pixelsPerInch, scale = 1) {
     ? "#075985"
     : objective.allegiance === "enemy" ? "#991b1b" : "#0f766e";
   ctx.save();
+  ctx.globalAlpha = objective.visible === false ? 0.05 : 1;
   ctx.beginPath();
   if (objective.shape === "diamond") {
     ctx.moveTo(objective.x, objective.y - radius * 1.15);
@@ -6799,6 +7206,30 @@ function drawLayoutObjective(ctx, objective, pixelsPerInch, scale = 1) {
     ctx.moveTo(objective.x + skullScale * offset, objective.y + skullScale * 0.43);
     ctx.lineTo(objective.x + skullScale * offset, objective.y + skullScale * 0.64);
     ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawObjectiveVisibilityControls(ctx, buttons, visible, scale = 1) {
+  ctx.save();
+  buttons.forEach((button) => {
+    const active = button.visible ? visible : !visible;
+    const cx = button.x + button.size / 2;
+    const cy = button.y + button.size / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, button.size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = button.visible
+      ? active ? "rgba(34,197,94,.95)" : "rgba(100,116,139,.95)"
+      : active ? "rgba(239,68,68,.95)" : "rgba(100,116,139,.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.lineWidth = 1.5 / scale;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${12 / scale}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(button.visible ? "◉" : "⊘", cx, cy);
   });
   ctx.restore();
 }
@@ -7355,17 +7786,17 @@ function drawMeasurementLine(ctx, a, b, label, scale = 1) {
   ctx.restore();
 }
 
-function deploymentLabelWorldPoint(boardPosition, fit) {
+function deploymentLabelWorldPoint(boardPosition, fit, boardWidth = BATTLEFIELD_WIDTH_INCHES, boardHeight = BATTLEFIELD_HEIGHT_INCHES) {
   if (!fit || !Number.isFinite(boardPosition?.x) || !Number.isFinite(boardPosition?.y)) return null;
   return {
-    x: fit.x + (boardPosition.x / BATTLEFIELD_WIDTH_INCHES) * fit.w,
-    y: fit.y + (boardPosition.y / BATTLEFIELD_HEIGHT_INCHES) * fit.h,
+    x: fit.x + (boardPosition.x / boardWidth) * fit.w,
+    y: fit.y + (boardPosition.y / boardHeight) * fit.h,
   };
 }
 
-function deploymentLineCaptionRect(ctx, label, path, fit, scale = 1, boardPosition = null) {
+function deploymentLineCaptionRect(ctx, label, path, fit, scale = 1, boardPosition = null, boardWidth = BATTLEFIELD_WIDTH_INCHES, boardHeight = BATTLEFIELD_HEIGHT_INCHES) {
   if (!fit || !path?.length) return null;
-  const customPoint = deploymentLabelWorldPoint(boardPosition, fit);
+  const customPoint = deploymentLabelWorldPoint(boardPosition, fit, boardWidth, boardHeight);
   let midpoint = customPoint || path[0];
   let isVertical = false;
   let edge = midpoint.x <= fit.x + fit.w / 2 ? "left" : "right";
@@ -7398,7 +7829,7 @@ function deploymentLineCaptionRect(ctx, label, path, fit, scale = 1, boardPositi
     isVertical = maxY - minY > maxX - minX;
     edge = Math.abs(midpoint.x - fit.x) <= Math.abs(midpoint.x - (fit.x + fit.w)) ? "left" : "right";
   }
-  const inch = fit.w / BATTLEFIELD_WIDTH_INCHES;
+  const inch = fit.w / boardWidth;
   const width = 4 * inch;
   const height = 1 * inch;
   const gap = 6 / scale;
@@ -7694,7 +8125,9 @@ function closestUnitStickyGeometry(unitMembers, target, unitFirst = true) {
   let closestDistance = Infinity;
   unitMembers.forEach((member) => {
     let geometry;
-    if (target.poly) {
+    if (target.segments) {
+      geometry = closestSegmentsToEllipsePoints(target.segments, member, !unitFirst);
+    } else if (target.poly) {
       geometry = closestPolygonToEllipsePoints(target.poly, member, !unitFirst);
     } else {
       geometry = unitFirst
@@ -7820,8 +8253,37 @@ function closestPointOnPolygon(p, poly) {
   return closest;
 }
 
+function closestPointOnSegments(p, segments) {
+  let closest = segments[0]?.a || p;
+  let closestDistance = Infinity;
+  segments.forEach((segment) => {
+    const candidate = closestPointOnSegment(p, segment.a, segment.b);
+    const distance = dist(p, candidate);
+    if (distance < closestDistance) {
+      closest = candidate;
+      closestDistance = distance;
+    }
+  });
+  return closest;
+}
+
 function pointNearPolygon(p, poly, threshold) {
   return dist(p, closestPointOnPolygon(p, poly)) <= threshold;
+}
+
+function closestSegmentsToEllipsePoints(segments, ellipse, segmentsFirst = false) {
+  const segmentPoint = closestPointOnSegments(ellipse.center, segments);
+  const dx = segmentPoint.x - ellipse.center.x;
+  const dy = segmentPoint.y - ellipse.center.y;
+  const length = Math.hypot(dx, dy);
+  if (!length) return { a: segmentPoint, b: segmentPoint };
+  const radius = ellipseRadiusInDirection(ellipse, dx, dy);
+  if (length <= radius) return { a: segmentPoint, b: segmentPoint };
+  const ellipsePoint = {
+    x: ellipse.center.x + dx / length * radius,
+    y: ellipse.center.y + dy / length * radius,
+  };
+  return segmentsFirst ? { a: segmentPoint, b: ellipsePoint } : { a: ellipsePoint, b: segmentPoint };
 }
 
 function closestPolygonToEllipsePoints(poly, ellipse, polygonFirst = false) {
