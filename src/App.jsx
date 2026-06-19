@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import BASE_DATABASE from "./baseSizes.json";
 import LAYOUT_PRESETS from "./layoutPresets.json";
 import LOS_TERRAIN_DATA from "./losTerrain.json";
@@ -90,6 +90,17 @@ const DOUBLE_SIDED_PRIMARY_MISSIONS = new Set([
   "Triangulation",
 ]);
 
+function missionCardsFor(mission) {
+  const slug = PRIMARY_MISSION_CARD_SLUGS[mission];
+  if (!slug) return [];
+  return [
+    { side: "Front", src: `/mission-cards/${slug}-front.webp` },
+    ...(DOUBLE_SIDED_PRIMARY_MISSIONS.has(mission)
+      ? [{ side: "Back", src: `/mission-cards/${slug}-back.webp` }]
+      : []),
+  ];
+}
+
 const FORCE_DISPOSITION_STYLES = {
   "Take and Hold": { color: "#2f7054", icon: "hold" },
   "Purge the Foe": { color: "#982d31", icon: "sword" },
@@ -101,6 +112,15 @@ const FORCE_DISPOSITION_STYLES = {
 const BATTLEFIELD_WIDTH_INCHES = 44;
 const BATTLEFIELD_HEIGHT_INCHES = 60;
 const SOURCE_LAYOUT_WIDTH_INCHES = 60;
+const MOVEMENT_PHASES = ["deployment", "turn1", "turn2", "turn3", "turn4", "turn5"];
+const MOVEMENT_PHASE_LABELS = {
+  deployment: "Deployment",
+  turn1: "Turn 1",
+  turn2: "Turn 2",
+  turn3: "Turn 3",
+  turn4: "Turn 4",
+  turn5: "Turn 5",
+};
 
 const TERRAIN_FOOTPRINTS = Object.fromEntries(LOS_TERRAIN_DATA.pieces.map((piece) => {
   const [width, height] = piece.nominal_size_in;
@@ -117,6 +137,14 @@ const TERRAIN_FOOTPRINTS = Object.fromEntries(LOS_TERRAIN_DATA.pieces.map((piece
     dense: [],
   }];
 }));
+
+const GW_TERRAIN_FOOTPRINT_ROWS = [
+  { shape: "medium_rectangle", label: '6" x 4"', recommended: 4 },
+  { shape: "long_line", label: '10" x 2.5"', recommended: 2 },
+  { shape: "short_line", label: '6" x 2"', recommended: 4 },
+  { shape: "large_rectangle", label: '7" x 11.5"', recommended: 4 },
+  { shape: "right_triangle", label: '8" x 11.5"', recommended: 2 },
+];
 
 const LAYOUT_WALL_TYPES = {
   AB: { label: "AB", width: 5, height: 4, thickness: 0.5 },
@@ -238,7 +266,9 @@ export default function InteractiveLOSTool() {
   const [attackerForceDisposition, setAttackerForceDisposition] = useState("Take and Hold");
   const [selectedLayoutVariant, setSelectedLayoutVariant] = useState("A");
   const [missionCardsVisible, setMissionCardsVisible] = useState(false);
+  const [opponentMissionCardsVisible, setOpponentMissionCardsVisible] = useState(false);
   const [layoutEditMode, setLayoutEditMode] = useState(false);
+  const [selectiveFootprintRemoveMode, setSelectiveFootprintRemoveMode] = useState(false);
   const [selectedLayoutTerrainId, setSelectedLayoutTerrainId] = useState(null);
   const [layoutTerrainRelationVersion, setLayoutTerrainRelationVersion] = useState(0);
   const [selectedLayoutWallId, setSelectedLayoutWallId] = useState(null);
@@ -260,6 +290,7 @@ export default function InteractiveLOSTool() {
   const [armyPresetName, setArmyPresetName] = useState("Army 1");
   const [armyPresetNames, setArmyPresetNames] = useState([]);
   const [selectedArmyPreset, setSelectedArmyPreset] = useState("");
+  const [editingArmyPresetName, setEditingArmyPresetName] = useState(false);
   const [editingSaveName, setEditingSaveName] = useState(false);
   const [showNewGamePrompt, setShowNewGamePrompt] = useState(false);
   const [expandedMissionCards, setExpandedMissionCards] = useState(null);
@@ -268,6 +299,8 @@ export default function InteractiveLOSTool() {
   const [customGridLength, setCustomGridLength] = useState(60);
   const [showLightTerrainFeatures, setShowLightTerrainFeatures] = useState(true);
   const [showDenseTerrainFeatures, setShowDenseTerrainFeatures] = useState(true);
+  const [movementPlanningEnabled, setMovementPlanningEnabled] = useState(false);
+  const [activeMovementPhase, setActiveMovementPhase] = useState("deployment");
   const [mapSectionOpen, setMapSectionOpen] = useState({
     modify: false,
     upload: false,
@@ -275,12 +308,14 @@ export default function InteractiveLOSTool() {
     edit: false,
   });
   const [editSubsectionOpen, setEditSubsectionOpen] = useState({
+    footprints: false,
     features: false,
     walls: false,
     freeDraw: false,
     manipulation: false,
     deployment: false,
     objectives: false,
+    exportDownload: false,
   });
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
@@ -340,6 +375,7 @@ export default function InteractiveLOSTool() {
     layoutTerrainFeatures: [],
     layoutFeaturePieces: [],
     layoutFeatureLinks: [],
+    movementPhases: {},
     layoutStagingIndex: 0,
     activeLayoutKey: null,
     currentPoly: [],
@@ -410,7 +446,7 @@ export default function InteractiveLOSTool() {
   useEffect(() => {
     draw();
     scheduleBrowserSave();
-  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId, selectedLayoutObjectiveId, showLightTerrainFeatures, showDenseTerrainFeatures]);
+  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectiveFootprintRemoveMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId, selectedLayoutObjectiveId, showLightTerrainFeatures, showDenseTerrainFeatures, movementPlanningEnabled, activeMovementPhase]);
 
   useEffect(() => {
     if (!layoutSaveReadyRef.current) {
@@ -418,7 +454,7 @@ export default function InteractiveLOSTool() {
       return;
     }
     scheduleBrowserSave();
-  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible, showLightTerrainFeatures, showDenseTerrainFeatures]);
+  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible, opponentMissionCardsVisible, showLightTerrainFeatures, showDenseTerrainFeatures]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -537,7 +573,11 @@ export default function InteractiveLOSTool() {
     reader.readAsDataURL(file);
   }
 
-  function buildSaveData() {
+  function buildSaveData(options = {}) {
+    if (movementPlanningEnabled) saveActiveMovementPhaseSnapshot();
+    const losMarkersForSave = options.disableLosMarkerVisibility
+      ? state.current.losMarkers.map((marker) => ({ ...marker, visible: false }))
+      : state.current.losMarkers;
     return {
       version: 11,
       battlefieldOrientation: "portrait-44x60",
@@ -547,7 +587,7 @@ export default function InteractiveLOSTool() {
       savedAt: new Date().toISOString(),
       mapStorageKey: null,
       light: getActiveLosPoint(),
-      losMarkers: state.current.losMarkers,
+      losMarkers: losMarkersForSave,
       activeLosId,
       camera: state.current.camera,
       blockers: state.current.blockers,
@@ -593,6 +633,10 @@ export default function InteractiveLOSTool() {
       attackerForceDisposition,
       selectedLayoutVariant,
       missionCardsVisible,
+      opponentMissionCardsVisible,
+      movementPlanningEnabled,
+      activeMovementPhase,
+      movementPhases: state.current.movementPhases || {},
     };
   }
 
@@ -611,6 +655,10 @@ export default function InteractiveLOSTool() {
     setAttackerForceDisposition(FORCE_DISPOSITIONS.includes(data.attackerForceDisposition) ? data.attackerForceDisposition : "Take and Hold");
     setSelectedLayoutVariant(["A", "B", "C"].includes(data.selectedLayoutVariant) ? data.selectedLayoutVariant : "A");
     setMissionCardsVisible(data.missionCardsVisible === true);
+    setOpponentMissionCardsVisible(data.opponentMissionCardsVisible === true);
+    setMovementPlanningEnabled(data.movementPlanningEnabled === true);
+    setActiveMovementPhase(MOVEMENT_PHASES.includes(data.activeMovementPhase) ? data.activeMovementPhase : "deployment");
+    state.current.movementPhases = data.movementPhases && typeof data.movementPhases === "object" ? data.movementPhases : {};
     setShowLightTerrainFeatures(data.showLightTerrainFeatures !== false);
     setShowDenseTerrainFeatures(data.showDenseTerrainFeatures !== false);
 
@@ -814,8 +862,8 @@ export default function InteractiveLOSTool() {
     saveTimerRef.current = setTimeout(saveBrowserState, 250);
   }
 
-  async function persistGame(storageKey, mapStorageKey) {
-    const data = buildSaveData();
+  async function persistGame(storageKey, mapStorageKey, options = {}) {
+    const data = buildSaveData(options);
     const imageSrc = state.current.savedImageSrc || null;
     data.mapStorageKey = imageSrc ? mapStorageKey : null;
     if (storedMapSourcesRef.current.get(mapStorageKey) !== imageSrc) {
@@ -854,14 +902,41 @@ export default function InteractiveLOSTool() {
     setStatus("Browser autosave cleared. Named save slots are unchanged.");
   }
 
-  function refreshSaveSlots() {
+  function readSaveSlotRecords() {
     try {
-      const index = JSON.parse(localStorage.getItem("warhammer-los-slots-index") || "[]");
-      setSaveSlots(index);
-      if (index.length && !selectedSave) setSelectedSave(index[0]);
+      const raw = JSON.parse(localStorage.getItem("warhammer-los-slots-index") || "[]");
+      return raw
+        .map((entry) => (typeof entry === "string" ? { name: entry, lastAccessed: 0 } : entry))
+        .filter((entry) => entry?.name)
+        .sort((a, b) => (Number(b.lastAccessed) || 0) - (Number(a.lastAccessed) || 0));
     } catch (err) {
       console.warn("Could not load save slot list", err);
+      return [];
     }
+  }
+
+  function writeSaveSlotRecords(records) {
+    const deduped = [];
+    records.forEach((record) => {
+      if (!record?.name || deduped.some((item) => item.name === record.name)) return;
+      deduped.push({ name: record.name, lastAccessed: Number(record.lastAccessed) || 0 });
+    });
+    deduped.sort((a, b) => (Number(b.lastAccessed) || 0) - (Number(a.lastAccessed) || 0));
+    localStorage.setItem("warhammer-los-slots-index", JSON.stringify(deduped));
+    setSaveSlots(deduped.map((record) => record.name));
+    return deduped;
+  }
+
+  function touchSaveSlot(name) {
+    if (!name) return;
+    const records = readSaveSlotRecords().filter((record) => record.name !== name);
+    writeSaveSlotRecords([{ name, lastAccessed: Date.now() }, ...records]);
+  }
+
+  function refreshSaveSlots() {
+    const records = readSaveSlotRecords();
+    setSaveSlots(records.map((record) => record.name));
+    if (records.length && !selectedSave) setSelectedSave(records[0].name);
   }
 
   async function saveNamedSlot() {
@@ -872,43 +947,41 @@ export default function InteractiveLOSTool() {
     }
 
     try {
-      await persistGame(`warhammer-los-slot:${name}`, `slot:${name}`);
-      const index = JSON.parse(localStorage.getItem("warhammer-los-slots-index") || "[]");
-      const next = index.includes(name) ? index : [...index, name].sort((a, b) => a.localeCompare(b));
-      localStorage.setItem("warhammer-los-slots-index", JSON.stringify(next));
-      setSaveSlots(next);
+      await persistGame(`warhammer-los-slot:${name}`, `slot:${name}`, { disableLosMarkerVisibility: true });
+      touchSaveSlot(name);
       setSelectedSave(name);
-      setStatus(`Saved slot: ${name}`);
+      setStatus(`Saved game: ${name}`);
     } catch (err) {
       console.warn("Named save failed", err);
-      setStatus("Could not save slot. Browser storage may be full.");
+      setStatus("Could not save game. Browser storage may be full.");
     }
   }
 
   async function loadNamedSlot() {
     if (!selectedSave) {
-      setStatus("Choose a save slot first.");
+      setStatus("Choose a game first.");
       return;
     }
 
     try {
       const raw = localStorage.getItem(`warhammer-los-slot:${selectedSave}`);
       if (!raw) {
-        setStatus("That save slot was not found.");
+        setStatus("That saved game was not found.");
         refreshSaveSlots();
         return;
       }
-      await applySaveData(JSON.parse(raw), `Loaded slot: ${selectedSave}`);
+      await applySaveData(JSON.parse(raw), `Loaded game: ${selectedSave}`);
+      touchSaveSlot(selectedSave);
       setSaveName(selectedSave);
     } catch (err) {
-      console.warn("Load slot failed", err);
-      setStatus("Could not load that save slot.");
+      console.warn("Load game failed", err);
+      setStatus("Could not load that saved game.");
     }
   }
 
   async function deleteNamedSlot() {
     if (!selectedSave) {
-      setStatus("Choose a save slot to delete.");
+      setStatus("Choose a game to delete.");
       return;
     }
 
@@ -919,12 +992,10 @@ export default function InteractiveLOSTool() {
     } catch (err) {
       console.warn("Could not delete saved map", err);
     }
-    const next = saveSlots.filter((name) => name !== selectedSave);
-    localStorage.setItem("warhammer-los-slots-index", JSON.stringify(next));
-    setSaveSlots(next);
-    setSelectedSave(next[0] || "");
-    setSaveName(next[0] || "Game 1");
-    setStatus(`Deleted slot: ${selectedSave}`);
+    const next = writeSaveSlotRecords(readSaveSlotRecords().filter((record) => record.name !== selectedSave));
+    setSelectedSave(next[0]?.name || "");
+    setSaveName(next[0]?.name || "Game 1");
+    setStatus(`Deleted game: ${selectedSave}`);
   }
 
   function handleSelectedSaveChange(value) {
@@ -987,6 +1058,7 @@ export default function InteractiveLOSTool() {
     state.current.layoutTerrainFeatures = [];
     state.current.layoutFeaturePieces = [];
     state.current.layoutFeatureLinks = [];
+    state.current.movementPhases = {};
     state.current.activeLayoutKey = null;
     state.current.currentPoly = [];
     state.current.wallPath = [];
@@ -1004,6 +1076,8 @@ export default function InteractiveLOSTool() {
     setAttackerForceDisposition("Take and Hold");
     setSelectedLayoutVariant("A");
     setMissionCardsVisible(false);
+    setMovementPlanningEnabled(false);
+    setActiveMovementPhase("deployment");
     setSaveName(nextGameSaveName());
     setEditingSaveName(false);
     setActiveLosId("");
@@ -1080,19 +1154,15 @@ export default function InteractiveLOSTool() {
       localStorage.setItem(newKey, JSON.stringify(data));
       localStorage.removeItem(oldKey);
 
-      const next = saveSlots
-        .map((name) => (name === selectedSave ? nextName : name))
-        .filter((name, index, arr) => arr.indexOf(name) === index)
-        .sort((a, b) => a.localeCompare(b));
-
-      localStorage.setItem("warhammer-los-slots-index", JSON.stringify(next));
-      setSaveSlots(next);
+      const records = readSaveSlotRecords()
+        .filter((record) => record.name !== selectedSave && record.name !== nextName);
+      writeSaveSlotRecords([{ name: nextName, lastAccessed: Date.now() }, ...records]);
       setSelectedSave(nextName);
       setSaveName(nextName);
-      setStatus(`Renamed save slot to: ${nextName}`);
+      setStatus(`Renamed saved game to: ${nextName}`);
     } catch (err) {
-      console.warn("Rename save slot failed", err);
-      setStatus("Could not rename save slot.");
+      console.warn("Rename saved game failed", err);
+      setStatus("Could not rename saved game.");
     }
   }
 
@@ -1124,6 +1194,38 @@ export default function InteractiveLOSTool() {
     } catch (err) {
       console.warn("Could not load army preset list", err);
     }
+  }
+
+  function startNewArmyPreset() {
+    setSelectedArmyPreset("");
+    setArmyPresetName(`Army ${armyPresetNames.length + 1}`);
+    setArmyListText("");
+    setArmyResults([]);
+    setEditingArmyPresetName(false);
+    setStatus("Started a new army list slot.");
+  }
+
+  function saveArmyPresetName() {
+    const nextName = armyPresetName.trim();
+    if (!nextName) {
+      setStatus("Enter an army name first.");
+      return;
+    }
+    if (selectedArmyPreset && selectedArmyPreset !== nextName) {
+      const raw = localStorage.getItem(`warhammer-los-army:${selectedArmyPreset}`);
+      if (raw) {
+        localStorage.setItem(`warhammer-los-army:${nextName}`, raw);
+        localStorage.removeItem(`warhammer-los-army:${selectedArmyPreset}`);
+      }
+      const nextNames = [...new Set(armyPresetNames.map((name) => (name === selectedArmyPreset ? nextName : name)))]
+        .sort((a, b) => a.localeCompare(b));
+      localStorage.setItem("warhammer-los-armies-index", JSON.stringify(nextNames));
+      setArmyPresetNames(nextNames);
+    }
+    setSelectedArmyPreset(nextName);
+    setArmyPresetName(nextName);
+    setEditingArmyPresetName(false);
+    setStatus(`Army name saved as ${nextName}.`);
   }
 
   function saveArmyPreset() {
@@ -1542,10 +1644,19 @@ export default function InteractiveLOSTool() {
     setStatus(`Selected ${marker.name}.`);
   }
 
+  function nextLosMarkerStagingPoint(index = state.current.losMarkers.length) {
+    const yStep = Math.max(34, (pixelsPerInch || state.current.fit.w / boardWidthInches()) * 1.2);
+    return {
+      x: state.current.fit.x - 48 / state.current.camera.scale,
+      y: state.current.fit.y + 45 / state.current.camera.scale + (index % 12) * yStep,
+    };
+  }
+
   function addLosMarker() {
     const id = `los-${Date.now()}`;
     const existing = state.current.losMarkers.length;
-    const marker = createLosMarker(id, `LOS ${existing + 1}`, state.current.W / 2, state.current.H / 2);
+    const spawn = nextLosMarkerStagingPoint(existing);
+    const marker = createLosMarker(id, `LOS ${existing + 1}`, spawn.x, spawn.y);
     marker.baseShape = baseShape;
     marker.baseLengthMm = baseLengthMm;
     marker.baseWidthMm = baseShape === "circle" ? baseLengthMm : baseWidthMm;
@@ -1702,12 +1813,69 @@ export default function InteractiveLOSTool() {
     return `Oval • ${result.baseLengthMm}mm × ${result.baseWidthMm}mm`;
   }
 
-  if (shape === "pill") {
-    return `Pill • ${result.baseLengthMm}mm × ${result.baseWidthMm}mm`;
+  if (shape === "rectangle") {
+    return `Rectangle - ${result.baseLengthMm}mm x ${result.baseWidthMm}mm`;
   }
+
 
   return `Circle • ${result.baseLengthMm}mm`;
 }
+
+  function resultBaseFromMatch(match, fallbackName = "") {
+    const base = match?.base || { shape: "circle", diameter: 40 };
+    const shape = base.shape || "circle";
+    const baseLengthMm = shape === "circle" ? base.diameter : base.length;
+    const baseWidthMm = shape === "circle" ? base.diameter : base.width;
+    return {
+      unit: match?.name || fallbackName,
+      matched: Boolean(match),
+      accepted: Boolean(match),
+      editing: !match,
+      baseShape: shape,
+      baseLengthMm: Number(baseLengthMm) || 40,
+      baseWidthMm: Number(baseWidthMm) || Number(baseLengthMm) || 40,
+    };
+  }
+
+  function removeArmyGeneratedMarker(markerId) {
+    if (!markerId) return false;
+    const before = state.current.losMarkers.length;
+    state.current.losMarkers = state.current.losMarkers.filter((marker) => marker.id !== markerId);
+    removeStickyRulersForTarget({ type: "los", id: markerId });
+    if (before === state.current.losMarkers.length) return false;
+    if (activeLosId === markerId) {
+      const next = state.current.losMarkers[0];
+      setActiveLosId(next?.id || "");
+      if (next) {
+        setLosName(next.name);
+        setBaseShape(next.baseShape || "circle");
+        setBaseLengthMm(next.baseLengthMm || 40);
+        setBaseWidthMm(next.baseWidthMm || next.baseLengthMm || 40);
+        setBaseRotation(next.baseRotation || 0);
+        setRangeInches(next.rangeInches ?? "unlimited");
+        state.current.light = { x: next.x, y: next.y };
+      }
+    }
+    return true;
+  }
+
+  function createLosMarkerForArmyResult(result, index = 0) {
+    if (!result?.accepted) return null;
+    if (result.markerId && state.current.losMarkers.some((marker) => marker.id === result.markerId)) return result.markerId;
+    const id = `army-los-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
+    const spawn = nextLosMarkerStagingPoint(state.current.losMarkers.length + index);
+    const marker = {
+      ...createLosMarker(id, result.unit || result.original || `Unit ${index + 1}`, spawn.x, spawn.y),
+      baseShape: result.baseShape || "circle",
+      baseLengthMm: Number(result.baseLengthMm) || 40,
+      baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
+      visible: false,
+      armyResultId: result.id,
+      unitTypeId: id,
+    };
+    state.current.losMarkers.push(marker);
+    return id;
+  }
 
   function parseArmyList() {
     const seen = new Set();
@@ -1725,25 +1893,40 @@ export default function InteractiveLOSTool() {
       if (seen.has(key)) return;
       seen.add(key);
 
-      const base = match?.base || { shape: "circle", diameter: 40 };
+      const baseResult = resultBaseFromMatch(match, line);
       results.push({
         id: `army-result-${Date.now()}-${index}`,
         original: line,
-        unit: match?.name || line,
-        matched: Boolean(match),
-        accepted: Boolean(match),
-        editing: !match,
-        baseShape: base.shape || "circle",
-        baseLengthMm: base.shape === "circle" ? base.diameter : base.length,
-        baseWidthMm: base.shape === "circle" ? base.diameter : base.width,
+        ...baseResult,
       });
     });
 
-    setArmyResults(results);
+    const hydratedResults = results.map((result, index) => ({
+      ...result,
+      markerId: result.accepted ? createLosMarkerForArmyResult(result, index) : null,
+    }));
+    if (hydratedResults.some((result) => result.markerId)) {
+      const first = state.current.losMarkers.find((marker) => marker.id === hydratedResults.find((result) => result.markerId)?.markerId);
+      if (first) {
+        setActiveLosId(first.id);
+        setLosName(first.name);
+        setBaseShape(first.baseShape);
+        setBaseLengthMm(first.baseLengthMm);
+        setBaseWidthMm(first.baseWidthMm);
+        setBaseRotation(first.baseRotation || 0);
+        setRangeInches(first.rangeInches ?? "unlimited");
+        state.current.light = { x: first.x, y: first.y };
+      }
+      setLosVersion((v) => v + 1);
+      updateVisibility();
+      draw();
+      scheduleBrowserSave();
+    }
+    setArmyResults(hydratedResults);
     setStatus(
       warhammerAppUnits.length
-        ? `Warhammer app format detected. Matched ${results.filter((r) => r.matched).length} of ${results.length} unit entries.`
-        : `Matched ${results.filter((r) => r.matched).length} of ${results.length} army-list entries.`
+        ? `Warhammer app format detected. Matched ${hydratedResults.filter((r) => r.matched).length} of ${hydratedResults.length} unit entries and created LOS markers for them.`
+        : `Matched ${hydratedResults.filter((r) => r.matched).length} of ${hydratedResults.length} army-list entries and created LOS markers for them.`
     );
   }
 
@@ -1751,39 +1934,73 @@ export default function InteractiveLOSTool() {
     setArmyResults((current) => current.map((result) => result.id === id ? { ...result, ...patch } : result));
   }
 
+  function rematchArmyResult(id) {
+    setArmyResults((current) => current.map((result, index) => {
+      if (result.id !== id) return result;
+      removeArmyGeneratedMarker(result.markerId);
+      const match = findBestBaseMatch(result.unit || result.original || "");
+      const updated = {
+        ...result,
+        ...resultBaseFromMatch(match, result.unit || result.original || ""),
+      };
+      updated.markerId = updated.accepted ? createLosMarkerForArmyResult(updated, index) : null;
+      setStatus(updated.matched ? `${updated.unit} rematched and added as an LOS marker.` : `${result.unit || result.original} still needs manual base details.`);
+      return updated;
+    }));
+    setLosVersion((v) => v + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function addArmyResultLosMarker(id) {
+    setArmyResults((current) => current.map((result, index) => {
+      if (result.id !== id) return result;
+      const accepted = {
+        ...result,
+        accepted: true,
+        editing: false,
+        matched: result.matched || false,
+      };
+      const markerId = createLosMarkerForArmyResult(accepted, index);
+      setStatus(`${accepted.unit || accepted.original} added as an LOS marker.`);
+      return { ...accepted, markerId };
+    }));
+    setLosVersion((v) => v + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+  }
+
+  function deleteArmyResult(id) {
+    setArmyResults((current) => {
+      const result = current.find((item) => item.id === id);
+      if (result?.markerId) removeArmyGeneratedMarker(result.markerId);
+      return current.filter((item) => item.id !== id);
+    });
+    setLosVersion((v) => v + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus("Army result removed.");
+  }
+
   function createLosMarkersFromArmy() {
-    const accepted = armyResults.filter((result) => result.accepted);
+    const accepted = armyResults.filter((result) => result.accepted && !result.markerId);
     if (!accepted.length) {
-      setStatus("No accepted army-list entries to create LOS markers from.");
+      setStatus("No accepted army-list entries need LOS markers.");
       return;
     }
-
-    const spacing = 34;
-    const startX = state.current.W / 2 - ((accepted.length - 1) * spacing) / 2;
-    const startY = state.current.H / 2;
-
-    const createdAt = Date.now();
-    const newMarkers = accepted.map((result, index) => {
-      const id = `army-los-${createdAt}-${index}`;
-      return {
-        id,
-        name: result.unit || result.original || `Unit ${index + 1}`,
-        x: startX + index * spacing,
-        y: startY + (index % 2) * spacing,
-        baseShape: result.baseShape || "circle",
-        baseLengthMm: Number(result.baseLengthMm) || 40,
-        baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
-        baseRotation: 0,
-        rangeInches: "unlimited",
-        visible: false,
-        groupingMode: "model",
-        unitSlot: null,
-        unitTypeId: id,
-      };
-    });
-
-    state.current.losMarkers.push(...newMarkers);
-    const first = newMarkers[0];
+    let first = null;
+    let createdCount = 0;
+    setArmyResults((current) => current.map((result, index) => {
+      if (!result.accepted || result.markerId) return result;
+      const markerId = createLosMarkerForArmyResult(result, index);
+      if (!first) first = state.current.losMarkers.find((marker) => marker.id === markerId);
+      createdCount += 1;
+      return { ...result, markerId };
+    }));
+    if (!first) return;
     setActiveLosId(first.id);
     setActiveUnitSlot(null);
     setLosName(first.name);
@@ -1800,7 +2017,7 @@ export default function InteractiveLOSTool() {
     updateVisibility();
     draw();
     scheduleBrowserSave();
-    setStatus(`Created ${newMarkers.length} LOS marker${newMarkers.length === 1 ? "" : "s"} from army list with LOS disabled.`);
+    setStatus(`Created ${createdCount} LOS marker${createdCount === 1 ? "" : "s"} from army list with LOS disabled.`);
   }
 
   function clearArmyGeneratedLosMarkers() {
@@ -1841,6 +2058,7 @@ export default function InteractiveLOSTool() {
       state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
     }
     setLosVersion((v) => v + 1);
+    setArmyResults((current) => current.map((result) => result.markerId ? { ...result, markerId: null } : result));
     updateVisibility();
     draw();
     scheduleBrowserSave();
@@ -1898,6 +2116,27 @@ export default function InteractiveLOSTool() {
 
     const canSelectLayoutWall = mode !== "denseTF" && mode !== "lightTF" && mode !== "block"
       && mode !== "wall" && mode !== "erase" && !isDeploymentMode();
+
+    if (selectiveFootprintRemoveMode) {
+      const terrainIndex = findLayoutTerrainAtPoint(p);
+      if (terrainIndex >= 0) {
+        const terrain = state.current.layoutTerrain[terrainIndex];
+        const removedTerrain = removeLayoutTerrainById(terrain.id);
+        if (removedTerrain) {
+          const definition = TERRAIN_FOOTPRINTS[removedTerrain.shape];
+          setSelectedLayoutWallId(null);
+          setSelectedLayoutFeatureId(null);
+          setSelectedLayoutObjectiveId(null);
+          setStatus(`${definition?.label || "Terrain"} footprint removed.`);
+          draw();
+          scheduleBrowserSave();
+        }
+      } else {
+        setStatus("Selective footprint removal is on. Click a GW terrain footprint to remove it.");
+      }
+      return;
+    }
+
     const clickedDeploymentLabel = layoutEditMode && canSelectLayoutWall ? findDeploymentLabelAtPoint(p) : null;
     if (clickedDeploymentLabel) {
       objectDragRef.current = { type: "deploymentLabel", kind: clickedDeploymentLabel };
@@ -2228,6 +2467,18 @@ export default function InteractiveLOSTool() {
           scheduleBrowserSave();
           return;
         }
+        const layoutTerrainIndex = layoutEditMode ? findLayoutTerrainAtPoint(p) : -1;
+        if (layoutTerrainIndex >= 0) {
+          const terrain = state.current.layoutTerrain[layoutTerrainIndex];
+          const removedTerrain = removeLayoutTerrainById(terrain.id);
+          if (removedTerrain) {
+            const definition = TERRAIN_FOOTPRINTS[removedTerrain.shape];
+            setStatus(`${definition?.label || "Terrain"} footprint erased.`);
+            draw();
+            scheduleBrowserSave();
+            return;
+          }
+        }
         const layoutWallIndex = findLayoutWallAtPoint(p);
         if (layoutWallIndex >= 0) {
           const [removedWall] = state.current.layoutWalls.splice(layoutWallIndex, 1);
@@ -2429,7 +2680,7 @@ export default function InteractiveLOSTool() {
       if (dragged.type === "light") {
         if (dragged.unitSlot) {
           getUnitMembers(dragged.unitSlot).forEach((marker) => {
-            if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, true));
+            if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker));
           });
           rebuildCombinedVisibility();
         }
@@ -2589,6 +2840,12 @@ export default function InteractiveLOSTool() {
       const offsetX = p.x - marker.x;
       const offsetY = p.y - marker.y;
       const local = rotatePoint(offsetX, offsetY, -(marker.baseRotation || 0));
+      if (marker.baseShape === "rectangle") {
+        if (Math.abs(local.x) <= base.rx && Math.abs(local.y) <= base.ry) {
+          return { type: "light", id: marker.id };
+        }
+        continue;
+      }
       const dx = local.x / base.rx;
       const dy = local.y / base.ry;
       if (dx * dx + dy * dy <= 1) {
@@ -2719,6 +2976,83 @@ export default function InteractiveLOSTool() {
     draw();
     scheduleBrowserSave();
     setStatus(`Objective marker ${visible ? "shown" : "faded"}.`);
+  }
+
+  function captureMovementPhaseSnapshot() {
+    return {
+      losMarkers: state.current.losMarkers.map((marker) => ({
+        id: marker.id,
+        x: marker.x,
+        y: marker.y,
+        baseShape: marker.baseShape,
+        baseLengthMm: marker.baseLengthMm,
+        baseWidthMm: marker.baseWidthMm,
+        baseRotation: marker.baseRotation || 0,
+        name: marker.name,
+      })),
+      enemies: state.current.enemies.map((enemy) => ({
+        id: enemy.id,
+        x: enemy.x,
+        y: enemy.y,
+      })),
+    };
+  }
+
+  function saveActiveMovementPhaseSnapshot() {
+    if (!movementPlanningEnabled || !MOVEMENT_PHASES.includes(activeMovementPhase)) return;
+    state.current.movementPhases = {
+      ...(state.current.movementPhases || {}),
+      [activeMovementPhase]: captureMovementPhaseSnapshot(),
+    };
+  }
+
+  function applyMovementPhaseSnapshot(snapshot) {
+    if (!snapshot) return;
+    const markerPositions = new Map((snapshot.losMarkers || []).map((marker) => [marker.id, marker]));
+    state.current.losMarkers = state.current.losMarkers.map((marker) => {
+      const saved = markerPositions.get(marker.id);
+      return saved ? { ...marker, x: saved.x, y: saved.y, baseRotation: saved.baseRotation ?? marker.baseRotation } : marker;
+    });
+    const enemyPositions = new Map((snapshot.enemies || []).map((enemy) => [enemy.id, enemy]));
+    state.current.enemies = state.current.enemies.map((enemy) => {
+      const saved = enemyPositions.get(enemy.id);
+      return saved ? { ...enemy, x: saved.x, y: saved.y } : enemy;
+    });
+    const active = getActiveLosMarker();
+    if (active) state.current.light = { x: active.x, y: active.y };
+  }
+
+  function switchMovementPhase(phase) {
+    if (!MOVEMENT_PHASES.includes(phase)) return;
+    saveActiveMovementPhaseSnapshot();
+    const phases = state.current.movementPhases || {};
+    if (!phases[phase]) phases[phase] = captureMovementPhaseSnapshot();
+    state.current.movementPhases = phases;
+    applyMovementPhaseSnapshot(phases[phase]);
+    setActiveMovementPhase(phase);
+    setLosVersion((version) => version + 1);
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${MOVEMENT_PHASE_LABELS[phase]} planning positions shown.`);
+  }
+
+  function toggleMovementPlanning() {
+    const next = !movementPlanningEnabled;
+    if (next) {
+      state.current.movementPhases = {
+        ...(state.current.movementPhases || {}),
+        [activeMovementPhase]: captureMovementPhaseSnapshot(),
+      };
+      setMovementPlanningEnabled(true);
+      setStatus("Planning movement enabled. Choose Deployment or a turn.");
+    } else {
+      saveActiveMovementPhaseSnapshot();
+      setMovementPlanningEnabled(false);
+      setStatus("Planning movement hidden.");
+    }
+    draw();
+    scheduleBrowserSave();
   }
 
   function findDeploymentLabelAtPoint(p) {
@@ -2875,6 +3209,8 @@ export default function InteractiveLOSTool() {
     if (!canvas) return;
     if (objectDragRef.current) {
       canvas.style.cursor = "grabbing";
+    } else if (selectiveFootprintRemoveMode) {
+      canvas.style.cursor = findLayoutTerrainAtPoint(p) >= 0 ? "not-allowed" : "crosshair";
     } else if (layoutEditMode && findLayoutObjectiveAtPoint(p) >= 0) {
       canvas.style.cursor = "grab";
     } else if (layoutEditMode && findSelectedLayoutTerrainHandle(p)) {
@@ -3089,6 +3425,39 @@ export default function InteractiveLOSTool() {
     draw();
   }
 
+  function previousMovementPhase() {
+    const index = MOVEMENT_PHASES.indexOf(activeMovementPhase);
+    return index > 0 ? MOVEMENT_PHASES[index - 1] : null;
+  }
+
+  function drawMovementPlanningOverlay(ctx, scale = 1) {
+    if (!movementPlanningEnabled) return;
+    const previousPhase = previousMovementPhase();
+    if (!previousPhase) return;
+    const previous = state.current.movementPhases?.[previousPhase];
+    if (!previous) return;
+
+    const currentMarkers = new Map(state.current.losMarkers.map((marker) => [marker.id, marker]));
+    (previous.losMarkers || []).forEach((ghost) => {
+      const current = currentMarkers.get(ghost.id);
+      const ghostMarker = { ...current, ...ghost };
+      const ghostBase = getBaseRadii(scale, ghostMarker);
+      drawMovementBaseGhost(ctx, ghostMarker, ghostBase, scale);
+      if (current) drawMovementArrow(ctx, ghostMarker, current, ghostBase, getBaseRadii(scale, current), scale, pixelsPerInch);
+    });
+
+    const currentEnemies = new Map(state.current.enemies.map((enemy) => [enemy.id, enemy]));
+    (previous.enemies || []).forEach((ghost, index) => {
+      const current = currentEnemies.get(ghost.id);
+      const radius = enemyBaseRadius(pixelsPerInch || state.current.fit.w / boardWidthInches());
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      drawEnemy(ctx, ghost, "blocked", false, false, index + 1, scale, 0, pixelsPerInch);
+      ctx.restore();
+      if (current) drawMovementArrow(ctx, ghost, current, { rx: radius, ry: radius }, { rx: radius, ry: radius }, scale, pixelsPerInch);
+    });
+  }
+
   function getBaseRadii(cameraScale = 1, marker = null) {
     const shape = marker?.baseShape || baseShape;
     const lengthMm = marker?.baseLengthMm ?? baseLengthMm;
@@ -3111,7 +3480,7 @@ export default function InteractiveLOSTool() {
     };
   }
 
-  function getLOSOriginsForMarker(marker, interactive = false) {
+  function getLOSOriginsForMarker(marker, interactive = false, targetPoint = null) {
     if (!marker) return [];
     const center = { x: marker.x, y: marker.y };
     if (!pixelsPerInch) return [center];
@@ -3119,6 +3488,26 @@ export default function InteractiveLOSTool() {
     const { rx, ry } = getBaseRadii(1, marker);
     const samples = interactive ? (marker.baseShape === "circle" ? 4 : 6) : (marker.baseShape === "circle" ? 20 : 28);
     const points = [center];
+
+    if (marker.baseShape === "rectangle") {
+      const perSide = interactive ? 2 : 8;
+      for (let i = 0; i <= perSide; i++) {
+        const t = -1 + (2 * i) / perSide;
+        [
+          { x: t * rx, y: -ry },
+          { x: rx, y: t * ry },
+          { x: -t * rx, y: ry },
+          { x: -rx, y: -t * ry },
+        ].forEach((local) => {
+          const rotated = rotatePoint(local.x, local.y, marker.baseRotation || 0);
+          points.push({ x: center.x + rotated.x, y: center.y + rotated.y });
+        });
+      }
+      if (targetPoint) {
+        addTargetFacingMarkerEdgePoints(points, marker, center, rx, ry, targetPoint, interactive);
+      }
+      return points;
+    }
 
     for (let i = 0; i < samples; i++) {
       const a = (Math.PI * 2 * i) / samples;
@@ -3128,7 +3517,37 @@ export default function InteractiveLOSTool() {
       points.push({ x: center.x + rotated.x, y: center.y + rotated.y });
     }
 
+    if (targetPoint) {
+      addTargetFacingMarkerEdgePoints(points, marker, center, rx, ry, targetPoint, interactive);
+    }
+
     return points;
+  }
+
+  function addTargetFacingMarkerEdgePoints(points, marker, center, rx, ry, targetPoint, interactive = false) {
+    const dx = targetPoint.x - center.x;
+    const dy = targetPoint.y - center.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= 0.001) return;
+    const angles = interactive ? [0] : [0, -0.16, 0.16];
+    angles.forEach((offset) => {
+      const rotatedDirection = rotatePoint(dx / length, dy / length, offset);
+      let edge;
+      if (marker.baseShape === "rectangle") {
+        edge = movementEdgePoint(marker, { rx, ry }, rotatedDirection.x, rotatedDirection.y);
+      } else {
+        const radius = ellipseRadiusInDirection(
+          { rx, ry, rotation: marker.baseRotation || 0 },
+          rotatedDirection.x,
+          rotatedDirection.y,
+        );
+        edge = {
+          x: center.x + rotatedDirection.x * radius,
+          y: center.y + rotatedDirection.y * radius,
+        };
+      }
+      if (!points.some((point) => dist(point, edge) < 0.5)) points.push(edge);
+    });
   }
 
   function getLOSOrigins() {
@@ -3281,7 +3700,13 @@ export default function InteractiveLOSTool() {
       setStatus("Apply an official layout before restoring its deployment lines.");
       return;
     }
-    state.current.deploymentPath = preset.homeDeploymentPath.map(([x, y]) => {
+    const homeDeploymentPath = Array.isArray(preset.homeDeploymentPath) ? preset.homeDeploymentPath : [];
+    const enemyDeploymentPath = Array.isArray(preset.enemyDeploymentPath) ? preset.enemyDeploymentPath : [];
+    if (homeDeploymentPath.length < 2 || enemyDeploymentPath.length < 2) {
+      setStatus("This layout does not have deployment lines saved yet.");
+      return;
+    }
+    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => {
       const point = rotateLayoutPoint(x, y);
       return battlefieldPoint(point.x, point.y);
     });
@@ -3289,7 +3714,7 @@ export default function InteractiveLOSTool() {
       a: state.current.deploymentPath[0],
       b: state.current.deploymentPath[state.current.deploymentPath.length - 1],
     };
-    state.current.enemyDeploymentPath = preset.enemyDeploymentPath.map(([x, y]) => {
+    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => {
       const point = rotateLayoutPoint(x, y);
       return battlefieldPoint(point.x, point.y);
     });
@@ -3631,14 +4056,18 @@ export default function InteractiveLOSTool() {
       drawObjectiveVisibilityControls(ctx, layoutObjectiveVisibilityButtons(selectedObjective), selectedObjective.visible !== false, camera.scale);
     }
 
+    drawMovementPlanningOverlay(ctx, camera.scale);
+
     enemies.forEach((enemy, index) => {
       const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+      const enemyCheckInteractive = Boolean(objectDragRef.current || draggingRef.current);
       const losState = directEnemyLOSState(
         enemy,
         enemyBaseRadius(pixelsPerInch),
-        visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, true)),
+        visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, enemyCheckInteractive, enemy)),
         blockers,
         walls,
+        enemyCheckInteractive,
       );
       const rangeActive = Number.isFinite(rangeRadius);
       const inRange = selectedUnitMembers.length
@@ -3659,7 +4088,15 @@ export default function InteractiveLOSTool() {
 
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(marker.x, marker.y, base.rx, base.ry, marker.baseRotation || 0, 0, Math.PI * 2);
+      if (marker.baseShape === "rectangle") {
+        ctx.save();
+        ctx.translate(marker.x, marker.y);
+        ctx.rotate(marker.baseRotation || 0);
+        ctx.rect(-base.rx, -base.ry, base.rx * 2, base.ry * 2);
+        ctx.restore();
+      } else {
+        ctx.ellipse(marker.x, marker.y, base.rx, base.ry, marker.baseRotation || 0, 0, Math.PI * 2);
+      }
       ctx.fillStyle = marker.visible ? "#f5f7fa" : "rgba(245,247,250,.45)";
       ctx.fill();
       ctx.lineWidth = isUnitStickyStart || isStickyStart ? 6 / camera.scale : unitFailed ? 6 / camera.scale : isActive ? 5 / camera.scale : 4 / camera.scale;
@@ -3753,12 +4190,12 @@ export default function InteractiveLOSTool() {
     ctx.restore();
   }
 
-  function calculateMarkerVisibility(marker, interactive = false, forceFullDetail = false) {
+  function calculateMarkerVisibility(marker, interactive = false) {
     const clearZones = [];
     const oneWallZones = [];
     if (!marker || marker.visible === false) return { clearZones, oneWallZones };
     const visibleMarkerCount = state.current.losMarkers.filter((item) => item.visible !== false).length;
-    const useReducedSamples = !forceFullDetail && (interactive || visibleMarkerCount > 5);
+    const useReducedSamples = interactive || visibleMarkerCount > 5;
     const origins = interactive
       ? [{ x: marker.x, y: marker.y }]
       : getLOSOriginsForMarker(marker, useReducedSamples);
@@ -3801,6 +4238,7 @@ export default function InteractiveLOSTool() {
       state.current.H,
       renderScale,
       state.current.combinedLosBuffers,
+      state.current.blockers,
     );
   }
 
@@ -4064,16 +4502,22 @@ export default function InteractiveLOSTool() {
         visible: objective.visible !== false,
       };
     });
-    state.current.deploymentPath = preset.homeDeploymentPath.map(([x, y]) => {
+    const homeDeploymentPath = Array.isArray(preset.homeDeploymentPath) ? preset.homeDeploymentPath : [];
+    const enemyDeploymentPath = Array.isArray(preset.enemyDeploymentPath) ? preset.enemyDeploymentPath : [];
+    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => {
       const point = rotateLayoutPoint(x, y);
       return battlefieldPoint(point.x, point.y);
     });
-    state.current.deploymentLine = { a: state.current.deploymentPath[0], b: state.current.deploymentPath[state.current.deploymentPath.length - 1] };
-    state.current.enemyDeploymentPath = preset.enemyDeploymentPath.map(([x, y]) => {
+    state.current.deploymentLine = state.current.deploymentPath.length >= 2
+      ? { a: state.current.deploymentPath[0], b: state.current.deploymentPath[state.current.deploymentPath.length - 1] }
+      : null;
+    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => {
       const point = rotateLayoutPoint(x, y);
       return battlefieldPoint(point.x, point.y);
     });
-    state.current.enemyDeploymentLine = { a: state.current.enemyDeploymentPath[0], b: state.current.enemyDeploymentPath[state.current.enemyDeploymentPath.length - 1] };
+    state.current.enemyDeploymentLine = state.current.enemyDeploymentPath.length >= 2
+      ? { a: state.current.enemyDeploymentPath[0], b: state.current.enemyDeploymentPath[state.current.enemyDeploymentPath.length - 1] }
+      : null;
   }
 
   function rotateSelectedLayoutTerrain(deltaDegrees) {
@@ -4390,6 +4834,66 @@ export default function InteractiveLOSTool() {
     scheduleBrowserSave();
   }
 
+  function removeLayoutTerrainById(id) {
+    const index = state.current.layoutTerrain.findIndex((terrain) => terrain.id === id);
+    if (index < 0) return null;
+    const [removed] = state.current.layoutTerrain.splice(index, 1);
+    state.current.layoutTerrainLinks = state.current.layoutTerrainLinks.filter((link) => !link.includes(removed.id));
+    state.current.layoutTerrainGroups = state.current.layoutTerrainGroups
+      .map((group) => group.filter((terrainId) => terrainId !== removed.id))
+      .filter((group) => group.length >= 2);
+    removeStickyRulersForTarget({ type: "footprint", id: removed.id });
+    if (selectedLayoutTerrainId === removed.id) setSelectedLayoutTerrainId(null);
+    if (firstLinkedTerrainId === removed.id) setFirstLinkedTerrainId(null);
+    setLayoutTerrainRelationVersion((version) => version + 1);
+    rebuildLayoutTerrainGeometry();
+    updateVisibility();
+    return removed;
+  }
+
+  function addLayoutTerrainFootprint(shape) {
+    const definition = TERRAIN_FOOTPRINTS[shape];
+    if (!definition) return;
+    const stagingPosition = nextLayoutStagingPosition(definition.width);
+    const terrain = {
+      id: `layout-terrain-${shape}-${Date.now()}-${state.current.layoutTerrain.length}`,
+      shape,
+      x: stagingPosition.x,
+      y: stagingPosition.y,
+      rotation: 0,
+      mirrored: false,
+      footprint: definition.footprint,
+      outer: definition.outer,
+    };
+    state.current.layoutTerrain.push(terrain);
+    setSelectedLayoutTerrainId(terrain.id);
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutFeatureId(null);
+    setSelectedLayoutObjectiveId(null);
+    setLayoutEditMode(true);
+    setLayoutTerrainRelationVersion((version) => version + 1);
+    rebuildLayoutTerrainGeometry();
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus(`${definition.label} footprint added to the staging area left of the battlefield. Drag it into position.`);
+  }
+
+  function removeOneLayoutTerrainFootprint(shape) {
+    const index = state.current.layoutTerrain.findLastIndex((terrain) => terrain.shape === shape);
+    if (index < 0) {
+      const definition = TERRAIN_FOOTPRINTS[shape];
+      setStatus(`${definition?.label || "That"} footprint is not on this layout.`);
+      return;
+    }
+    const removed = removeLayoutTerrainById(state.current.layoutTerrain[index].id);
+    if (!removed) return;
+    draw();
+    scheduleBrowserSave();
+    const definition = TERRAIN_FOOTPRINTS[shape];
+    setStatus(`${definition?.label || "Terrain"} footprint removed.`);
+  }
+
   function addLayoutWall(type) {
     const definition = LAYOUT_WALL_TYPES[type];
     if (!definition) return;
@@ -4474,13 +4978,8 @@ export default function InteractiveLOSTool() {
     };
   }
 
-  function saveLayoutFixture() {
-    if (!state.current.layoutTerrain.length) {
-      setStatus("Apply a layout before saving its fixture positions.");
-      return;
-    }
-    const key = `warhammer-layout-fixture:v11:${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
-    const fixture = {
+  function currentLayoutFixture() {
+    return {
       version: 11,
       terrain: state.current.layoutTerrain.map(({ id, shape, x, y, rotation, mirrored }) => ({ id, shape, x, y, rotation, mirrored: mirrored === true })),
       terrainLinks: state.current.layoutTerrainLinks.map((link) => [...link]),
@@ -4492,6 +4991,14 @@ export default function InteractiveLOSTool() {
       featureLinks: state.current.layoutFeatureLinks.map((link) => [...link]),
       deploymentLabelPosition: state.current.deploymentLabelPosition ? { ...state.current.deploymentLabelPosition } : null,
       enemyDeploymentLabelPosition: state.current.enemyDeploymentLabelPosition ? { ...state.current.enemyDeploymentLabelPosition } : null,
+      homeDeploymentPath: state.current.deploymentPath.map((point) => {
+        const boardPoint = worldToBattlefieldPoint(point);
+        return [boardPoint.x, boardPoint.y];
+      }),
+      enemyDeploymentPath: state.current.enemyDeploymentPath.map((point) => {
+        const boardPoint = worldToBattlefieldPoint(point);
+        return [boardPoint.x, boardPoint.y];
+      }),
       objectives: state.current.layoutObjectives.map((objective) => ({
         id: objective.id,
         boardX: Number.isFinite(objective.boardX) ? objective.boardX : worldToBattlefieldPoint(objective).x,
@@ -4505,8 +5012,38 @@ export default function InteractiveLOSTool() {
         b: worldToBattlefieldPoint(wall.b),
       })),
     };
+  }
+
+  function saveLayoutFixture() {
+    if (!state.current.layoutTerrain.length) {
+      setStatus("Apply a layout before saving its fixture positions.");
+      return;
+    }
+    const key = `warhammer-layout-fixture:v11:${defenderForceDisposition}|${attackerForceDisposition}|${selectedLayoutVariant}`;
+    const fixture = currentLayoutFixture();
     localStorage.setItem(key, JSON.stringify(fixture));
     setStatus("Terrain, reusable walls, and objective fixture positions saved.");
+  }
+
+  function downloadLayoutFixture() {
+    if (!state.current.layoutTerrain.length && !state.current.layoutWalls.length && !state.current.layoutFeaturePieces.length && !state.current.layoutObjectives.length) {
+      setStatus("Load or create a layout before downloading it.");
+      return;
+    }
+    const fixture = currentLayoutFixture();
+    const fileSafeName = `${defenderForceDisposition}-${attackerForceDisposition}-Layout-${selectedLayoutVariant}`
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
+    const blob = new Blob([JSON.stringify(fixture, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${fileSafeName || "layout-fixture"}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatus("Layout JSON downloaded.");
   }
 
   function applySelectedLayout(editable = false) {
@@ -4532,10 +5069,12 @@ export default function InteractiveLOSTool() {
     calculateFit();
     const fixtureKey = `warhammer-layout-fixture:v11:${layoutKey}`;
     let savedFixture = null;
-    try {
-      const savedFixtureText = localStorage.getItem(fixtureKey);
-      savedFixture = JSON.parse(savedFixtureText || "null");
-    } catch {}
+    if (editable) {
+      try {
+        const savedFixtureText = localStorage.getItem(fixtureKey);
+        savedFixture = JSON.parse(savedFixtureText || "null");
+      } catch {}
+    }
     const savedTerrain = Array.isArray(savedFixture) ? savedFixture : savedFixture?.terrain;
     const savedTerrainLinks = Array.isArray(savedFixture?.terrainLinks) ? savedFixture.terrainLinks : (preset.terrainLinks || []);
     const savedTerrainGroups = Array.isArray(savedFixture?.terrainGroups) ? savedFixture.terrainGroups : (preset.terrainGroups || []);
@@ -4724,6 +5263,7 @@ export default function InteractiveLOSTool() {
   function toggleLayoutEditing() {
     if (layoutEditMode) {
       setLayoutEditMode(false);
+      setSelectiveFootprintRemoveMode(false);
       setSelectedLayoutTerrainId(null);
       setSelectedLayoutWallId(null);
       setSelectedLayoutFeatureId(null);
@@ -4750,17 +5290,15 @@ export default function InteractiveLOSTool() {
     .filter((unit) => unit.members.length);
   const displayedSaveName = selectedSave || saveName || "Unsaved game";
   const selectedPrimaryMission = FORCE_DISPOSITION_MISSIONS[defenderForceDisposition]?.[attackerForceDisposition] || "Unknown mission";
-  const selectedMissionSlug = PRIMARY_MISSION_CARD_SLUGS[selectedPrimaryMission];
-  const selectedMissionCards = selectedMissionSlug
-    ? [
-      { side: "Front", src: `/mission-cards/${selectedMissionSlug}-front.webp` },
-      ...(DOUBLE_SIDED_PRIMARY_MISSIONS.has(selectedPrimaryMission)
-        ? [{ side: "Back", src: `/mission-cards/${selectedMissionSlug}-back.webp` }]
-        : []),
-    ]
-    : [];
+  const opponentPrimaryMission = FORCE_DISPOSITION_MISSIONS[attackerForceDisposition]?.[defenderForceDisposition] || "Unknown mission";
+  const selectedMissionCards = missionCardsFor(selectedPrimaryMission);
+  const opponentMissionCards = missionCardsFor(opponentPrimaryMission);
   const selectedLayoutPreset = layoutPresetFor(defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant).preset;
   const activeTerrainRelation = layoutTerrainRelationVersion >= 0 ? selectedTerrainRelation() : null;
+  const layoutTerrainCounts = GW_TERRAIN_FOOTPRINT_ROWS.reduce((counts, row) => {
+    counts[row.shape] = state.current.layoutTerrain.filter((terrain) => terrain.shape === row.shape).length;
+    return counts;
+  }, {});
 
   return (
     <div style={styles.appShell}>
@@ -4772,54 +5310,62 @@ export default function InteractiveLOSTool() {
           <div style={{ ...styles.sidebarSection, order: 1 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("game")}>
               <span style={styles.sectionTriangle}>{sectionOpen.game ? "▾" : "▸"}</span>
-              <span>Game Save</span>
+              <span>Save Game</span>
             </button>
             {sectionOpen.game && (
               <div style={styles.sectionContent}>
                 <div style={styles.sidebarRow}>
                   <select value={selectedSave} onChange={(e) => handleSelectedSaveChange(e.target.value)} style={{ ...styles.select, flex: 1, minWidth: 0 }}>
+                    <option value="">Choose Game</option>
                     <option value="__new_game__">New game save</option>
                     {saveSlots.map((name) => <option key={name} value={name}>{name}</option>)}
                   </select>
-                  <ToolButton onClick={loadNamedSlot}>Load slot</ToolButton>
+                  <ToolButton onClick={loadNamedSlot}>Load game</ToolButton>
                 </div>
 
-                {editingSaveName ? (
-                  <input
-                    autoFocus
-                    value={saveName}
-                    onChange={(e) => handleSaveNameChange(e.target.value)}
-                    onBlur={commitSaveNameRename}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        cancelSaveNameRename();
-                      }
-                    }}
-                    style={styles.saveNameDisplayInput}
-                    title="Press Enter or click away to save the name"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onDoubleClick={() => {
+                <div style={styles.sidebarRow}>
+                  {editingSaveName ? (
+                    <input
+                      autoFocus
+                      value={saveName}
+                      onChange={(e) => handleSaveNameChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitSaveNameRename();
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelSaveNameRename();
+                        }
+                      }}
+                      style={{ ...styles.saveNameDisplayInput, flex: 1 }}
+                      title="Click Save name to save the name"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onDoubleClick={() => {
+                        setSaveName(displayedSaveName);
+                        setEditingSaveName(true);
+                      }}
+                      style={{ ...styles.saveNameDisplay, flex: 1 }}
+                      title="Double-click or use Edit name to rename this save"
+                    >
+                      {displayedSaveName}
+                    </button>
+                  )}
+                  <ToolButton onClick={() => {
+                    if (editingSaveName) commitSaveNameRename();
+                    else {
                       setSaveName(displayedSaveName);
                       setEditingSaveName(true);
-                    }}
-                    style={styles.saveNameDisplay}
-                    title="Double-click to rename this save"
-                  >
-                    {displayedSaveName}
-                  </button>
-                )}
+                    }
+                  }}>
+                    {editingSaveName ? "Save name" : "Edit name"}
+                  </ToolButton>
+                </div>
 
                 <div style={styles.sidebarRow}>
-                  <ToolButton onClick={saveNamedSlot}>Save slot</ToolButton>
-                  <ToolButton onClick={clearBrowserSave}>Clear autosave</ToolButton>
-                </div>
-                <div style={styles.sidebarRow}>
-                  <ToolButton onClick={deleteNamedSlot}>Delete slot</ToolButton>
+                  <ToolButton onClick={saveNamedSlot}>Save game</ToolButton>
+                  <ToolButton onClick={deleteNamedSlot}>Delete game</ToolButton>
                 </div>
                 <div style={styles.storageNote}>
                   {imageReady ? "Map image included in saves" : "No map image loaded"}
@@ -4853,13 +5399,13 @@ export default function InteractiveLOSTool() {
                   {selectedLayoutPreset ? "Apply Layout" : "Layout coming soon"}
                 </ToolButton>
                 <div style={styles.layoutMissionSummary}>
-                  <span style={styles.layoutMissionLabel}>Primary Mission</span>
-                  <strong>{selectedPrimaryMission}</strong>
-                </div>
-                <div style={styles.missionCardToggleRow}>
-                  <span style={styles.missionCardToggleLabel}>Primary mission cards</span>
-                  <ToolButton active={missionCardsVisible} onClick={() => setMissionCardsVisible(true)}>Display</ToolButton>
-                  <ToolButton active={!missionCardsVisible} onClick={() => setMissionCardsVisible(false)}>Hide</ToolButton>
+                  <div style={styles.layoutMissionText}>
+                    <span style={styles.layoutMissionLabel}>My Primary Mission</span>
+                    <strong>{selectedPrimaryMission}</strong>
+                  </div>
+                  <ToolButton active={missionCardsVisible} onClick={() => setMissionCardsVisible((visible) => !visible)}>
+                    {missionCardsVisible ? "Hide" : "Display"}
+                  </ToolButton>
                 </div>
                 {missionCardsVisible && (
                   <div style={styles.missionCardList}>
@@ -4874,6 +5420,36 @@ export default function InteractiveLOSTool() {
                         <img
                           src={card.src}
                           alt={`${selectedPrimaryMission} ${card.side}`}
+                          loading="lazy"
+                          style={styles.missionCardImage}
+                        />
+                        <span style={styles.missionCardSide}>{card.side}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div style={{ ...styles.layoutMissionSummary, ...styles.opponentMissionSummary }}>
+                  <div style={styles.layoutMissionText}>
+                    <span style={{ ...styles.layoutMissionLabel, ...styles.opponentMissionLabel }}>Opponent&apos;s Primary Mission</span>
+                    <strong>{opponentPrimaryMission}</strong>
+                  </div>
+                  <ToolButton active={opponentMissionCardsVisible} onClick={() => setOpponentMissionCardsVisible((visible) => !visible)}>
+                    {opponentMissionCardsVisible ? "Hide" : "Display"}
+                  </ToolButton>
+                </div>
+                {opponentMissionCardsVisible && (
+                  <div style={styles.missionCardList}>
+                    {opponentMissionCards.map((card) => (
+                      <button
+                        key={card.side}
+                        type="button"
+                        onClick={() => setExpandedMissionCards({ mission: opponentPrimaryMission, cards: opponentMissionCards })}
+                        style={styles.missionCardButton}
+                        title={`Open ${opponentPrimaryMission} card${opponentMissionCards.length > 1 ? "s" : ""}`}
+                      >
+                        <img
+                          src={card.src}
+                          alt={`${opponentPrimaryMission} ${card.side}`}
                           loading="lazy"
                           style={styles.missionCardImage}
                         />
@@ -4964,6 +5540,40 @@ export default function InteractiveLOSTool() {
                     <ToolButton active={layoutEditMode} onClick={toggleLayoutEditing}>{layoutEditMode ? "Finish editing" : "Start editing"}</ToolButton>
                     <ToolButton active={mode === "scale"} disabled={state.current.activeLayoutKey || !imgRef.current} onClick={() => setMode("scale")}>Set scale</ToolButton>
                   </div>
+                  <EditControlSection title="Add in GW terrain footprints" open={editSubsectionOpen.footprints} onToggle={() => toggleEditSubsection("footprints")}>
+                    <div style={styles.gwFootprintTable}>
+                      <div style={{ ...styles.gwFootprintCell, ...styles.gwFootprintHeaderCell }}>GW Footprint Size</div>
+                      <div style={{ ...styles.gwFootprintCell, ...styles.gwFootprintHeaderCell }}>Quantity (recommended no.)</div>
+                      {GW_TERRAIN_FOOTPRINT_ROWS.map((row) => (
+                        <Fragment key={row.shape}>
+                          <div style={styles.gwFootprintCell}>{row.label}</div>
+                          <div style={{ ...styles.gwFootprintCell, ...styles.gwFootprintQuantityCell }}>
+                            <button type="button" style={styles.gwFootprintCounterButton} onClick={() => removeOneLayoutTerrainFootprint(row.shape)} aria-label={`Remove ${row.label} footprint`}>-</button>
+                            <span style={styles.gwFootprintCount}>{layoutTerrainCounts[row.shape] || 0}</span>
+                            <button type="button" style={styles.gwFootprintCounterButton} onClick={() => addLayoutTerrainFootprint(row.shape)} aria-label={`Add ${row.label} footprint`}>+</button>
+                            <span style={styles.gwFootprintRecommended}>({row.recommended})</span>
+                          </div>
+                        </Fragment>
+                      ))}
+                    </div>
+                    <ToolButton active={selectiveFootprintRemoveMode} onClick={() => {
+                      const next = !selectiveFootprintRemoveMode;
+                      setSelectiveFootprintRemoveMode(next);
+                      setLayoutEditMode(true);
+                      setLayoutLinkMode(false);
+                      setFirstLinkedTerrainId(null);
+                      setFirstLinkedWallId(null);
+                      setFirstLinkedFeatureId(null);
+                      setSelectedLayoutTerrainId(null);
+                      setSelectedLayoutWallId(null);
+                      setSelectedLayoutFeatureId(null);
+                      setSelectedLayoutObjectiveId(null);
+                      setStatus(next ? "Selective footprint removal is on. Click a GW terrain footprint to remove it." : "Selective footprint removal stopped.");
+                      draw();
+                    }}>
+                      {selectiveFootprintRemoveMode ? "Stop selectively removing terrain footprint(s)" : "Selectively remove terrain footprint(s)"}
+                    </ToolButton>
+                  </EditControlSection>
                   <EditControlSection title="Preset light and dense terrain features" open={editSubsectionOpen.features} onToggle={() => toggleEditSubsection("features")}>
                     <div style={styles.layoutEditorControls}>
                       {Object.entries(LAYOUT_FEATURE_TYPES).map(([type, definition]) => (
@@ -5026,6 +5636,11 @@ export default function InteractiveLOSTool() {
                       <ToolButton onClick={() => addLayoutObjective("enemy", "circle", "Enemy objective marker")}>Enemy objective</ToolButton>
                       <ToolButton onClick={() => addLayoutObjective("neutral", "diamond", "Expansion objective marker")}>Expansion objective</ToolButton>
                       <ToolButton onClick={() => addLayoutObjective("neutral", "circle", "Central objective marker")}>Central objective</ToolButton>
+                    </div>
+                  </EditControlSection>
+                  <EditControlSection title="Export/Download" open={editSubsectionOpen.exportDownload} onToggle={() => toggleEditSubsection("exportDownload")}>
+                    <div style={styles.layoutEditorControls}>
+                      <ToolButton onClick={downloadLayoutFixture}>Download layout JSON</ToolButton>
                     </div>
                   </EditControlSection>
                 </MapSubsection>
@@ -5094,26 +5709,39 @@ export default function InteractiveLOSTool() {
             </button>
             {sectionOpen.army && (
               <div style={styles.sectionContent}>
-                <input
-                  value={armyPresetName}
-                  onChange={(e) => setArmyPresetName(e.target.value)}
-                  style={styles.fullInput}
-                  placeholder="Army preset name"
-                  title="Name used when saving this army preset"
-                />
                 <div style={styles.sidebarRow}>
                   <select
-                    value={selectedArmyPreset}
+                    value={selectedArmyPreset || "__new__"}
                     onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        startNewArmyPreset();
+                        return;
+                      }
                       setSelectedArmyPreset(e.target.value);
                       if (e.target.value) setArmyPresetName(e.target.value);
                     }}
                     style={{ ...styles.select, flex: 1, minWidth: 0 }}
                   >
-                    <option value="">Choose army</option>
+                    <option value="__new__">New army</option>
                     {armyPresetNames.map((name) => <option key={name} value={name}>{name}</option>)}
                   </select>
                   <ToolButton onClick={loadArmyPreset}>Load</ToolButton>
+                </div>
+                <div style={styles.sidebarRow}>
+                  {editingArmyPresetName ? (
+                    <input
+                      value={armyPresetName}
+                      onChange={(e) => setArmyPresetName(e.target.value)}
+                      style={{ ...styles.fullInput, flex: 1 }}
+                      placeholder="Army preset name"
+                      title="Name used when saving this army preset"
+                    />
+                  ) : (
+                    <div style={styles.armyNameDisplay}>{armyPresetName || "New army"}</div>
+                  )}
+                  <ToolButton onClick={() => editingArmyPresetName ? saveArmyPresetName() : setEditingArmyPresetName(true)}>
+                    {editingArmyPresetName ? "Save name" : "Edit name"}
+                  </ToolButton>
                 </div>
                 <div style={styles.sidebarRow}>
                   <ToolButton onClick={saveArmyPreset}>Save army</ToolButton>
@@ -5127,9 +5755,9 @@ export default function InteractiveLOSTool() {
                 />
                 <div style={styles.sidebarRow}>
                   <ToolButton onClick={parseArmyList}>Match units</ToolButton>
-                  <ToolButton onClick={createLosMarkersFromArmy}>Create LOS</ToolButton>
+                  <ToolButton onClick={createLosMarkersFromArmy}>Create LOS markers</ToolButton>
                 </div>
-                <ToolButton onClick={clearArmyGeneratedLosMarkers}>Remove generated LOS</ToolButton>
+                <ToolButton onClick={clearArmyGeneratedLosMarkers}>Remove generated LOS marker(s)</ToolButton>
 
                 {armyResults.length > 0 && (
                   <div style={styles.armyResultList}>
@@ -5145,17 +5773,28 @@ export default function InteractiveLOSTool() {
                         <div style={styles.sidebarRow}>
                           <button
                             type="button"
-                            onClick={() => updateArmyResult(result.id, { accepted: true, editing: false })}
+                            onClick={() => addArmyResultLosMarker(result.id)}
                             style={{ ...styles.iconChoiceButton, background: result.accepted ? "rgba(34,197,94,.35)" : "rgba(255,255,255,.08)" }}
-                            title="Base size is correct"
+                            title="Add as LOS marker"
                           >✓</button>
                           <button
                             type="button"
-                            onClick={() => updateArmyResult(result.id, { accepted: false, editing: true })}
+                            onClick={() => {
+                              removeArmyGeneratedMarker(result.markerId);
+                              updateArmyResult(result.id, { accepted: false, editing: true, markerId: null });
+                              setLosVersion((v) => v + 1);
+                              updateVisibility();
+                              draw();
+                              scheduleBrowserSave();
+                            }}
                             style={{ ...styles.iconChoiceButton, background: result.editing ? "rgba(239,68,68,.35)" : "rgba(255,255,255,.08)" }}
                             title="Correct base size manually"
                           >✕</button>
-                          <span style={styles.armyMatchLabel}>{result.matched ? "matched" : "manual"}</span>
+                          <span style={styles.armyMatchLabel}>{result.markerId ? "LOS made" : result.matched ? "matched" : "manual"}</span>
+                        </div>
+                        <div style={styles.sidebarRow}>
+                          <ToolButton onClick={() => rematchArmyResult(result.id)}>Rematch</ToolButton>
+                          <ToolButton onClick={() => deleteArmyResult(result.id)}>Delete</ToolButton>
                         </div>
                         {result.editing && (
                           <div style={styles.armyManualGrid}>
@@ -5173,6 +5812,7 @@ export default function InteractiveLOSTool() {
                             >
                               <option value="circle">Circle</option>
                               <option value="oval">Oval</option>
+                              <option value="rectangle">Rectangle</option>
                             </select>
                             <input
                               type="number"
@@ -5191,6 +5831,7 @@ export default function InteractiveLOSTool() {
                               style={{ ...styles.smallInput, opacity: result.baseShape === "circle" ? 0.45 : 1 }}
                               title="Width mm"
                             />
+                            <ToolButton onClick={() => addArmyResultLosMarker(result.id)}>Add</ToolButton>
                           </div>
                         )}
                       </div>
@@ -5242,6 +5883,7 @@ export default function InteractiveLOSTool() {
                           <div style={styles.sidebarRow}>
                             <ToolButton active={baseShape === "circle"} onClick={() => updateActiveLosMarker({ baseShape: "circle", baseWidthMm: baseLengthMm })}>○</ToolButton>
                             <ToolButton active={baseShape === "oval"} onClick={() => updateActiveLosMarker({ baseShape: "oval" })}>⬭</ToolButton>
+                            <ToolButton active={baseShape === "rectangle"} onClick={() => updateActiveLosMarker({ baseShape: "rectangle" })}>▭</ToolButton>
                             <ToolButton onClick={deleteActiveLosMarker}>Delete</ToolButton>
                           </div>
                           <div style={styles.sidebarRow}>
@@ -5404,7 +6046,22 @@ export default function InteractiveLOSTool() {
           </div>
           <div style={styles.status}>{status}</div>
           <div style={styles.legend}>White = model LOS · Blue = home deployment LOS · Red = enemy deployment LOS · Orange = valid deepstrike area · Green = visible within selected range · Yellow = crossed one footprint wall · Dark = blocked</div>
+
           <div style={styles.canvasWrap}>
+            <div style={styles.planningControls}>
+              {movementPlanningEnabled && (
+                <div style={styles.planningPhaseRow}>
+                  {MOVEMENT_PHASES.map((phase) => (
+                    <button key={phase} type="button" style={{ ...styles.planningButton, ...(activeMovementPhase === phase ? styles.planningButtonActive : {}) }} onClick={() => switchMovementPhase(phase)}>
+                      {MOVEMENT_PHASE_LABELS[phase]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button type="button" style={{ ...styles.planningMainButton, ...(movementPlanningEnabled ? styles.planningButtonActive : {}) }} onClick={toggleMovementPlanning}>
+                Planning movement
+              </button>
+            </div>
             <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} />
           </div>
         </main>
@@ -5623,6 +6280,59 @@ const styles = {
     display: "grid",
     gap: 6,
   },
+  gwFootprintTable: {
+    display: "grid",
+    gridTemplateColumns: "1.05fr 1fr",
+    border: "1px solid rgba(148,163,184,.35)",
+    borderRadius: 10,
+    overflow: "hidden",
+    background: "rgba(15,23,42,.28)",
+  },
+  gwFootprintCell: {
+    minWidth: 0,
+    padding: "7px 8px",
+    borderBottom: "1px solid rgba(148,163,184,.22)",
+    color: "#e5e7eb",
+    fontSize: 13,
+    fontWeight: 850,
+  },
+  gwFootprintHeaderCell: {
+    background: "rgba(30,41,59,.85)",
+    color: "#fff",
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: ".03em",
+  },
+  gwFootprintQuantityCell: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  gwFootprintCounterButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    border: "1px solid rgba(255,255,255,.22)",
+    background: "#111827",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 900,
+    lineHeight: 1,
+    cursor: "pointer",
+  },
+  gwFootprintCount: {
+    minWidth: 18,
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 900,
+    textAlign: "center",
+  },
+  gwFootprintRecommended: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: 850,
+  },
   forceDispositionSelectWrap: {
     position: "relative",
     minHeight: 38,
@@ -5687,13 +6397,24 @@ const styles = {
   },
   layoutMissionSummary: {
     display: "grid",
-    gap: 3,
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    alignItems: "center",
+    gap: 8,
     padding: "9px 10px",
     borderRadius: 9,
     border: "1px solid rgba(96,165,250,.28)",
     background: "rgba(37,99,235,.14)",
     color: "#f8fafc",
     fontSize: 13,
+  },
+  opponentMissionSummary: {
+    border: "1px solid rgba(248,113,113,.34)",
+    background: "rgba(153,27,27,.22)",
+  },
+  layoutMissionText: {
+    display: "grid",
+    gap: 3,
+    minWidth: 0,
   },
   layoutMissionLabel: {
     color: "#93c5fd",
@@ -5702,21 +6423,12 @@ const styles = {
     letterSpacing: ".05em",
     textTransform: "uppercase",
   },
+  opponentMissionLabel: {
+    color: "#fecaca",
+  },
   missionCardList: {
     display: "grid",
     gap: 8,
-  },
-  missionCardToggleRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) auto auto",
-    alignItems: "center",
-    gap: 5,
-  },
-  missionCardToggleLabel: {
-    color: "#cbd5e1",
-    fontSize: 11,
-    fontWeight: 800,
-    lineHeight: 1.15,
   },
   missionCardButton: {
     position: "relative",
@@ -6074,6 +6786,19 @@ const styles = {
     resize: "vertical",
     fontFamily: "inherit",
   },
+  armyNameDisplay: {
+    flex: 1,
+    minWidth: 0,
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,.16)",
+    background: "#111827",
+    color: "#e5e7eb",
+    fontWeight: 800,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
   armyResultList: {
     display: "flex",
     flexDirection: "column",
@@ -6110,7 +6835,7 @@ const styles = {
   },
   armyManualGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 76px 76px",
+    gridTemplateColumns: "1fr 64px 64px 72px",
     gap: 6,
     alignItems: "center",
   },
@@ -6212,6 +6937,52 @@ const styles = {
     borderBottom: "1px solid rgba(255,255,255,.10)",
     color: "#a3a3a3",
     flexShrink: 0,
+  },
+  planningControls: {
+    position: "absolute",
+    top: 14,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 4,
+    pointerEvents: "none",
+    display: "grid",
+    justifyItems: "center",
+    gap: 8,
+    width: "min(96%, 1120px)",
+  },
+  planningPhaseRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 18,
+    flexWrap: "wrap",
+    pointerEvents: "auto",
+  },
+  planningButton: {
+    minWidth: 112,
+    padding: "8px 14px",
+    borderRadius: 9,
+    border: "1px solid rgba(0,0,0,.25)",
+    background: "#f8fafc",
+    color: "#111827",
+    fontWeight: 850,
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,0,0,.28)",
+  },
+  planningMainButton: {
+    minWidth: 240,
+    padding: "10px 16px",
+    borderRadius: 10,
+    border: "1px solid rgba(0,0,0,.25)",
+    background: "#f8fafc",
+    color: "#111827",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,0,0,.28)",
+    pointerEvents: "auto",
+  },
+  planningButtonActive: {
+    background: "#dbeafe",
+    border: "1px solid #2563eb",
   },
   canvasWrap: {
     position: "relative",
@@ -6472,9 +7243,21 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
 
   const bounds = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
   const footprintSegments = getFootprintBoundarySegments(blockers);
+  const edgeSampleVertices = [];
+  const addEdgeSamples = (a, b, spacing = 18) => {
+    const length = dist(a, b);
+    if (!Number.isFinite(length) || length <= spacing) return;
+    const count = Math.min(24, Math.floor(length / spacing));
+    for (let index = 1; index < count; index += 1) {
+      edgeSampleVertices.push(interpolatePoint(a, b, index / count));
+    }
+  };
+  footprintSegments.forEach((segment) => addEdgeSamples(segment.a, segment.b));
+  walls.forEach((wall) => addEdgeSamples(wall.a, wall.b, 12));
   const vertices = [
     ...bounds,
     ...footprintSegments.flatMap((segment) => [segment.a, segment.b]),
+    ...edgeSampleVertices,
     ...walls.flatMap((wall) => [wall.a, wall.b]),
   ];
   const segments = [];
@@ -6483,7 +7266,9 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
     segments.push({
       a: segment.a,
       b: segment.b,
-      meta: { type: "footprint", index: segment.index, groupKey: segment.groupKey },
+      meta: segment.cap
+        ? { type: "wall", index: -1, cap: true }
+        : { type: "footprint", index: segment.index, groupKey: segment.groupKey },
     });
   });
   walls.forEach((wall, index) => segments.push({ a: wall.a, b: wall.b, meta: { type: "wall", index } }));
@@ -6570,20 +7355,20 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
   return sanitizeVisibilityPolygon(source, hits, W, H);
 }
 
-function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls) {
+function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false) {
   if (!origins.length) return "blocked";
-  let centerHasOneWallPath = false;
+  let hasCenterOneWallPath = false;
+  let hasEdgeOneWallPath = false;
   for (const origin of origins) {
     const state = classifySightSegment(origin, enemy, blockers, walls);
     if (state === "clear") return "clear";
-    if (state === "oneWall") centerHasOneWallPath = true;
+    if (state === "oneWall") hasCenterOneWallPath = true;
   }
-  if (centerHasOneWallPath) return "oneWall";
 
-  // A base whose centre is blocked can still be visible at its edge. Require a
-  // small continuous arc rather than allowing one corner-grazing sample to
-  // promote the whole enemy marker.
-  const targetSamples = 32;
+  // A base whose centre is blocked or in cover can still have a clear edge.
+  // Check all meaningful edge arcs for clear LOS before promoting the marker
+  // to yellow, otherwise a tiny cover-grazing line can overrule a clean view.
+  const targetSamples = interactive ? 16 : 48;
   for (const origin of origins) {
     const edgeStates = [];
     for (let index = 0; index < targetSamples; index += 1) {
@@ -6595,8 +7380,9 @@ function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls) {
       edgeStates.push(classifySightSegment(origin, target, blockers, walls));
     }
     if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) return "clear";
-    if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) return "oneWall";
+    if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) hasEdgeOneWallPath = true;
   }
+  if (hasCenterOneWallPath || hasEdgeOneWallPath) return "oneWall";
   return "blocked";
 }
 
@@ -6826,8 +7612,63 @@ function getFootprintBoundarySegments(blockers) {
     snapSegmentEndpoints(groupedSegments, Math.max(0.1, tolerance));
   });
 
+  segments.push(...createTouchingFootprintCaps(segments));
+
   footprintBoundarySegmentCache.set(blockers, segments);
   return segments;
+}
+
+function createTouchingFootprintCaps(segments) {
+  const caps = [];
+  const tolerance = 0.12;
+  const capRadius = 0.18;
+  const endpoints = [];
+  segments.forEach((segment) => {
+    endpoints.push({ point: segment.a, segment });
+    endpoints.push({ point: segment.b, segment });
+  });
+
+  const addCap = (center, direction, groupKey) => {
+    const length = Math.hypot(direction.x, direction.y);
+    if (length <= 0.0001) return;
+    const normal = { x: -direction.y / length, y: direction.x / length };
+    caps.push({
+      a: { x: center.x - normal.x * capRadius, y: center.y - normal.y * capRadius },
+      b: { x: center.x + normal.x * capRadius, y: center.y + normal.y * capRadius },
+      index: -1,
+      groupKey,
+      cap: true,
+    });
+  };
+
+  for (let leftIndex = 0; leftIndex < endpoints.length; leftIndex += 1) {
+    const left = endpoints[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < endpoints.length; rightIndex += 1) {
+      const right = endpoints[rightIndex];
+      if (left.segment === right.segment) continue;
+      if (left.segment.groupKey === right.segment.groupKey) continue;
+      if (dist(left.point, right.point) > tolerance) continue;
+      const center = {
+        x: (left.point.x + right.point.x) / 2,
+        y: (left.point.y + right.point.y) / 2,
+      };
+      const leftDirection = segmentDirectionAwayFromEndpoint(left.segment, left.point);
+      const rightDirection = segmentDirectionAwayFromEndpoint(right.segment, right.point);
+      const bisector = {
+        x: leftDirection.x + rightDirection.x,
+        y: leftDirection.y + rightDirection.y,
+      };
+      addCap(center, Math.hypot(bisector.x, bisector.y) > 0.0001 ? bisector : leftDirection, `cap:${left.segment.groupKey}:${right.segment.groupKey}`);
+    }
+  }
+  return caps;
+}
+
+function segmentDirectionAwayFromEndpoint(segment, endpoint) {
+  const other = dist(endpoint, segment.a) <= dist(endpoint, segment.b) ? segment.b : segment.a;
+  const vector = { x: other.x - endpoint.x, y: other.y - endpoint.y };
+  const length = Math.hypot(vector.x, vector.y);
+  return length > 0.0001 ? { x: vector.x / length, y: vector.y / length } : { x: 1, y: 0 };
 }
 
 function snapSegmentEndpoints(segments, tolerance) {
@@ -7354,7 +8195,7 @@ function createZoneLayer(zones, W, H, fillStyle, reusableCanvas = null, renderSc
   return mask;
 }
 
-function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1, buffers = null) {
+function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1, buffers = null, blockers = []) {
   if (!clearZones.some((poly) => poly?.length) && !oneWallZones.some((poly) => poly?.length)) return null;
   const reusableBuffers = buffers || {};
   if (renderScale !== 1) {
@@ -7381,8 +8222,8 @@ function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1
     reusableBuffers.oneWallRender,
   );
   if (oneWallMask) reusableBuffers.oneWallMask = oneWallMask;
-  const cleanupRadius = renderScale < 1 ? 1 : 2;
-  if (clearMask) {
+  const cleanupRadius = 1;
+  if (renderScale !== 1 && clearMask) {
     const cleaned = cleanThinMaskArtifacts(
       clearMask,
       W,
@@ -7395,7 +8236,7 @@ function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1
     reusableBuffers.clearCleanupB = cleaned.output;
     clearMask = cleaned.output;
   }
-  if (oneWallMask) {
+  if (renderScale !== 1 && oneWallMask) {
     const cleaned = cleanThinMaskArtifacts(
       oneWallMask,
       W,
@@ -7474,6 +8315,24 @@ function colorizeLosMask(mask, W, H, fillStyle, reusableCanvas = null) {
   context.fillRect(0, 0, W, H);
   context.globalCompositeOperation = "source-over";
   return layer;
+}
+
+function visibilityZoneTriangles(poly) {
+  const source = poly.source;
+  if (!source || poly.length < 3) return [poly];
+  const triangles = [];
+  for (let index = 0; index < poly.length; index += 1) {
+    const first = poly[index];
+    const second = poly[(index + 1) % poly.length];
+    const firstRadius = dist(source, first);
+    const secondRadius = dist(source, second);
+    const minimumRadius = Math.max(1, Math.min(firstRadius, secondRadius));
+    const radiusRatio = Math.max(firstRadius, secondRadius) / minimumRadius;
+    const angularGap = Math.abs(normalizeAngle(second.angle - first.angle));
+    if (radiusRatio > 1.55 && angularGap < 0.025) continue;
+    triangles.push([source, first, second]);
+  }
+  return triangles;
 }
 
 function clipOutsidePolygons(ctx, polygons, W, H) {
@@ -7944,6 +8803,74 @@ function drawWall(ctx, wall, scale = 1, preview = false) {
   ctx.restore();
 }
 
+function drawMovementBaseGhost(ctx, marker, base, scale = 1) {
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.beginPath();
+  if (marker.baseShape === "rectangle") {
+    ctx.translate(marker.x, marker.y);
+    ctx.rotate(marker.baseRotation || 0);
+    ctx.rect(-base.rx, -base.ry, base.rx * 2, base.ry * 2);
+  } else {
+    ctx.ellipse(marker.x, marker.y, base.rx, base.ry, marker.baseRotation || 0, 0, Math.PI * 2);
+  }
+  ctx.fillStyle = "#f8fafc";
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 3 / scale;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function movementEdgePoint(marker, base, dx, dy) {
+  const length = Math.hypot(dx, dy);
+  if (!length) return { x: marker.x, y: marker.y };
+  if (marker.baseShape === "rectangle") {
+    const local = rotatePoint(dx / length, dy / length, -(marker.baseRotation || 0));
+    const tx = Math.abs(local.x) > 0 ? base.rx / Math.abs(local.x) : Infinity;
+    const ty = Math.abs(local.y) > 0 ? base.ry / Math.abs(local.y) : Infinity;
+    const t = Math.min(tx, ty);
+    const rotated = rotatePoint(local.x * t, local.y * t, marker.baseRotation || 0);
+    return { x: marker.x + rotated.x, y: marker.y + rotated.y };
+  }
+  const radius = ellipseRadiusInDirection({ rx: base.rx, ry: base.ry, rotation: marker.baseRotation || 0 }, dx, dy);
+  return { x: marker.x + (dx / length) * radius, y: marker.y + (dy / length) * radius };
+}
+
+function drawMovementArrow(ctx, from, to, fromBase, toBase, scale = 1, pixelsPerInch = null) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return;
+  const a = movementEdgePoint(from, fromBase, dx, dy);
+  const b = movementEdgePoint(to, toBase, -dx, -dy);
+  const arrowLength = Math.hypot(b.x - a.x, b.y - a.y);
+  if (arrowLength < 4 / scale) return;
+  const ux = (b.x - a.x) / arrowLength;
+  const uy = (b.y - a.y) / arrowLength;
+  ctx.save();
+  ctx.strokeStyle = "rgba(222,145,25,.95)";
+  ctx.fillStyle = "rgba(222,145,25,.95)";
+  ctx.lineWidth = 2.5 / scale;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  const head = 9 / scale;
+  const angle = Math.atan2(uy, ux);
+  ctx.beginPath();
+  ctx.moveTo(b.x, b.y);
+  ctx.lineTo(b.x - Math.cos(angle - Math.PI / 6) * head, b.y - Math.sin(angle - Math.PI / 6) * head);
+  ctx.lineTo(b.x - Math.cos(angle + Math.PI / 6) * head, b.y - Math.sin(angle + Math.PI / 6) * head);
+  ctx.closePath();
+  ctx.fill();
+  if (pixelsPerInch) {
+    const inches = arrowLength / pixelsPerInch;
+    drawMapCaption(ctx, `${inches.toFixed(1)}"`, (a.x + b.x) / 2, (a.y + b.y) / 2, scale);
+  }
+  ctx.restore();
+}
+
 function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1, rangeCount = 0, pixelsPerInch = null) {
   const r = enemyBaseRadius(pixelsPerInch);
   const visible = state === "clear";
@@ -8352,3 +9279,4 @@ function roundRect(ctx, x, y, width, height, radius, fill = false, stroke = fals
   if (fill) ctx.fill();
   if (stroke) ctx.stroke();
 }
+
