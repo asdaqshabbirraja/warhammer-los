@@ -3,6 +3,15 @@ import BASE_DATABASE from "./baseSizes.json";
 import LAYOUT_PRESETS from "./layoutPresets.json";
 import LOS_TERRAIN_DATA from "./losTerrain.json";
 
+function chunkArray(items, size) {
+  const chunks = [];
+  const chunkSize = Math.max(1, size || 1);
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
 const FORCE_DISPOSITIONS = [
   "Take and Hold",
   "Purge the Foe",
@@ -153,6 +162,23 @@ const LAYOUT_WALL_TYPES = {
   GH: { label: "GH", width: 3, height: 6, thickness: 0.5 },
 };
 
+const RI_FEATURE_POINTS = {
+  rapidLight1: [[0.44, 1.88], [0.08, 1.88], [0.05, 1.83], [-0.62, 1.81], [-0.62, 1.69], [-0.58, 1.67], [0.03, 1.68], [0.10, 1.61], [0.06, 1.45], [0.10, 1.40], [0.10, 0.51], [0.07, 0.48], [0.10, 0.30], [0.03, 0.22], [0.03, 0.10], [0.10, 0.01], [0.07, -0.07], [0.03, -0.10], [0.03, -0.24], [0.10, -0.32], [0.07, -0.43], [0.10, -0.52], [0.10, -1.41], [0.06, -1.45], [0.10, -1.63], [0.05, -1.68], [-0.58, -1.68], [-0.62, -1.71], [-0.62, -1.82], [-0.58, -1.85], [-0.59, -1.88], [0.48, -1.88], [0.50, -1.83], [0.62, -1.76], [0.58, -1.72], [0.58, -0.20], [0.62, -0.16], [0.46, -0.09], [0.42, -0.01], [0.46, 0.08], [0.62, 0.15], [0.58, 0.20], [0.58, 1.71], [0.62, 1.76], [0.46, 1.84]],
+  rapidLight2: [[0.88, 0.54], [0.68, 0.70], [0.62, 0.66], [0.42, 0.68], [0.36, 0.64], [0.14, 0.66], [-0.14, 0.78], [-0.24, 0.76], [-0.26, 0.82], [-0.44, 0.82], [-0.48, 0.74], [-0.58, 0.70], [-0.58, 0.64], [-0.66, 0.64], [-0.74, 0.54], [-0.74, 0.48], [-0.82, 0.46], [-0.84, 0.38], [-0.92, 0.36], [-0.92, 0.16], [-0.84, 0.12], [-0.86, -0.02], [-0.84, -0.24], [-0.62, -0.74], [-0.62, -0.82], [-0.54, -0.82], [-0.54, -0.76], [-0.48, -0.72], [-0.44, -0.50], [-0.38, -0.34], [-0.44, -0.26], [-0.42, -0.14], [-0.44, -0.10], [-0.36, -0.04], [-0.40, 0.02], [-0.38, 0.30], [-0.12, 0.30], [-0.06, 0.26], [-0.04, 0.33], [0.12, 0.30], [0.20, 0.33], [0.52, 0.33], [0.66, 0.38], [0.72, 0.33], [0.86, 0.33], [0.92, 0.44]],
+  rapidLight3: [[0.67, -1.44], [0.72, -1.38], [0.70, -1.30], [0.80, -1.26], [0.80, -0.92], [0.87, -0.90], [0.91, -0.82], [0.91, -0.46], [0.86, -0.42], [0.84, -0.28], [0.77, -0.20], [0.84, -0.04], [0.78, 0.08], [0.68, 0.14], [0.66, 0.22], [0.68, 0.46], [0.58, 0.48], [0.56, 0.52], [0.68, 0.56], [0.72, 0.60], [0.71, 0.68], [0.83, 0.72], [0.82, 1.18], [0.71, 1.22], [0.72, 1.28], [0.63, 1.38], [0.54, 1.38], [0.53, 1.46], [0.05, 1.46], [0.02, 1.36], [-0.05, 1.38], [-0.13, 1.28], [-0.19, 1.26], [-0.48, 1.34], [-0.53, 1.28], [-0.65, 1.28], [-0.82, 1.20], [-0.87, 1.14], [-0.91, 1.14], [-0.91, 1.02], [-0.87, 1.02], [-0.77, 0.89], [-0.66, 0.84], [-0.07, 0.86], [0.14, 0.98], [0.34, 0.96], [0.34, 0.68], [0.31, 0.60], [0.36, 0.56], [0.48, 0.56], [0.49, 0.50], [0.32, 0.46], [0.19, 0.28], [0.41, 0.04], [0.41, -0.14], [0.37, -0.24], [0.46, -0.32], [0.32, -0.50], [0.48, -0.66], [0.35, -0.68], [0.34, -0.78], [0.52, -0.82], [0.41, -1.06], [0.49, -1.18], [0.60, -1.24], [0.55, -1.30], [0.35, -1.30], [0.34, -1.42], [0.51, -1.46]],
+  rapidLight4: [[0.10, 2.38], [0.04, 2.30], [-0.04, 2.26], [-0.04, 1.86], [-0.08, 1.78], [-0.52, 1.76], [-0.52, 1.66], [-0.46, 1.60], [-0.52, 1.54], [-0.50, 1.42], [-0.10, 1.44], [-0.04, 1.36], [-0.04, 0.26], [-0.08, 0.16], [-0.50, 0.18], [-0.58, 0.12], [-0.72, 0.20], [-0.78, 0.16], [-0.78, -0.08], [-0.76, -0.12], [-0.78, -0.18], [-0.74, -0.20], [-0.60, -0.14], [-0.52, -0.20], [-0.08, -0.18], [-0.04, -0.28], [-0.04, -1.34], [-0.06, -1.42], [-0.50, -1.42], [-0.58, -1.48], [-0.74, -1.42], [-0.78, -1.44], [-0.76, -1.50], [-0.78, -1.54], [-0.78, -1.78], [-0.72, -1.82], [-0.58, -1.74], [-0.50, -1.80], [-0.08, -1.78], [-0.04, -1.84], [-0.04, -2.26], [0.02, -2.32], [0.04, -2.38], [0.10, -2.38], [0.12, -2.32], [0.22, -2.28], [0.22, -1.86], [0.30, -1.76], [0.42, -1.74], [0.52, -1.80], [0.64, -1.80], [0.72, -1.74], [0.78, -1.62], [0.74, -1.50], [0.66, -1.42], [0.56, -1.40], [0.42, -1.48], [0.32, -1.48], [0.22, -1.36], [0.22, -0.94], [0.26, -0.89], [0.24, -0.86], [0.26, -0.80], [0.24, -0.78], [0.26, -0.72], [0.22, -0.68], [0.24, -0.24], [0.32, -0.14], [0.42, -0.14], [0.52, -0.20], [0.64, -0.20], [0.74, -0.12], [0.78, -0.02], [0.74, 0.11], [0.64, 0.18], [0.56, 0.20], [0.42, 0.14], [0.34, 0.14], [0.24, 0.24], [0.22, 0.66], [0.26, 0.72], [0.24, 0.74], [0.26, 0.82], [0.24, 0.84], [0.26, 0.88], [0.22, 0.94], [0.22, 1.34], [0.32, 1.46], [0.42, 1.46], [0.54, 1.40], [0.64, 1.42], [0.74, 1.50], [0.78, 1.62], [0.74, 1.72], [0.64, 1.78], [0.52, 1.80], [0.40, 1.74], [0.30, 1.74], [0.22, 1.86], [0.24, 2.26], [0.16, 2.28]],
+  rapidLight5: [[-1.32, 0.88], [-1.32, 0.02], [-1.38, -0.05], [-1.34, -0.11], [-1.44, -0.19], [-1.44, -0.61], [-1.34, -0.68], [-1.38, -0.76], [-1.26, -0.88], [-1.18, -0.85], [-1.12, -0.92], [-0.68, -0.92], [-0.62, -0.85], [-0.54, -0.88], [-0.48, -0.83], [-0.30, -0.83], [-0.24, -0.76], [-0.06, -0.76], [-0.02, -0.81], [0.08, -0.76], [0.14, -0.81], [0.20, -0.76], [0.36, -0.76], [0.41, -0.81], [0.60, -0.76], [0.88, -0.89], [0.96, -0.85], [1.04, -0.88], [1.12, -0.85], [1.18, -0.92], [1.44, -0.90], [1.44, -0.70], [1.18, -0.70], [1.08, -0.60], [1.00, -0.63], [0.94, -0.61], [0.92, -0.40], [0.84, -0.29], [0.78, -0.35], [0.72, -0.30], [0.34, -0.29], [0.26, -0.40], [0.20, -0.30], [0.12, -0.27], [-0.14, -0.27], [-0.24, -0.35], [-0.32, -0.29], [-0.40, -0.36], [-0.40, -0.57], [-0.48, -0.63], [-0.52, -0.62], [-0.52, -0.49], [-0.56, -0.42], [-0.62, -0.46], [-0.94, -0.46], [-0.96, -0.11], [-0.92, -0.05], [-1.00, 0.03], [-0.92, 0.12], [-0.96, 0.22], [-0.86, 0.36], [-0.92, 0.44], [-0.92, 0.60], [-0.98, 0.75], [-1.12, 0.92], [-1.26, 0.92]],
+  rapidLight6: [[1.25, -0.77], [1.35, -0.16], [1.39, -0.04], [1.49, 0.04], [1.46, 0.11], [1.54, 0.17], [1.54, 0.57], [1.46, 0.63], [1.49, 0.71], [1.38, 0.81], [1.30, 0.78], [1.25, 0.85], [0.85, 0.85], [0.80, 0.78], [0.71, 0.81], [0.65, 0.74], [0.65, 0.61], [0.57, 0.56], [0.33, 0.62], [0.20, 0.62], [-0.01, 0.56], [-0.23, 0.62], [-0.37, 0.62], [-0.55, 0.56], [-0.79, 0.62], [-0.92, 0.62], [-1.02, 0.58], [-1.54, 0.61], [-1.54, 0.27], [-1.32, 0.26], [-1.20, 0.22], [0.47, 0.24], [0.55, 0.21], [0.65, 0.28], [0.75, 0.22], [0.82, 0.42], [1.07, 0.42], [1.11, 0.37], [1.10, 0.14], [0.90, 0.07], [0.98, -0.03], [0.90, -0.10], [0.89, -0.17], [0.90, -0.26], [0.97, -0.29], [0.94, -0.35], [0.94, -0.60], [0.98, -0.66], [0.96, -0.71], [1.00, -0.85], [1.09, -0.85]],
+  rapidDense1: [[1.27, -1.02], [1.29, -0.86], [1.21, -0.78], [0.94, -0.78], [0.84, -0.74], [0.70, -0.76], [0.63, -0.72], [0.63, -0.48], [0.71, -0.42], [0.71, 0.46], [0.64, 0.50], [0.63, 0.70], [0.70, 0.74], [0.84, 0.74], [0.94, 0.76], [1.21, 0.78], [1.29, 0.86], [1.29, 0.98], [1.23, 1.06], [0.94, 1.08], [0.84, 1.10], [0.63, 1.08], [0.53, 1.20], [0.49, 1.22], [0.24, 1.20], [0.16, 1.10], [0.14, 1.18], [0.07, 1.24], [0.05, 1.48], [0.00, 1.50], [0.00, 1.66], [-0.03, 1.70], [-0.06, 1.70], [-0.07, 1.24], [-0.15, 1.18], [-0.17, 1.10], [-0.22, 1.18], [-0.22, 1.38], [-0.39, 1.40], [-0.54, 1.36], [-0.56, 1.18], [-0.64, 1.08], [-0.83, 1.12], [-0.94, 1.08], [-1.15, 1.08], [-1.23, 1.06], [-1.29, 1.00], [-1.29, 0.84], [-1.22, 0.78], [-0.94, 0.76], [-0.84, 0.74], [-0.70, 0.74], [-0.63, 0.70], [-0.63, 0.46], [-0.71, 0.42], [-0.71, -0.48], [-0.64, -0.52], [-0.63, -0.72], [-0.70, -0.76], [-0.83, -0.74], [-0.94, -0.78], [-1.22, -0.78], [-1.29, -0.86], [-1.29, -1.00], [-1.23, -1.06], [-0.94, -1.08], [-0.83, -1.12], [-0.80, -1.10], [-0.63, -1.10], [-0.53, -1.22], [-0.24, -1.22], [-0.17, -1.14], [-0.07, -1.24], [-0.06, -1.46], [0.00, -1.52], [0.00, -1.70], [0.07, -1.70], [0.07, -1.24], [0.14, -1.20], [0.17, -1.12], [0.24, -1.24], [0.22, -1.38], [0.28, -1.40], [0.41, -1.40], [0.54, -1.36], [0.56, -1.18], [0.63, -1.10], [0.83, -1.12], [0.94, -1.08], [1.16, -1.08]],
+  rapidDense2: [[-2.11, -0.24], [-2.07, -0.26], [-1.96, -0.54], [-1.83, -0.66], [-1.79, -0.64], [-1.45, -0.80], [-1.08, -0.78], [-0.81, -0.66], [-0.74, -0.58], [-0.55, -0.72], [-0.07, -0.86], [0.21, -0.84], [0.35, -0.74], [0.55, -0.72], [0.70, -0.58], [1.07, -0.78], [1.43, -0.80], [1.77, -0.64], [1.81, -0.66], [1.95, -0.52], [2.11, 0.00], [1.95, 0.48], [1.84, 0.60], [1.60, 0.70], [1.19, 0.76], [0.79, 0.62], [0.70, 0.54], [0.55, 0.66], [0.38, 0.66], [0.19, 0.82], [0.19, 0.86], [0.13, 0.78], [0.10, 0.86], [0.04, 0.78], [0.01, 0.86], [-0.04, 0.78], [-0.09, 0.86], [-0.13, 0.80], [-0.21, 0.86], [-0.21, 0.80], [-0.37, 0.68], [-0.55, 0.66], [-0.72, 0.54], [-0.81, 0.62], [-1.20, 0.76], [-1.52, 0.73], [-1.83, 0.62], [-1.96, 0.50], [-1.96, 0.42], [-2.07, 0.20], [-2.11, 0.18]],
+  rapidDense3: [[-1.34, -0.30], [-1.27, -0.46], [-1.17, -0.48], [-1.08, -0.46], [-1.02, -0.58], [-0.87, -0.60], [-0.78, -0.68], [-0.26, -0.62], [-0.05, -0.74], [0.08, -0.74], [0.29, -0.62], [0.99, -0.62], [1.07, -0.58], [1.15, -0.46], [1.26, -0.46], [1.34, -0.40], [1.34, -0.34], [1.27, -0.24], [1.05, -0.22], [1.04, -0.14], [0.95, 0.00], [0.82, 0.04], [0.49, 0.02], [0.35, 0.22], [0.31, 0.38], [0.24, 0.42], [0.22, 0.50], [0.13, 0.58], [0.15, 0.64], [0.21, 0.66], [0.22, 0.74], [-0.20, 0.74], [-0.20, 0.66], [-0.11, 0.60], [-0.19, 0.50], [-0.21, 0.42], [-0.28, 0.38], [-0.32, 0.22], [-0.47, 0.02], [-0.80, 0.04], [-0.92, 0.02], [-1.02, -0.14], [-1.04, -0.24], [-1.20, -0.18], [-1.28, -0.24]],
+  rapidDense4: [[3.13, 1.44], [3.07, 1.50], [3.00, 1.46], [2.92, 1.54], [2.55, 1.54], [2.47, 1.46], [2.40, 1.50], [2.34, 1.44], [2.33, 1.28], [2.24, 1.26], [1.88, 1.30], [1.83, 1.32], [1.47, 1.32], [1.42, 1.40], [0.44, 1.42], [0.42, 1.48], [0.33, 1.54], [0.27, 1.50], [0.19, 1.54], [-0.19, 1.54], [-0.22, 1.50], [-0.33, 1.54], [-0.41, 1.50], [-0.44, 1.42], [-0.56, 1.50], [-0.72, 1.50], [-0.90, 1.48], [-1.25, 1.56], [-1.79, 1.50], [-1.92, 1.44], [-2.12, 1.40], [-2.28, 1.42], [-2.30, 1.48], [-2.38, 1.54], [-2.46, 1.50], [-2.53, 1.54], [-2.91, 1.54], [-2.95, 1.50], [-3.06, 1.54], [-3.12, 1.50], [-3.12, 1.44], [-3.17, 1.36], [-3.14, 1.28], [-3.17, 1.22], [-3.17, 0.80], [-3.14, 0.78], [-3.17, 0.66], [-3.12, 0.60], [-3.07, 0.58], [-3.06, 0.52], [-3.12, 0.16], [-3.12, -0.30], [-3.06, -0.70], [-3.17, -0.80], [-3.14, -0.88], [-3.17, -0.94], [-3.17, -1.34], [-3.14, -1.38], [-3.17, -1.48], [-3.14, -1.56], [-2.70, -1.56], [-2.70, -0.92], [-2.59, -0.82], [-2.39, -0.88], [-2.06, -0.86], [-1.98, -0.78], [-1.87, -0.74], [-1.71, -0.74], [-1.63, -0.84], [-1.54, -0.86], [-1.53, -0.84], [-1.62, -0.76], [-1.61, -0.72], [-1.52, -0.66], [-1.21, -0.66], [-1.18, -0.72], [-1.04, -0.68], [-0.97, -0.60], [-1.00, -0.46], [-0.97, -0.46], [-0.93, -0.50], [-0.90, -0.48], [-0.93, -0.38], [-0.46, -0.16], [-0.38, -0.14], [-0.23, -0.22], [-0.25, -0.10], [-0.08, -0.08], [0.02, -0.10], [0.15, -0.06], [0.22, -0.10], [0.29, -0.04], [0.47, -0.04], [0.55, -0.10], [0.55, -0.02], [0.68, 0.08], [0.69, 0.90], [0.93, 0.90], [1.01, 0.92], [1.08, 0.90], [1.15, 0.92], [1.49, 0.90], [1.55, 0.94], [1.61, 0.94], [1.66, 0.90], [1.70, 0.94], [2.04, 0.92], [2.11, 0.98], [2.33, 0.98], [2.43, 0.90], [2.49, 0.98], [2.50, 1.28], [2.56, 1.16], [2.72, 1.16], [2.76, 1.18], [2.86, 1.18], [2.94, 1.28], [2.99, 1.24], [3.00, 0.96], [3.07, 0.90], [3.13, 0.96], [3.17, 1.12]],
+  rapidDense5: [[-2.40, -2.82], [-2.26, -2.82], [-2.14, -2.90], [-1.96, -2.94], [-1.60, -2.94], [-1.36, -2.84], [-1.26, -2.88], [-1.16, -3.02], [-1.08, -3.06], [-0.92, -3.04], [-0.74, -2.98], [-0.62, -2.98], [-0.50, -3.04], [-0.44, -3.00], [-0.36, -3.04], [0.36, -3.02], [0.48, -3.10], [0.58, -3.10], [0.74, -3.00], [0.88, -3.10], [1.02, -3.14], [1.76, -3.12], [1.88, -3.14], [1.90, -3.16], [1.98, -3.16], [2.06, -3.06], [2.18, -3.00], [2.28, -3.04], [2.36, -3.00], [2.44, -2.88], [2.42, -2.76], [2.44, -2.74], [2.44, -2.30], [2.42, -2.28], [2.44, -2.16], [2.34, -2.06], [2.32, -2.00], [2.32, 0.46], [2.40, 0.48], [2.44, 0.56], [2.42, 0.68], [2.44, 0.70], [2.44, 1.12], [2.42, 1.14], [2.44, 1.28], [2.32, 1.50], [2.32, 1.76], [2.24, 1.84], [2.24, 2.30], [2.12, 2.60], [2.20, 2.86], [2.20, 2.96], [2.16, 3.06], [2.10, 3.06], [2.04, 3.12], [2.04, 3.16], [1.86, 3.16], [1.86, 3.06], [1.76, 2.98], [1.80, 2.78], [1.78, 2.68], [1.86, 2.64], [1.86, 2.52], [1.82, 2.48], [1.80, 2.26], [1.84, 2.14], [1.78, 2.04], [1.80, 2.00], [1.78, 1.42], [1.82, 1.30], [1.76, 1.26], [1.66, 0.92], [1.62, 0.90], [1.50, 0.90], [1.52, 1.02], [1.58, 1.08], [1.54, 1.18], [1.44, 1.08], [1.36, 0.92], [1.28, 0.88], [1.22, 0.66], [1.02, 0.60], [1.04, 0.56], [1.12, 0.56], [1.10, 0.50], [0.94, 0.48], [0.62, 0.30], [0.54, 0.28], [0.40, 0.14], [0.26, 0.16], [0.18, 0.16], [0.14, 0.12], [0.14, -0.02], [0.08, 0.00], [0.06, 0.06], [-0.02, 0.08], [-0.02, -0.06], [0.14, -0.18], [0.14, -0.28], [0.10, -0.30], [-0.08, -0.24], [-0.12, -0.26], [-0.14, -0.34], [-0.06, -0.34], [-0.10, -0.40], [-0.08, -0.42], [-0.02, -0.38], [0.10, -0.42], [0.14, -0.46], [0.14, -0.60], [0.12, -0.62], [0.00, -0.56], [-0.12, -0.54], [-0.10, -0.58], [0.06, -0.66], [0.10, -0.72], [-0.22, -0.74], [-0.30, -0.82], [-0.32, -0.92], [0.06, -0.94], [0.06, -1.02], [-0.12, -1.26], [-0.14, -1.38], [-0.34, -1.48], [-0.32, -1.54], [-0.22, -1.56], [-0.28, -1.66], [-0.30, -2.02], [-0.38, -2.10], [-0.44, -2.04], [-0.52, -2.00], [-0.56, -2.02], [-0.46, -2.28], [-0.52, -2.40], [-0.60, -2.44], [-0.62, -2.54], [-0.64, -2.54], [-0.72, -2.40], [-0.78, -2.36], [-0.84, -2.38], [-1.00, -2.56], [-1.18, -2.44], [-1.26, -2.46], [-1.30, -2.54], [-1.40, -2.46], [-1.52, -2.46], [-1.82, -2.60], [-1.98, -2.60], [-2.04, -2.56], [-2.08, -2.62], [-2.40, -2.62], [-2.44, -2.66], [-2.44, -2.80]],
+  rapidDense6: [[-1.94, 2.48], [-1.94, 2.38], [-2.00, 2.32], [-2.00, 2.04], [-1.94, 1.96], [-2.00, 1.92], [-2.00, 1.54], [-1.94, 1.48], [-2.00, 1.42], [-2.00, 1.32], [-2.06, 1.22], [-2.04, 1.08], [-2.08, 1.02], [-2.08, 0.94], [-2.16, 0.80], [-2.16, 0.64], [-2.24, 0.58], [-2.24, 0.42], [-2.16, 0.36], [-2.10, -0.04], [-2.00, -0.14], [-2.00, -1.56], [-2.04, -1.60], [-2.08, -1.62], [-2.12, -1.70], [-2.10, -1.74], [-2.16, -1.78], [-2.16, -1.84], [-2.24, -1.90], [-2.24, -2.06], [-2.16, -2.10], [-2.16, -2.18], [-2.10, -2.20], [-2.08, -2.32], [-1.96, -2.36], [-1.90, -2.34], [-1.88, -2.40], [-1.80, -2.42], [-1.76, -2.48], [-1.58, -2.48], [-1.54, -2.42], [-1.28, -2.40], [-1.08, -2.26], [-0.08, -2.26], [0.18, -2.38], [0.38, -2.36], [0.52, -2.42], [0.64, -2.40], [0.70, -2.48], [0.90, -2.48], [0.96, -2.40], [1.28, -2.44], [1.62, -2.28], [1.74, -2.28], [1.80, -2.24], [2.14, -2.24], [2.24, -2.18], [2.24, -2.04], [1.92, -2.02], [1.76, -2.06], [1.72, -2.02], [1.50, -2.02], [1.48, -1.96], [1.34, -1.96], [1.24, -1.82], [1.22, -0.90], [1.16, -0.86], [1.08, -0.90], [1.06, -1.12], [1.02, -1.02], [1.00, -0.90], [1.10, -0.76], [1.06, -0.76], [0.96, -0.80], [0.92, -0.76], [0.98, -0.72], [0.94, -0.66], [0.98, -0.60], [0.98, -0.54], [0.90, -0.48], [0.74, -0.46], [0.76, -0.32], [0.70, -0.22], [0.76, -0.20], [0.76, -0.16], [0.64, -0.16], [0.62, -0.04], [0.44, 0.12], [0.34, 0.20], [0.34, 0.26], [0.44, 0.34], [0.44, 0.38], [0.34, 0.34], [0.28, 0.30], [0.28, 0.22], [0.22, 0.22], [0.18, 0.40], [0.12, 0.46], [0.28, 0.58], [0.24, 0.62], [0.12, 0.56], [0.08, 0.58], [0.08, 0.64], [0.16, 0.66], [0.08, 0.74], [0.08, 0.78], [0.28, 0.80], [0.32, 0.84], [0.28, 0.94], [-0.70, 0.94], [-0.88, 0.92], [-0.90, 0.84], [-0.86, 0.76], [-0.64, 0.80], [-0.56, 0.78], [-0.82, 0.74], [-0.82, 0.70], [-0.76, 0.68], [-0.84, 0.58], [-0.98, 0.62], [-0.98, 0.58], [-0.90, 0.54], [-0.92, 0.50], [-1.12, 0.54], [-1.30, 0.50], [-1.32, 0.54], [-1.28, 0.64], [-1.34, 0.64], [-1.38, 0.58], [-1.42, 0.56], [-1.48, 0.58], [-1.52, 0.66], [-1.58, 0.62], [-1.68, 0.64], [-1.82, 0.50], [-1.84, 0.52], [-1.84, 0.62], [-1.88, 0.66], [-1.84, 0.74], [-1.84, 1.02], [-1.76, 1.06], [-1.76, 1.36], [-1.82, 1.50], [-1.76, 1.54], [-1.76, 1.84], [-1.82, 1.98], [-1.76, 2.04], [-1.76, 2.34], [-1.84, 2.42]],
+  rapidDense7: [[-1.16, -3.02], [-0.88, -3.02], [-0.74, -3.04], [-0.40, -3.04], [-0.38, -3.06], [-0.10, -3.02], [0.14, -3.20], [0.24, -3.20], [0.36, -3.16], [0.52, -3.24], [0.58, -3.24], [0.68, -3.16], [1.28, -3.18], [1.32, -3.10], [1.38, -3.12], [1.46, -3.08], [1.44, -3.04], [1.48, -2.94], [1.48, -2.88], [1.52, -2.84], [1.52, -2.42], [1.46, -2.38], [1.48, -2.32], [1.38, -2.16], [1.40, -1.02], [1.46, -1.00], [1.48, -0.94], [1.48, -0.88], [1.52, -0.84], [1.52, -0.42], [1.48, -0.38], [1.48, -0.32], [1.46, -0.24], [1.40, -0.22], [1.42, -0.18], [1.38, -0.12], [1.40, 0.56], [1.46, 0.64], [1.52, 0.84], [1.48, 0.98], [1.60, 1.16], [1.60, 1.30], [1.56, 1.42], [1.42, 1.56], [1.44, 1.82], [1.56, 1.98], [1.58, 2.22], [1.52, 2.48], [1.54, 2.80], [1.38, 3.08], [1.38, 3.24], [1.21, 3.24], [1.21, 2.84], [1.10, 2.80], [1.04, 2.76], [1.06, 2.72], [1.16, 2.68], [1.22, 2.54], [1.18, 2.44], [1.08, 2.38], [1.06, 2.04], [1.02, 1.96], [1.04, 1.76], [0.94, 1.62], [1.06, 1.46], [1.06, 1.39], [0.94, 1.26], [0.96, 1.20], [1.02, 1.14], [1.02, 1.10], [0.72, 1.04], [0.62, 1.20], [0.56, 1.22], [0.62, 1.06], [0.52, 1.04], [0.52, 1.14], [0.46, 1.16], [0.44, 1.06], [0.40, 1.02], [0.18, 1.14], [0.12, 1.30], [0.10, 1.28], [0.08, 1.16], [-0.22, 1.20], [-0.34, 1.14], [-0.36, 1.38], [-0.52, 1.38], [-0.54, 1.02], [-0.58, 1.00], [-0.62, 1.02], [-0.60, 1.16], [-0.64, 1.18], [-0.68, 1.00], [-0.78, 0.94], [-0.80, 1.14], [-0.84, 1.18], [-0.88, 0.94], [-1.00, 0.84], [-1.08, 0.50], [-1.52, 0.50], [-1.56, 0.48], [-1.56, 0.40], [-1.52, 0.32], [-1.22, 0.30], [-1.34, -0.06], [-1.32, -0.28], [-1.42, -0.32], [-1.44, -0.38], [-1.32, -0.32], [-1.26, -0.36], [-1.22, -0.44], [-1.22, -0.52], [-1.38, -0.62], [-1.32, -0.66], [-1.22, -0.62], [-1.20, -0.66], [-1.30, -0.86], [-1.24, -1.04], [-1.56, -1.04], [-1.60, -1.16], [-1.54, -1.24], [-1.20, -1.24], [-1.18, -1.26], [-1.22, -1.48], [-1.18, -1.70], [-0.92, -1.90], [-0.88, -2.00], [-0.94, -2.10], [-1.04, -2.08], [-1.04, -2.14], [-0.94, -2.18], [-0.94, -2.26], [-1.10, -2.22], [-1.16, -2.16], [-1.20, -2.18], [-1.14, -2.28], [-0.98, -2.34], [-1.06, -2.64], [-1.20, -2.68], [-1.24, -2.90]],
+  rapidDense8: [[0.50, 4.02], [0.58, 3.87], [0.54, 3.73], [0.46, 3.65], [0.50, 3.58], [0.58, 3.56], [0.58, 3.20], [0.53, 3.13], [0.53, 2.70], [0.59, 2.54], [0.90, 2.54], [0.95, 2.42], [0.91, 2.20], [0.60, 2.20], [0.53, 2.03], [0.53, 0.87], [0.60, 0.71], [0.91, 0.71], [0.95, 0.48], [0.91, 0.36], [0.60, 0.36], [0.52, 0.20], [0.54, -1.03], [0.61, -1.12], [0.83, -1.10], [0.91, -1.12], [0.92, -1.45], [0.83, -1.49], [0.60, -1.46], [0.52, -1.63], [0.52, -2.79], [0.59, -2.95], [0.83, -2.93], [0.91, -2.96], [0.93, -3.25], [0.91, -3.29], [0.83, -3.32], [0.55, -3.32], [0.50, -3.45], [0.48, -3.80], [0.37, -3.94], [0.30, -3.92], [0.29, -3.83], [0.17, -3.71], [0.19, -3.45], [0.13, -3.32], [0.06, -3.44], [0.05, -3.70], [-0.01, -3.79], [-0.01, -3.89], [-0.08, -3.90], [-0.09, -3.42], [-0.14, -3.32], [-0.19, -3.31], [-0.25, -3.45], [-0.25, -3.76], [-0.35, -3.89], [-0.35, -3.97], [-0.38, -4.02], [-0.43, -4.02], [-0.55, -3.78], [-0.55, -3.44], [-0.60, -3.32], [-0.95, -3.29], [-0.95, -2.96], [-0.61, -2.94], [-0.55, -2.81], [-0.57, -1.56], [-0.63, -1.46], [-0.81, -1.46], [-0.84, -1.49], [-0.95, -1.46], [-0.95, -1.12], [-0.85, -1.10], [-0.81, -1.12], [-0.64, -1.12], [-0.56, -1.03], [-0.55, -0.97], [-0.56, 0.27], [-0.62, 0.36], [-0.85, 0.34], [-0.95, 0.37], [-0.95, 0.70], [-0.85, 0.73], [-0.81, 0.71], [-0.62, 0.71], [-0.55, 0.85], [-0.55, 2.04], [-0.62, 2.20], [-0.81, 2.20], [-0.85, 2.17], [-0.95, 2.20], [-0.95, 2.53], [-0.85, 2.56], [-0.81, 2.54], [-0.60, 2.56], [-0.60, 2.59], [-0.50, 2.75], [-0.54, 2.79], [-0.69, 2.79], [-0.70, 2.82], [-0.51, 2.87], [-0.54, 2.89], [-0.69, 2.90], [-0.70, 2.92], [-0.53, 2.94], [-0.52, 2.97], [-0.69, 3.00], [-0.70, 3.03], [-0.54, 3.03], [-0.52, 3.07], [-0.68, 3.09], [-0.70, 3.12], [-0.53, 3.13], [-0.52, 3.17], [-0.69, 3.19], [-0.70, 3.22], [-0.43, 3.26], [-0.09, 3.22], [-0.11, 3.19], [-0.28, 3.17], [-0.27, 3.13], [-0.09, 3.12], [-0.12, 3.09], [-0.28, 3.07], [-0.26, 3.03], [-0.09, 3.03], [-0.11, 3.00], [-0.26, 2.99], [-0.28, 2.97], [-0.27, 2.94], [-0.09, 2.93], [-0.11, 2.90], [-0.26, 2.89], [-0.28, 2.87], [-0.27, 2.84], [-0.10, 2.84], [-0.06, 2.93], [0.00, 2.97], [0.00, 3.14], [0.06, 3.14], [0.07, 2.67], [0.12, 2.56], [0.18, 2.56], [0.23, 2.68], [0.23, 3.15], [0.19, 3.21], [0.19, 3.55], [0.30, 3.63], [0.21, 3.74], [0.19, 3.88], [0.27, 3.99], [0.26, 4.02]],
+};
+
 const LAYOUT_FEATURE_TYPES = {
   largeLightL: { label: "Light", button: "Add large L", kind: "light", shape: "l", width: 3, height: 2, thickness: 0.5 },
   smallLightL: { label: "Light", button: "Add small L", kind: "light", shape: "l", width: 2, height: 2, thickness: 0.5 },
@@ -161,6 +187,20 @@ const LAYOUT_FEATURE_TYPES = {
   smallDenseRectangle: { label: "Dense", button: "Add S green rectangle", kind: "dense", shape: "rect", width: 2.5, height: 3 },
   denseBarricade: { label: "Dense", button: "Add green barricade", kind: "dense", shape: "rect", width: 8, height: 2 },
   largeDenseRectangle: { label: "Dense", button: "Add L green rectangle", kind: "dense", shape: "rect", width: 2.75, height: 4 },
+  rapidLight1: { label: "Light RI 1", button: "Light 1", kind: "light", shape: "custom", width: 1.24, height: 3.76, points: RI_FEATURE_POINTS.rapidLight1, source: "Rapid Ingress TH-TH-A light" },
+  rapidLight2: { label: "Light RI 2", button: "Light 2", kind: "light", shape: "custom", width: 1.83, height: 1.63, points: RI_FEATURE_POINTS.rapidLight2, source: "Rapid Ingress TH-TH-A light" },
+  rapidLight3: { label: "Light RI 3", button: "Light 3", kind: "light", shape: "custom", width: 1.82, height: 2.93, points: RI_FEATURE_POINTS.rapidLight3, source: "Rapid Ingress TH-TH-A light" },
+  rapidLight4: { label: "Light RI 4", button: "Light 4", kind: "light", shape: "custom", width: 1.57, height: 4.77, points: RI_FEATURE_POINTS.rapidLight4, source: "Rapid Ingress TH-TH-A light" },
+  rapidLight5: { label: "Light RI 5", button: "Light 5", kind: "light", shape: "custom", width: 2.87, height: 1.84, points: RI_FEATURE_POINTS.rapidLight5, source: "Rapid Ingress TH-TH-A light" },
+  rapidLight6: { label: "Light RI 6", button: "Light 6", kind: "light", shape: "custom", width: 3.08, height: 1.7, points: RI_FEATURE_POINTS.rapidLight6, source: "Rapid Ingress TH-TH-A light" },
+  rapidDense1: { label: "Dense RI 1", button: "Dense 1", kind: "dense", shape: "custom", width: 2.58, height: 3.41, points: RI_FEATURE_POINTS.rapidDense1, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense2: { label: "Dense RI 2", button: "Dense 2", kind: "dense", shape: "custom", width: 4.22, height: 1.73, points: RI_FEATURE_POINTS.rapidDense2, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense3: { label: "Dense RI 3", button: "Dense 3", kind: "dense", shape: "custom", width: 2.68, height: 1.47, points: RI_FEATURE_POINTS.rapidDense3, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense4: { label: "Dense RI 4", button: "Dense 4", kind: "dense", shape: "custom", width: 6.34, height: 3.13, points: RI_FEATURE_POINTS.rapidDense4, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense5: { label: "Dense RI 5", button: "Dense 5", kind: "dense", shape: "custom", width: 4.89, height: 6.33, points: RI_FEATURE_POINTS.rapidDense5, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense6: { label: "Dense RI 6", button: "Dense 6", kind: "dense", shape: "custom", width: 4.49, height: 4.97, points: RI_FEATURE_POINTS.rapidDense6, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense7: { label: "Dense RI 7", button: "Dense 7", kind: "dense", shape: "custom", width: 3.21, height: 6.46, points: RI_FEATURE_POINTS.rapidDense7, source: "Rapid Ingress TH-TH-A dense" },
+  rapidDense8: { label: "Dense RI 8", button: "Dense 8", kind: "dense", shape: "custom", width: 1.9, height: 8.04, points: RI_FEATURE_POINTS.rapidDense8, source: "Rapid Ingress TH-TH-A dense" },
 };
 
 const DEFAULT_LAYOUT_WALL_SET = [
@@ -234,13 +274,28 @@ async function deleteStoredMap(key) {
 export default function InteractiveLOSTool() {
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
+  const importJsonRef = useRef(null);
   const imgRef = useRef(null);
+  const losWorkerRef = useRef(null);
+  const losWorkerRequestIdRef = useRef(0);
+  const latestLosWorkerRequestsRef = useRef(new Map());
+  const latestEnemyLosWorkerRequestRef = useRef(null);
+  const enemyLosCacheRef = useRef({ key: "", states: [] });
+  const markerEnemyLosCacheRef = useRef(new Map());
+  const lastInteractiveEnemyLosRef = useRef(0);
   const draggingRef = useRef(false);
   const panningRef = useRef(false);
   const panLastRef = useRef(null);
   const objectDragRef = useRef(null);
   const dragFrameRef = useRef(null);
   const pendingDragPointRef = useRef(null);
+  const perfStatsRef = useRef({
+    draw: { total: 0, count: 0, max: 0 },
+    visibility: { total: 0, count: 0, max: 0 },
+    markerVisibility: { total: 0, count: 0, max: 0 },
+    enemyLos: { total: 0, count: 0, max: 0 },
+    lastLog: 0,
+  });
   const saveTimerRef = useRef(null);
   const layoutSaveReadyRef = useRef(false);
   const storedMapSourcesRef = useRef(new Map());
@@ -320,6 +375,7 @@ export default function InteractiveLOSTool() {
   const [sectionOpen, setSectionOpen] = useState({
     game: true,
     layout: true,
+    importGame: false,
     createUpload: false,
     army: true,
     scale: true,
@@ -366,6 +422,9 @@ export default function InteractiveLOSTool() {
     interactiveBlockers: [],
     walls: [],
     enemies: [],
+    enemyLosStates: [],
+    enemyLosRays: [],
+    enemyLosPendingIndexes: new Set(),
     layoutObjectives: [],
     layoutTerrain: [],
     layoutTerrainLinks: [],
@@ -384,7 +443,41 @@ export default function InteractiveLOSTool() {
     visibility: { clear: [], oneWall: [] },
     losVisibilityCache: new Map(),
     combinedLosRender: { clear: null, oneWall: null },
+    movingLosRender: { clear: null, oneWall: null },
+    stationaryLosRender: { clear: null, oneWall: null },
+    stationaryLosRenderKey: "",
+    battlefieldBaseRender: null,
+    battlefieldBaseRenderKey: "",
+    battlefieldForegroundRender: null,
+    battlefieldForegroundRenderKey: "",
+    visibilitySceneVersion: 0,
+    battlefieldBaseVersion: 0,
+    battlefieldForegroundVersion: 0,
     combinedLosBuffers: {
+      clearMask: null,
+      clearRender: null,
+      oneWallMask: null,
+      oneWallRender: null,
+      clearColour: null,
+      oneWallColour: null,
+      clearCleanupA: null,
+      clearCleanupB: null,
+      oneWallCleanupA: null,
+      oneWallCleanupB: null,
+    },
+    movingLosBuffers: {
+      clearMask: null,
+      clearRender: null,
+      oneWallMask: null,
+      oneWallRender: null,
+      clearColour: null,
+      oneWallColour: null,
+      clearCleanupA: null,
+      clearCleanupB: null,
+      oneWallCleanupA: null,
+      oneWallCleanupB: null,
+    },
+    stationaryLosBuffers: {
       clearMask: null,
       clearRender: null,
       oneWallMask: null,
@@ -399,16 +492,37 @@ export default function InteractiveLOSTool() {
   });
 
   useEffect(() => {
+    if (typeof Worker !== "undefined") {
+      try {
+        const worker = new Worker(new URL("./losWorker.js", import.meta.url), { type: "module" });
+        worker.onmessage = (event) => handleLosWorkerMessage(event.data);
+        worker.onerror = (error) => {
+          console.warn("LOS worker error", error);
+          losWorkerRef.current = null;
+        };
+        losWorkerRef.current = worker;
+      } catch (error) {
+        console.warn("LOS worker unavailable", error);
+        losWorkerRef.current = null;
+      }
+    }
     refreshSaveSlots();
     refreshArmyPresets();
     loadBrowserSave();
     resize();
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerup", pointerUp);
+    window.addEventListener("pointercancel", pointerUp);
+    window.addEventListener("blur", cancelActiveDrag);
     return () => {
       if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
+      if (losWorkerRef.current) losWorkerRef.current.terminate();
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerup", pointerUp);
+      window.removeEventListener("pointercancel", pointerUp);
+      window.removeEventListener("blur", cancelActiveDrag);
     };
   }, []);
 
@@ -420,6 +534,211 @@ export default function InteractiveLOSTool() {
       clearTimeout(timer);
     };
   }, [sidebarCollapsed]);
+
+  function recordPerf(label, startedAt) {
+    const elapsed = performance.now() - startedAt;
+    const stats = perfStatsRef.current[label];
+    if (!stats) return;
+    stats.total += elapsed;
+    stats.count += 1;
+    stats.max = Math.max(stats.max, elapsed);
+    const now = performance.now();
+    if (now - perfStatsRef.current.lastLog < 2000) return;
+    perfStatsRef.current.lastLog = now;
+    const summary = Object.entries(perfStatsRef.current)
+      .filter(([, value]) => value && typeof value === "object" && value.count)
+      .map(([name, value]) => `${name}: avg ${(value.total / value.count).toFixed(1)}ms, max ${value.max.toFixed(1)}ms`)
+      .join(" | ");
+    if (summary) console.info(`[LOS perf] ${summary}`);
+    Object.values(perfStatsRef.current).forEach((value) => {
+      if (!value || typeof value !== "object" || !("count" in value)) return;
+      value.total = 0;
+      value.count = 0;
+      value.max = 0;
+    });
+  }
+
+  function currentVisibilitySceneKey(blockers = state.current.blockers) {
+    return `${state.current.visibilitySceneVersion}:${state.current.W}:${state.current.H}:${blockers.length}:${state.current.walls.length}`;
+  }
+
+  function serializeBlockersForWorker(blockers) {
+    return blockers.map((polygon) => ({
+      points: polygon.map((point) => ({ x: point.x, y: point.y })),
+      footprintGroupId: polygon.footprintGroupId,
+      sharedBoundaryTolerance: polygon.sharedBoundaryTolerance,
+    }));
+  }
+
+  function serializeWallsForWorker(walls) {
+    return walls.map((wall) => ({
+      a: { x: wall.a.x, y: wall.a.y },
+      b: { x: wall.b.x, y: wall.b.y },
+    }));
+  }
+
+  function requestDetailedMarkerVisibility(marker) {
+    return requestDetailedMarkerVisibilityBatch([marker], { single: true });
+  }
+
+  function requestDetailedMarkerVisibilityBatch(markers, options = {}) {
+    const worker = losWorkerRef.current;
+    const visibleMarkers = (markers || []).filter((marker) => marker && marker.visible !== false);
+    const uncachedMarkers = visibleMarkers.filter((marker) => !getCachedMarkerVisibility(marker, false));
+    if (!uncachedMarkers.length) return true;
+    if (!worker) return false;
+    const markersToRequest = uncachedMarkers;
+    if (!markersToRequest.length) return false;
+    const sceneKey = currentVisibilitySceneKey();
+    const chunks = options.single && markersToRequest.length === 1
+      ? [markersToRequest]
+      : chunkArray(markersToRequest, options.batchSize || (markersToRequest.length > 8 ? 2 : 3));
+    const sharedPayload = {
+      sceneKey,
+      blockers: serializeBlockersForWorker(state.current.blockers),
+      walls: serializeWallsForWorker(state.current.walls),
+      W: state.current.W,
+      H: state.current.H,
+      pixelsPerInch,
+      reducedOrigins: visibleMarkers.length > 5,
+    };
+    chunks.forEach((chunk, chunkIndex) => {
+      const requestId = ++losWorkerRequestIdRef.current;
+      chunk.forEach((marker) => {
+        latestLosWorkerRequestsRef.current.set(marker.id, { requestId, sceneKey, x: marker.x, y: marker.y });
+      });
+      const postChunk = () => worker.postMessage({
+        ...sharedPayload,
+        type: options.single && chunk.length === 1 ? "markerVisibility" : "markerVisibilityBatch",
+        requestId,
+        marker: options.single && chunk.length === 1 ? { ...chunk[0] } : undefined,
+        markers: options.single && chunk.length === 1 ? undefined : chunk.map((marker) => ({ ...marker })),
+        progressive: true,
+      });
+      if (chunkIndex === 0) postChunk();
+      else window.setTimeout(postChunk, chunkIndex * 10);
+    });
+    return true;
+  }
+
+  function enemyLosCacheKey(interactive = false) {
+    const boardPpi = boardPixelsPerInch();
+    const markerKey = state.current.losMarkers
+      .filter((marker) => marker.visible !== false)
+      .map((marker) => [
+        marker.id,
+        Math.round(marker.x * 10) / 10,
+        Math.round(marker.y * 10) / 10,
+        marker.baseShape || "circle",
+        marker.baseLengthMm || 40,
+        marker.baseWidthMm || marker.baseLengthMm || 40,
+        Math.round((marker.baseRotation || 0) * 1000) / 1000,
+      ].join(","))
+      .join("|");
+    const enemyKey = state.current.enemies
+      .map((enemy) => `${Math.round(enemy.x * 10) / 10},${Math.round(enemy.y * 10) / 10}`)
+      .join("|");
+    return [
+      currentVisibilitySceneKey(),
+      interactive ? "interactive" : "settled",
+      Math.round((boardPpi || 0) * 100) / 100,
+      markerKey,
+      enemyKey,
+    ].join("::");
+  }
+
+  function requestEnemyLosStates(interactive = false, cacheKey = enemyLosCacheKey(interactive)) {
+    const worker = losWorkerRef.current;
+    const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+    if (!worker || interactive || !visibleMarkers.length || !state.current.enemies.length) return false;
+    const previewStates = calculateEnemyLosPreviewStates();
+    const candidateEnemyIndexes = previewStates
+      .map((state, index) => state !== "blocked" ? index : -1)
+      .filter((index) => index >= 0);
+    state.current.enemyLosStates = previewStates;
+    state.current.enemyLosRays = [];
+    if (!candidateEnemyIndexes.length) {
+      state.current.enemyLosPendingIndexes = new Set();
+      enemyLosCacheRef.current = { key: cacheKey, states: previewStates };
+      latestEnemyLosWorkerRequestRef.current = null;
+      return true;
+    }
+    state.current.enemyLosPendingIndexes = new Set(
+      candidateEnemyIndexes.filter((index) => previewStates[index] === "clear"),
+    );
+    const requestId = ++losWorkerRequestIdRef.current;
+    const sceneKey = currentVisibilitySceneKey();
+    latestEnemyLosWorkerRequestRef.current = { requestId, sceneKey, cacheKey };
+    worker.postMessage({
+      type: "enemyLos",
+      requestId,
+      sceneKey,
+      cacheKey,
+      markers: visibleMarkers.map((marker) => ({ ...marker })),
+      enemies: state.current.enemies.map((enemy) => ({ x: enemy.x, y: enemy.y })),
+      previewStates,
+      candidateEnemyIndexes,
+      blockers: serializeBlockersForWorker(state.current.blockers),
+      walls: serializeWallsForWorker(state.current.walls),
+      W: state.current.W,
+      H: state.current.H,
+      pixelsPerInch: boardPixelsPerInch() || pixelsPerInch,
+      interactive,
+    });
+    return true;
+  }
+
+  function handleLosWorkerMessage(message) {
+    if (!message || message.type === "markerVisibilityError" || message.type === "markerVisibilityBatchError" || message.type === "enemyLosError") {
+      if (message?.message) console.warn("LOS worker failed", message.message);
+      return;
+    }
+    if (message.type === "enemyLosResult") {
+      const latest = latestEnemyLosWorkerRequestRef.current;
+      if (!latest || latest.requestId !== message.requestId || latest.sceneKey !== message.sceneKey) return;
+      if (currentVisibilitySceneKey() !== message.sceneKey) return;
+      if (latest.cacheKey !== message.cacheKey) return;
+      const states = Array.isArray(message.states) ? message.states : [];
+      state.current.enemyLosStates = states;
+      state.current.enemyLosPendingIndexes = new Set();
+      enemyLosCacheRef.current = { key: message.cacheKey, states };
+      latestEnemyLosWorkerRequestRef.current = null;
+      draw();
+      return;
+    }
+    if (message.type === "markerVisibilityBatchResult") {
+      if (currentVisibilitySceneKey() !== message.sceneKey) return;
+      let changed = false;
+      (message.results || []).forEach((result) => {
+        if (!result?.markerId) return;
+        const latest = latestLosWorkerRequestsRef.current.get(result.markerId);
+        if (!latest || latest.requestId !== message.requestId || latest.sceneKey !== message.sceneKey) return;
+        const marker = state.current.losMarkers.find((item) => item.id === result.markerId);
+        if (!marker || marker.visible === false) return;
+        if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
+        cacheMarkerVisibility(result.markerId, result.visibility || { clearZones: [], oneWallZones: [] });
+        latestLosWorkerRequestsRef.current.delete(result.markerId);
+        changed = true;
+      });
+      if (!changed) return;
+      rebuildCombinedVisibility(false);
+      updateEnemyLosStates(false, { forceImmediate: true });
+      draw();
+      return;
+    }
+    if (message.type !== "markerVisibilityResult" || !message.markerId) return;
+    const latest = latestLosWorkerRequestsRef.current.get(message.markerId);
+    if (!latest || latest.requestId !== message.requestId || latest.sceneKey !== message.sceneKey) return;
+    if (currentVisibilitySceneKey() !== message.sceneKey) return;
+    const marker = state.current.losMarkers.find((item) => item.id === message.markerId);
+    if (!marker || marker.visible === false) return;
+    if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
+    cacheMarkerVisibility(message.markerId, message.visibility || { clearZones: [], oneWallZones: [] });
+    rebuildCombinedVisibility(false);
+    updateEnemyLosStates(false, { forceImmediate: true });
+    latestLosWorkerRequestsRef.current.delete(message.markerId);
+    draw();
+  }
 
   useEffect(() => {
     const marker = getActiveLosMarker();
@@ -461,8 +780,13 @@ export default function InteractiveLOSTool() {
     if (!canvas) return;
     const rect = canvas.parentElement.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+    const previousFit = state.current.fit ? { ...state.current.fit } : null;
+    const previousW = state.current.W;
+    const previousH = state.current.H;
     state.current.W = Math.max(320, rect.width);
     state.current.H = Math.max(420, rect.height);
+    const sizeChanged = Math.abs(previousW - state.current.W) > 0.5 || Math.abs(previousH - state.current.H) > 0.5;
+    const anchoredObjects = sizeChanged ? captureBoardAnchoredObjects(previousFit) : null;
     canvas.width = state.current.W * dpr;
     canvas.height = state.current.H * dpr;
     canvas.style.width = `${state.current.W}px`;
@@ -470,12 +794,166 @@ export default function InteractiveLOSTool() {
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     calculateFit();
+    if (sizeChanged) invalidateLosRenderLayers();
     if (state.current.activeLayoutKey) {
       refreshActiveLayoutGeometry();
       setPixelsPerInch(state.current.fit.w / boardWidthInches());
     }
+    if (anchoredObjects) restoreBoardAnchoredObjects(anchoredObjects);
     updateVisibility();
     draw();
+  }
+
+  function fitIsUsable(fit) {
+    return fit && Number.isFinite(fit.x) && Number.isFinite(fit.y) && fit.w > 0 && fit.h > 0;
+  }
+
+  function worldPointToBoardWithFit(point, fit) {
+    if (!point || !fitIsUsable(fit)) return null;
+    return {
+      x: (point.x - fit.x) / fit.w * boardWidthInches(),
+      y: (point.y - fit.y) / fit.h * boardHeightInches(),
+    };
+  }
+
+  function boardPointToWorldWithFit(point, fit = state.current.fit) {
+    if (!point || !fitIsUsable(fit)) return null;
+    return {
+      x: fit.x + (point.x / boardWidthInches()) * fit.w,
+      y: fit.y + (point.y / boardHeightInches()) * fit.h,
+    };
+  }
+
+  function capturePointMap(items, fit) {
+    return new Map((items || []).map((item, index) => [
+      item.id || `index-${index}`,
+      worldPointToBoardWithFit(item, fit),
+    ]).filter(([, point]) => point));
+  }
+
+  function restorePointMap(items, pointMap) {
+    (items || []).forEach((item, index) => {
+      const boardPoint = pointMap.get(item.id || `index-${index}`);
+      const worldPoint = boardPointToWorldWithFit(boardPoint);
+      if (worldPoint) {
+        item.x = worldPoint.x;
+        item.y = worldPoint.y;
+      }
+    });
+  }
+
+  function captureBoardAnchoredObjects(fit) {
+    if (!fitIsUsable(fit)) return null;
+    const movementPhases = {};
+    Object.entries(state.current.movementPhases || {}).forEach(([phase, snapshot]) => {
+      movementPhases[phase] = {
+        losMarkers: capturePointMap(snapshot?.losMarkers || [], fit),
+        enemies: capturePointMap(snapshot?.enemies || [], fit),
+      };
+    });
+    return {
+      losMarkers: capturePointMap(state.current.losMarkers, fit),
+      enemies: capturePointMap(state.current.enemies, fit),
+      light: worldPointToBoardWithFit(state.current.light, fit),
+      rulers: (state.current.rulers || []).map((ruler) => ({
+        id: ruler.id,
+        a: worldPointToBoardWithFit(ruler.a, fit),
+        b: worldPointToBoardWithFit(ruler.b, fit),
+      })),
+      rulerStart: worldPointToBoardWithFit(state.current.rulerStart, fit),
+      rulerPreview: state.current.rulerPreview ? {
+        a: worldPointToBoardWithFit(state.current.rulerPreview.a, fit),
+        b: worldPointToBoardWithFit(state.current.rulerPreview.b, fit),
+      } : null,
+      movementPhases,
+    };
+  }
+
+  function restoreBoardAnchoredObjects(snapshot) {
+    if (!snapshot) return;
+    restorePointMap(state.current.losMarkers, snapshot.losMarkers);
+    restorePointMap(state.current.enemies, snapshot.enemies);
+    const active = getActiveLosMarker();
+    if (active) {
+      state.current.light = { x: active.x, y: active.y };
+    } else {
+      const light = boardPointToWorldWithFit(snapshot.light);
+      if (light) state.current.light = light;
+    }
+    (state.current.rulers || []).forEach((ruler, index) => {
+      const saved = snapshot.rulers[index];
+      const a = boardPointToWorldWithFit(saved?.a);
+      const b = boardPointToWorldWithFit(saved?.b);
+      if (a && b) {
+        ruler.a = a;
+        ruler.b = b;
+      }
+    });
+    const rulerStart = boardPointToWorldWithFit(snapshot.rulerStart);
+    if (rulerStart) state.current.rulerStart = rulerStart;
+    if (state.current.rulerPreview && snapshot.rulerPreview) {
+      const a = boardPointToWorldWithFit(snapshot.rulerPreview.a);
+      const b = boardPointToWorldWithFit(snapshot.rulerPreview.b);
+      if (a && b) state.current.rulerPreview = { a, b };
+    }
+    Object.entries(snapshot.movementPhases || {}).forEach(([phase, saved]) => {
+      const target = state.current.movementPhases?.[phase];
+      if (!target) return;
+      restorePointMap(target.losMarkers || [], saved.losMarkers);
+      restorePointMap(target.enemies || [], saved.enemies);
+    });
+  }
+
+  function clearLosBufferSet(buffers) {
+    if (!buffers) return;
+    Object.keys(buffers).forEach((key) => {
+      buffers[key] = null;
+    });
+  }
+
+  function invalidateBattlefieldRenderCaches() {
+    state.current.battlefieldBaseRender = null;
+    state.current.battlefieldBaseRenderKey = "";
+    state.current.battlefieldForegroundRender = null;
+    state.current.battlefieldForegroundRenderKey = "";
+    state.current.battlefieldBaseVersion += 1;
+    state.current.battlefieldForegroundVersion += 1;
+  }
+
+  function markVisibilityGeometryChanged({ base = true, foreground = true, clearVisibility = true } = {}) {
+    state.current.visibilitySceneVersion += 1;
+    if (base) state.current.battlefieldBaseVersion += 1;
+    if (foreground) state.current.battlefieldForegroundVersion += 1;
+    state.current.combinedLosRender = { clear: null, oneWall: null };
+    state.current.movingLosRender = { clear: null, oneWall: null };
+    state.current.stationaryLosRender = { clear: null, oneWall: null };
+    state.current.stationaryLosRenderKey = "";
+    enemyLosCacheRef.current = { key: "", states: [] };
+    markerEnemyLosCacheRef.current.clear();
+    latestEnemyLosWorkerRequestRef.current = null;
+    if (clearVisibility) {
+      state.current.losVisibilityCache.clear();
+      latestLosWorkerRequestsRef.current.clear();
+    }
+  }
+
+  function invalidateLosRenderLayers({ clearVisibility = false } = {}) {
+    state.current.combinedLosRender = { clear: null, oneWall: null };
+    state.current.movingLosRender = { clear: null, oneWall: null };
+    state.current.stationaryLosRender = { clear: null, oneWall: null };
+    state.current.stationaryLosRenderKey = "";
+    state.current.visibilitySceneVersion += 1;
+    invalidateBattlefieldRenderCaches();
+    clearLosBufferSet(state.current.combinedLosBuffers);
+    clearLosBufferSet(state.current.movingLosBuffers);
+    clearLosBufferSet(state.current.stationaryLosBuffers);
+    enemyLosCacheRef.current = { key: "", states: [] };
+    markerEnemyLosCacheRef.current.clear();
+    latestEnemyLosWorkerRequestRef.current = null;
+    if (clearVisibility) {
+      state.current.losVisibilityCache.clear();
+      latestLosWorkerRequestsRef.current.clear();
+    }
   }
 
   function calculateFit() {
@@ -580,6 +1058,8 @@ export default function InteractiveLOSTool() {
       : state.current.losMarkers;
     return {
       version: 11,
+      type: "game",
+      exactLayoutState: true,
       battlefieldOrientation: "portrait-44x60",
       layoutGeometryVersion: "wartoken-json-v1",
       boardWidthInches: boardWidthInches(),
@@ -637,6 +1117,10 @@ export default function InteractiveLOSTool() {
       movementPlanningEnabled,
       activeMovementPhase,
       movementPhases: state.current.movementPhases || {},
+      armyListText,
+      armyResults,
+      armyPresetName,
+      selectedArmyPreset,
     };
   }
 
@@ -659,6 +1143,10 @@ export default function InteractiveLOSTool() {
     setMovementPlanningEnabled(data.movementPlanningEnabled === true);
     setActiveMovementPhase(MOVEMENT_PHASES.includes(data.activeMovementPhase) ? data.activeMovementPhase : "deployment");
     state.current.movementPhases = data.movementPhases && typeof data.movementPhases === "object" ? data.movementPhases : {};
+    if (typeof data.armyListText === "string") setArmyListText(data.armyListText);
+    if (Array.isArray(data.armyResults)) setArmyResults(data.armyResults);
+    if (typeof data.armyPresetName === "string") setArmyPresetName(data.armyPresetName);
+    if (typeof data.selectedArmyPreset === "string") setSelectedArmyPreset(data.selectedArmyPreset);
     setShowLightTerrainFeatures(data.showLightTerrainFeatures !== false);
     setShowDenseTerrainFeatures(data.showDenseTerrainFeatures !== false);
 
@@ -707,7 +1195,24 @@ export default function InteractiveLOSTool() {
         id: enemy.id || `enemy-${Date.now()}-${index}`,
       }));
     }
-    state.current.layoutObjectives = Array.isArray(data.layoutObjectives) ? data.layoutObjectives : [];
+    state.current.layoutObjectives = Array.isArray(data.layoutObjectives)
+      ? data.layoutObjectives.map((objective, index) => {
+        const boardPoint = Number.isFinite(objective.boardX) && Number.isFinite(objective.boardY)
+          ? { x: objective.boardX, y: objective.boardY }
+          : Number.isFinite(objective.x) && Number.isFinite(objective.y)
+            ? worldToBattlefieldPoint(objective)
+            : null;
+        const worldPoint = boardPoint ? battlefieldPoint(boardPoint.x, boardPoint.y) : { x: objective.x || 0, y: objective.y || 0 };
+        return {
+          ...objective,
+          id: objective.id || `layout-objective-${index}`,
+          ...worldPoint,
+          boardX: boardPoint?.x ?? objective.boardX ?? 0,
+          boardY: boardPoint?.y ?? objective.boardY ?? 0,
+          visible: objective.visible !== false,
+        };
+      })
+      : [];
     state.current.layoutWalls = Array.isArray(data.layoutWalls)
       ? data.layoutWalls.map((wall) => ({ ...wall, mirrored: wall.mirrored === true }))
       : [];
@@ -815,19 +1320,23 @@ export default function InteractiveLOSTool() {
       }
     }
 
+    const shouldRefreshPresetLayout = data.exactLayoutState !== true;
     if (savedImageSrc) {
       const img = new Image();
       img.onload = () => {
         imgRef.current = img;
         state.current.savedImageSrc = savedImageSrc;
         calculateFit();
-        if (state.current.activeLayoutKey) {
+        if (state.current.activeLayoutKey && shouldRefreshPresetLayout) {
           refreshActiveLayoutGeometry();
           setPixelsPerInch(state.current.fit.w / boardWidthInches());
           state.current.deploymentVisible = false;
           state.current.enemyDeploymentVisible = false;
           state.current.deploymentNoMansSide = null;
           state.current.enemyDeploymentNoMansSide = null;
+        } else {
+          rebuildLayoutTerrainGeometry();
+          rebuildLayoutWallGeometry();
         }
         updateVisibility();
         setImageReady(true);
@@ -843,13 +1352,16 @@ export default function InteractiveLOSTool() {
       state.current.savedImageSrc = null;
       setImageReady(false);
       calculateFit();
-      if (state.current.activeLayoutKey) {
+      if (state.current.activeLayoutKey && shouldRefreshPresetLayout) {
         refreshActiveLayoutGeometry();
         setPixelsPerInch(state.current.fit.w / boardWidthInches());
         state.current.deploymentVisible = false;
         state.current.enemyDeploymentVisible = false;
         state.current.deploymentNoMansSide = null;
         state.current.enemyDeploymentNoMansSide = null;
+      } else {
+        rebuildLayoutTerrainGeometry();
+        rebuildLayoutWallGeometry();
       }
       updateVisibility();
       setStatus(message);
@@ -1402,7 +1914,17 @@ export default function InteractiveLOSTool() {
   function setLosMarkerVisibility(id, visible) {
     const marker = state.current.losMarkers.find((item) => item.id === id);
     if (!marker || marker.visible === visible) return;
-    updateLosMarkerById(id, { visible });
+    marker.visible = visible;
+    if (visible) {
+      if (!requestDetailedMarkerVisibility(marker)) {
+        cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker));
+      }
+    }
+    rebuildCombinedVisibility();
+    updateEnemyLosStates(false, { forceImmediate: true });
+    setLosVersion((version) => version + 1);
+    draw();
+    scheduleBrowserSave();
     setStatus(`${marker.name || "LOS"} LOS ${visible ? "enabled" : "disabled"}.`);
   }
 
@@ -1462,11 +1984,15 @@ export default function InteractiveLOSTool() {
     if (!members.length) return;
     members.forEach((member) => {
       member.visible = visible;
-      if (visible && !state.current.losVisibilityCache.has(member.id)) {
-        cacheMarkerVisibility(member.id, calculateMarkerVisibility(member));
-      }
     });
+    if (visible && !requestDetailedMarkerVisibilityBatch(members)) {
+      const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
+      members.forEach((member) => {
+        cacheMarkerVisibility(member.id, calculateMarkerVisibility(member, false, preparedGeometry));
+      });
+    }
     rebuildCombinedVisibility();
+    updateEnemyLosStates(false, { forceImmediate: true });
     setLosVersion((version) => version + 1);
     draw();
     scheduleBrowserSave();
@@ -2411,6 +2937,7 @@ export default function InteractiveLOSTool() {
       scheduleBrowserSave();
     } else if (mode === "enemy") {
       state.current.enemies.push({ id: `enemy-${Date.now()}`, x: p.x, y: p.y });
+      updateEnemyLosStates(false);
       setStatus("Enemy added. Red = clear, yellow = through one footprint wall, grey = blocked.");
       draw();
       scheduleBrowserSave();
@@ -2578,6 +3105,23 @@ export default function InteractiveLOSTool() {
     }
   }
 
+  function shouldRunInteractiveLos(dragged, point) {
+    if (!dragged || !point) return true;
+    const now = performance.now();
+    const lastPoint = dragged.lastLosPoint;
+    const moved = lastPoint ? dist(point, lastPoint) : Infinity;
+    const inch = pixelsPerInch || (state.current.fit.w / boardWidthInches()) || 0;
+    const smallMoveThreshold = inch ? inch * 0.18 : 12;
+    const forceMoveThreshold = inch ? inch * 0.45 : 28;
+    const elapsed = now - (dragged.lastLosUpdate || 0);
+    const shouldRun = !dragged.lastLosUpdate || elapsed >= 120 || moved >= forceMoveThreshold;
+    if (!shouldRun && moved < smallMoveThreshold) return false;
+    if (!shouldRun) return false;
+    dragged.lastLosUpdate = now;
+    dragged.lastLosPoint = { x: point.x, y: point.y };
+    return true;
+  }
+
   function applyPendingObjectDrag() {
     const p = pendingDragPointRef.current;
     const dragged = objectDragRef.current;
@@ -2596,18 +3140,14 @@ export default function InteractiveLOSTool() {
           if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
           if (marker.id === activeLosId) state.current.light = { x: marker.x, y: marker.y };
         });
-        const now = performance.now();
-        if (now - dragged.lastLosUpdate >= 80) {
+        if (shouldRunInteractiveLos(dragged, p)) {
           const visibleMembers = getUnitMembers(dragged.unitSlot).filter((marker) => marker.visible !== false);
-          const previewIndex = dragged.previewMemberIndex || 0;
-          const previewCount = Math.min(2, visibleMembers.length);
-          for (let index = 0; index < previewCount; index += 1) {
-            const previewMarker = visibleMembers[(previewIndex + index) % Math.max(1, visibleMembers.length)];
-            if (previewMarker) cacheMarkerVisibility(previewMarker.id, calculateMarkerVisibility(previewMarker, true));
-          }
-          dragged.previewMemberIndex = previewIndex + previewCount;
-          rebuildCombinedVisibility(true);
-          dragged.lastLosUpdate = now;
+          visibleMembers.forEach((marker) => state.current.losVisibilityCache.delete(marker.id));
+          visibleMembers.forEach((marker) => {
+            cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, true), true);
+          });
+          rebuildCombinedVisibility(true, visibleMembers.length ? visibleMembers.map((marker) => marker.id) : dragged.id);
+          updateEnemyLosPreviewStates();
         }
       } else {
         const markerIndex = state.current.losMarkers.findIndex((marker) => marker.id === dragged.id);
@@ -2616,12 +3156,15 @@ export default function InteractiveLOSTool() {
           state.current.losMarkers[markerIndex] = { ...marker, x: p.x, y: p.y };
           if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
           if (marker.id === activeLosId) state.current.light = { x: p.x, y: p.y };
-          updateVisibility(dragged.id, false, true);
+          if (shouldRunInteractiveLos(dragged, p)) updateVisibility(dragged.id, false, true);
         }
       }
     } else if (dragged.type === "enemy") {
       const enemy = state.current.enemies[dragged.index];
-      if (enemy) state.current.enemies[dragged.index] = { ...enemy, x: p.x, y: p.y };
+      if (enemy) {
+        state.current.enemies[dragged.index] = { ...enemy, x: p.x, y: p.y };
+        updateEnemyLosStates(true);
+      }
     } else if (dragged.type === "layoutTerrain") {
       const terrain = state.current.layoutTerrain[dragged.index];
       const inch = state.current.fit.w / boardWidthInches();
@@ -2677,24 +3220,35 @@ export default function InteractiveLOSTool() {
       }
       const dragged = objectDragRef.current;
       applyPendingObjectDrag();
+      objectDragRef.current = null;
+      pendingDragPointRef.current = null;
+      draggingRef.current = false;
+      panningRef.current = false;
+      panLastRef.current = null;
+      if (canvasRef.current) canvasRef.current.style.cursor = "grab";
       if (dragged.type === "light") {
         if (dragged.unitSlot) {
-          getUnitMembers(dragged.unitSlot).forEach((marker) => {
-            if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker));
-          });
-          rebuildCombinedVisibility();
+          const visibleMembers = getUnitMembers(dragged.unitSlot).filter((marker) => marker.visible !== false);
+          if (!requestDetailedMarkerVisibilityBatch(visibleMembers)) {
+            const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
+            visibleMembers.forEach((marker) => cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, preparedGeometry)));
+            rebuildCombinedVisibility();
+          }
+          updateEnemyLosStates(false, { forceImmediate: true });
         }
-        else updateVisibility(dragged.id, false);
+        else {
+          const marker = state.current.losMarkers.find((item) => item.id === dragged.id);
+          if (!requestDetailedMarkerVisibility(marker)) updateVisibility(dragged.id, false);
+          updateEnemyLosStates(false, { forceImmediate: true });
+        }
       }
       if (dragged.type === "layoutObjective") snapObjectiveToTerrainCenter(dragged.index);
-      objectDragRef.current = null;
       if (dragged.type === "light") setLosVersion((v) => v + 1);
       if (dragged.type === "layoutTerrain" || dragged.type === "layoutTerrainPoint" || dragged.type === "layoutWall") updateVisibility();
       if (dragged.type === "layoutTerrain" || dragged.type === "layoutTerrainPoint") {
         setLayoutTerrainRelationVersion((version) => version + 1);
       }
       scheduleBrowserSave();
-      if (canvasRef.current) canvasRef.current.style.cursor = "grab";
     }
 
 
@@ -2733,6 +3287,19 @@ export default function InteractiveLOSTool() {
     draggingRef.current = false;
     panningRef.current = false;
     panLastRef.current = null;
+  }
+
+  function cancelActiveDrag() {
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    objectDragRef.current = null;
+    pendingDragPointRef.current = null;
+    draggingRef.current = false;
+    panningRef.current = false;
+    panLastRef.current = null;
+    if (canvasRef.current) canvasRef.current.style.cursor = "grab";
   }
 
   function sameStickyTarget(a, b) {
@@ -3340,7 +3907,7 @@ export default function InteractiveLOSTool() {
   }
 
   function handleWheel(e) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
 
     if (objectDragRef.current?.type === "layoutTerrain") {
       const terrain = state.current.layoutTerrain[objectDragRef.current.index];
@@ -3449,12 +4016,13 @@ export default function InteractiveLOSTool() {
     const currentEnemies = new Map(state.current.enemies.map((enemy) => [enemy.id, enemy]));
     (previous.enemies || []).forEach((ghost, index) => {
       const current = currentEnemies.get(ghost.id);
-      const radius = enemyBaseRadius(pixelsPerInch || state.current.fit.w / boardWidthInches());
+      const boardPpi = boardPixelsPerInch();
+      const radius = enemyBaseRadius(boardPpi);
       ctx.save();
       ctx.globalAlpha = 0.15;
-      drawEnemy(ctx, ghost, "blocked", false, false, index + 1, scale, 0, pixelsPerInch);
+      drawEnemy(ctx, ghost, "blocked", false, false, index + 1, scale, 0, boardPpi);
       ctx.restore();
-      if (current) drawMovementArrow(ctx, ghost, current, { rx: radius, ry: radius }, { rx: radius, ry: radius }, scale, pixelsPerInch);
+      if (current) drawMovementArrow(ctx, ghost, current, { rx: radius, ry: radius }, { rx: radius, ry: radius }, scale, boardPpi);
     });
   }
 
@@ -3486,11 +4054,11 @@ export default function InteractiveLOSTool() {
     if (!pixelsPerInch) return [center];
 
     const { rx, ry } = getBaseRadii(1, marker);
-    const samples = interactive ? (marker.baseShape === "circle" ? 4 : 6) : (marker.baseShape === "circle" ? 20 : 28);
+    const samples = interactive ? (marker.baseShape === "circle" ? 3 : 4) : (marker.baseShape === "circle" ? 20 : 28);
     const points = [center];
 
     if (marker.baseShape === "rectangle") {
-      const perSide = interactive ? 2 : 8;
+      const perSide = interactive ? 1 : 8;
       for (let i = 0; i <= perSide; i++) {
         const t = -1 + (2 * i) / perSide;
         [
@@ -3798,13 +4366,469 @@ export default function InteractiveLOSTool() {
     return !numeric || numeric <= 0 ? Infinity : numeric * pixelsPerInch;
   }
 
+  function boardPixelsPerInch() {
+    const fitPpi = state.current.fit?.w ? state.current.fit.w / boardWidthInches() : null;
+    return Number.isFinite(fitPpi) && fitPpi > 0
+      ? fitPpi
+      : Number.isFinite(pixelsPerInch) && pixelsPerInch > 0 ? pixelsPerInch : null;
+  }
+
+  function enemyLosMarkerKey(marker) {
+    return [
+      marker.id,
+      Math.round(marker.x * 10) / 10,
+      Math.round(marker.y * 10) / 10,
+      marker.baseShape || "circle",
+      marker.baseLengthMm || 40,
+      marker.baseWidthMm || marker.baseLengthMm || 40,
+      Math.round((marker.baseRotation || 0) * 1000) / 1000,
+    ].join(",");
+  }
+
+  function enemyLosEnemyKey(enemy) {
+    return [
+      enemy.id || "",
+      Math.round(enemy.x * 10) / 10,
+      Math.round(enemy.y * 10) / 10,
+    ].join(",");
+  }
+
+  function combineEnemyLosStates(states) {
+    if (states.includes("clear")) return "clear";
+    if (states.includes("oneWall")) return "oneWall";
+    return "blocked";
+  }
+
+  function normalizePairEnemyLosResult(result) {
+    return typeof result === "string" ? { state: result, ray: null } : {
+      state: result?.state || "blocked",
+      ray: result?.ray || null,
+    };
+  }
+
+  function findConfirmedEnemyLosRay(enemy, enemyRadius, origins, blockers, walls, interactive, preparedGeometry) {
+    const targetSamples = interactive ? 8 : 16;
+    let oneWallRay = null;
+    const targets = [{ x: enemy.x, y: enemy.y }];
+    for (let index = 0; index < targetSamples; index += 1) {
+      const angle = index / targetSamples * Math.PI * 2;
+      targets.push({
+        x: enemy.x + Math.cos(angle) * enemyRadius,
+        y: enemy.y + Math.sin(angle) * enemyRadius,
+      });
+    }
+    for (const origin of origins) {
+      for (const target of targets) {
+        const state = classifySightSegment(origin, target, blockers, walls, preparedGeometry);
+        if (state === "clear") return { state, ray: { a: origin, b: target } };
+        if (state === "oneWall" && !oneWallRay) oneWallRay = { state, ray: { a: origin, b: target } };
+      }
+    }
+    return oneWallRay || { state: "blocked", ray: null };
+  }
+
+  function enemyLosPreviewSamples(enemy, radius) {
+    const samples = [{ x: enemy.x, y: enemy.y }];
+    const sampleCount = 12;
+    for (let index = 0; index < sampleCount; index += 1) {
+      const angle = index / sampleCount * Math.PI * 2;
+      samples.push({
+        x: enemy.x + Math.cos(angle) * radius,
+        y: enemy.y + Math.sin(angle) * radius,
+      });
+    }
+    return samples;
+  }
+
+  function pointInAnyVisibilityZone(point, zones) {
+    return (zones || []).some((zone) => zone?.length >= 3 && pointInPoly(point, zone));
+  }
+
+  function calculateEnemyLosPreviewStates() {
+    const enemies = state.current.enemies || [];
+    if (!enemies.length) return [];
+    const visibility = state.current.visibility || {};
+    const clearZones = visibility.clearZones || [];
+    const oneWallZones = visibility.oneWallZones || [];
+    const hasZones = clearZones.some((zone) => zone?.length >= 3)
+      || oneWallZones.some((zone) => zone?.length >= 3);
+    if (!hasZones) {
+      return enemies.map(() => "blocked");
+    }
+    const radius = enemyBaseRadius(boardPixelsPerInch());
+    const blockers = state.current.blockers || [];
+    return enemies.map((enemy) => {
+      const samples = enemyLosPreviewSamples(enemy, radius);
+      if (samples.some((sample) => pointInAnyVisibilityZone(sample, clearZones))) {
+        return enemyBaseTouchesFootprint(enemy, radius, blockers) ? "oneWall" : "clear";
+      }
+      if (samples.some((sample) => pointInAnyVisibilityZone(sample, oneWallZones))) return "oneWall";
+      return "blocked";
+    });
+  }
+
+  function updateEnemyLosPreviewStates() {
+    state.current.enemyLosStates = calculateEnemyLosPreviewStates();
+    state.current.enemyLosRays = [];
+    state.current.enemyLosPendingIndexes = new Set();
+  }
+
+  function trimMarkerEnemyLosCache(limit = 6000) {
+    const cache = markerEnemyLosCacheRef.current;
+    if (cache.size <= limit) return;
+    const removeCount = cache.size - limit;
+    let removed = 0;
+    for (const key of cache.keys()) {
+      cache.delete(key);
+      removed += 1;
+      if (removed >= removeCount) break;
+    }
+  }
+
+  function calculateEnemyLosStatesFromPairCache(interactive, sceneKey, boardPpi, visibleMarkers, enemyVisibilityGeometry) {
+    const pairCache = markerEnemyLosCacheRef.current;
+    const radius = enemyBaseRadius(boardPpi);
+    const rays = [];
+    const states = state.current.enemies.map((enemy) => {
+      const pairResults = visibleMarkers.map((marker) => {
+        const pairKey = [
+          sceneKey,
+          interactive ? "interactive" : "settled",
+          Math.round((boardPpi || 0) * 100) / 100,
+          enemyLosMarkerKey(marker),
+          enemyLosEnemyKey(enemy),
+        ].join("::");
+        if (pairCache.has(pairKey)) return normalizePairEnemyLosResult(pairCache.get(pairKey));
+        const origins = getLOSOriginsForMarker(marker, interactive, enemy);
+        const losState = directEnemyLOSState(
+          enemy,
+          radius,
+          origins,
+          state.current.blockers,
+          state.current.walls,
+          interactive,
+          enemyVisibilityGeometry,
+        );
+        const result = losState === "blocked"
+          ? { state: losState, ray: null }
+          : findConfirmedEnemyLosRay(enemy, radius, origins, state.current.blockers, state.current.walls, interactive, enemyVisibilityGeometry);
+        pairCache.set(pairKey, result);
+        return result;
+      });
+      const finalState = combineEnemyLosStates(pairResults.map((result) => result.state));
+      const ray = pairResults.find((result) => result.state === finalState && result.ray)?.ray || null;
+      rays.push(ray ? { ...ray, state: finalState } : null);
+      return finalState;
+    });
+    state.current.enemyLosRays = rays;
+    trimMarkerEnemyLosCache();
+    return states;
+  }
+
+  function updateEnemyLosStates(interactive = false, options = {}) {
+    const startedAt = performance.now();
+    const forceImmediate = options.forceImmediate === true;
+    const cacheKey = enemyLosCacheKey(interactive);
+    if (!forceImmediate && enemyLosCacheRef.current.key === cacheKey) {
+      state.current.enemyLosStates = enemyLosCacheRef.current.states;
+      state.current.enemyLosPendingIndexes = new Set();
+      return;
+    }
+    if (interactive) {
+      const now = performance.now();
+      if (now - lastInteractiveEnemyLosRef.current < 180) return;
+      lastInteractiveEnemyLosRef.current = now;
+      updateEnemyLosPreviewStates();
+      recordPerf("enemyLos", startedAt);
+      return;
+    }
+    if (requestEnemyLosStates(interactive, cacheKey)) {
+      recordPerf("enemyLos", startedAt);
+      return;
+    }
+    const boardPpi = boardPixelsPerInch();
+    const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+    const enemyVisibilityGeometry = getPreparedVisibilityGeometry(
+      state.current.blockers,
+      state.current.walls,
+      state.current.W,
+      state.current.H,
+    );
+    state.current.enemyLosStates = calculateEnemyLosStatesFromPairCache(
+      interactive,
+      currentVisibilitySceneKey(),
+      boardPpi,
+      visibleMarkers,
+      enemyVisibilityGeometry,
+    );
+    state.current.enemyLosPendingIndexes = new Set();
+    enemyLosCacheRef.current = { key: cacheKey, states: state.current.enemyLosStates };
+    recordPerf("enemyLos", startedAt);
+  }
+
   function terrainFeatureKindVisible(kind) {
     return kind === "dense" ? showDenseTerrainFeatures : showLightTerrainFeatures;
+  }
+
+  function roundedNumber(value, places = 2) {
+    if (!Number.isFinite(value)) return value;
+    const factor = 10 ** places;
+    return Math.round(value * factor) / factor;
+  }
+
+  function roundedPoint(point) {
+    return point ? { x: roundedNumber(point.x), y: roundedNumber(point.y) } : null;
+  }
+
+  function roundedPoints(points = []) {
+    return points.map(roundedPoint);
+  }
+
+  function ensureRenderCanvas(canvas, W, H) {
+    const target = canvas || document.createElement("canvas");
+    if (target.width !== W) target.width = W;
+    if (target.height !== H) target.height = H;
+    return target;
+  }
+
+  function battlefieldBaseRenderKey(cameraScale) {
+    const { W, H, fit, deploymentPath, deploymentLine, enemyDeploymentPath, enemyDeploymentLine } = state.current;
+    const homeDeployPath = deploymentPath?.length >= 2 ? deploymentPath : (deploymentLine ? [deploymentLine.a, deploymentLine.b] : []);
+    const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
+    return JSON.stringify({
+      W,
+      H,
+      version: state.current.battlefieldBaseVersion,
+      fit: { x: roundedNumber(fit.x), y: roundedNumber(fit.y), w: roundedNumber(fit.w), h: roundedNumber(fit.h) },
+      boardW: boardWidthInches(),
+      boardH: boardHeightInches(),
+      scale: roundedNumber(cameraScale, 3),
+      image: Boolean(imgRef.current),
+      imageSrc: state.current.savedImageSrc ? String(state.current.savedImageSrc).slice(0, 128) : "",
+      homeDeployPathLength: homeDeployPath.length,
+      homeNoMans: state.current.deploymentNoMansSide || "",
+      enemyDeployPathLength: enemyDeployPath.length,
+      enemyNoMans: state.current.enemyDeploymentNoMansSide || "",
+    });
+  }
+
+  function battlefieldForegroundRenderKey(cameraScale) {
+    const { W, H } = state.current;
+    return JSON.stringify({
+      W,
+      H,
+      version: state.current.battlefieldForegroundVersion,
+      scale: roundedNumber(cameraScale, 3),
+      boardPpi: roundedNumber(boardPixelsPerInch(), 3),
+      lightVisible: terrainFeatureKindVisible("light"),
+      denseVisible: terrainFeatureKindVisible("dense"),
+      terrainCount: state.current.layoutTerrain.length,
+      terrain: state.current.layoutTerrain.map((terrain) => [
+        terrain.id,
+        terrain.shape,
+        roundedNumber(terrain.x),
+        roundedNumber(terrain.y),
+        roundedNumber(terrain.rotation, 4),
+        terrain.mirrored === true,
+      ]),
+      blockerCount: state.current.blockers.length,
+      wallCount: state.current.layoutWalls.length,
+      walls: state.current.layoutWalls.map((wall) => [
+        wall.id,
+        wall.type,
+        roundedNumber(wall.x),
+        roundedNumber(wall.y),
+        roundedNumber(wall.rotation, 4),
+        wall.mirrored === true,
+        wall.floorState || "ground",
+      ]),
+      terrainFeatureCount: state.current.layoutTerrainFeatures.length,
+      terrainFeatures: state.current.layoutTerrainFeatures.map((feature) => [
+        feature.id,
+        feature.kind,
+        roundedPoints(feature.points),
+      ]),
+      featurePieceCount: state.current.layoutFeaturePieces.length,
+      featurePieces: state.current.layoutFeaturePieces.map((feature) => [
+        feature.id,
+        feature.type,
+        roundedNumber(feature.x),
+        roundedNumber(feature.y),
+        roundedNumber(feature.rotation, 4),
+        feature.mirrored === true,
+      ]),
+      objectiveCount: state.current.layoutObjectives.length,
+      objectives: state.current.layoutObjectives.map((objective) => [
+        objective.id,
+        objective.type,
+        roundedNumber(objective.x),
+        roundedNumber(objective.y),
+        objective.visible !== false,
+      ]),
+      deploymentPathLength: state.current.deploymentPath?.length || 0,
+      deploymentVisible: state.current.deploymentVisible,
+      deploymentLabelPosition: roundedPoint(state.current.deploymentLabelPosition),
+      enemyDeploymentPathLength: state.current.enemyDeploymentPath?.length || 0,
+      enemyDeploymentVisible: state.current.enemyDeploymentVisible,
+      enemyDeploymentLabelPosition: roundedPoint(state.current.enemyDeploymentLabelPosition),
+      noMans: state.current.deploymentNoMansSide || "",
+      enemyNoMans: state.current.enemyDeploymentNoMansSide || "",
+    });
+  }
+
+  function drawBattlefieldBaseLayer(targetCtx, cameraScale) {
+    const { W, H, fit, blockers, deploymentLine, deploymentPath, enemyDeploymentLine, enemyDeploymentPath } = state.current;
+    const img = imgRef.current;
+    const homeDeployPath = deploymentPath?.length >= 2 ? deploymentPath : (deploymentLine ? [deploymentLine.a, deploymentLine.b] : []);
+    const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
+
+    targetCtx.clearRect(0, 0, W, H);
+    targetCtx.fillStyle = "#151515";
+    targetCtx.fillRect(0, 0, W, H);
+    targetCtx.fillStyle = "#24272b";
+    targetCtx.fillRect(fit.x, fit.y, fit.w, fit.h);
+    if (img) {
+      targetCtx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
+      targetCtx.fillStyle = "rgba(15,18,22,.72)";
+      targetCtx.fillRect(fit.x, fit.y, fit.w, fit.h);
+    }
+    drawBattlefieldGrid(targetCtx, fit, cameraScale, boardWidthInches(), boardHeightInches());
+
+    if (homeDeployPath.length >= 2 && state.current.deploymentNoMansSide) {
+      drawDeploymentAreaWash(targetCtx, homeDeployPath, state.current.deploymentNoMansSide, W, H, fit, blockers, "rgba(125,211,252,.18)");
+    }
+    if (enemyDeployPath.length >= 2 && state.current.enemyDeploymentNoMansSide) {
+      drawDeploymentAreaWash(targetCtx, enemyDeployPath, state.current.enemyDeploymentNoMansSide, W, H, fit, blockers, "rgba(248,113,113,.18)");
+    }
+  }
+
+  function getBattlefieldBaseRender(cameraScale) {
+    const { W, H } = state.current;
+    const key = battlefieldBaseRenderKey(cameraScale);
+    if (state.current.battlefieldBaseRender && state.current.battlefieldBaseRenderKey === key) {
+      return state.current.battlefieldBaseRender;
+    }
+    const canvas = ensureRenderCanvas(state.current.battlefieldBaseRender, W, H);
+    drawBattlefieldBaseLayer(canvas.getContext("2d"), cameraScale);
+    state.current.battlefieldBaseRender = canvas;
+    state.current.battlefieldBaseRenderKey = key;
+    return canvas;
+  }
+
+  function drawBattlefieldForegroundLayer(targetCtx, cameraScale) {
+    const { W, H, fit, blockers, deploymentLine, deploymentPath, enemyDeploymentLine, enemyDeploymentPath, layoutObjectives } = state.current;
+    targetCtx.clearRect(0, 0, W, H);
+
+    state.current.layoutTerrain.forEach((layoutTerrain) => {
+      const definition = TERRAIN_FOOTPRINTS[layoutTerrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+      const visualPoly = terrainLocalPolygonToWorld(layoutTerrain, layoutTerrain.outer || definition.outer);
+      const grouped = Boolean(layoutTerrainGroupFor(layoutTerrain.id));
+      drawPoly(targetCtx, visualPoly, "rgba(196,152,43,.30)", grouped ? "rgba(0,0,0,0)" : "rgba(255,255,255,.84)", true, cameraScale, false);
+      const lightPoly = terrainLocalPolygonToWorld(layoutTerrain, definition.light);
+      const densePoly = terrainLocalPolygonToWorld(layoutTerrain, definition.dense);
+      if (lightPoly.length) drawPoly(targetCtx, lightPoly, "rgba(222,145,25,.42)", "rgba(250,204,21,.75)", true, cameraScale, false);
+      if (densePoly.length) drawPoly(targetCtx, densePoly, "rgba(15,118,110,.52)", "rgba(16,185,129,.88)", true, cameraScale, false);
+    });
+
+    blockers.forEach((poly, index) => {
+      const blockerId = state.current.blockerIds[index] || "";
+      const generatedLayoutFootprint = blockerId.startsWith("layout-");
+      drawPoly(
+        targetCtx,
+        poly,
+        generatedLayoutFootprint ? "rgba(0,0,0,0)" : "rgba(18,18,18,.38)",
+        generatedLayoutFootprint && String(poly.footprintGroupId || "").startsWith("layout-group:")
+          ? "rgba(0,0,0,0)"
+          : generatedLayoutFootprint ? "rgba(255,255,255,.96)" : "rgba(255,255,255,.22)",
+        true,
+        cameraScale,
+        !generatedLayoutFootprint,
+      );
+    });
+    drawGroupedTerrainOutlines(targetCtx, blockers, cameraScale);
+
+    state.current.layoutWalls.forEach((wall) => {
+      const polygon = layoutWallPolygonToWorld(wall);
+      targetCtx.save();
+      if (wall.floorState === "firstFloor") targetCtx.setLineDash([7 / cameraScale, 5 / cameraScale]);
+      drawPoly(targetCtx, polygon, wall.floorState === "firstFloor" ? "rgba(168,85,247,.24)" : "rgba(168,85,247,.82)", "#c084fc", true, cameraScale, false);
+      targetCtx.restore();
+    });
+
+    state.current.layoutTerrainFeatures.filter((feature) => terrainFeatureKindVisible(feature.kind)).forEach((feature) => {
+      const poly = feature.points.map((point) => battlefieldPoint(point.x, point.y));
+      drawDecorativeTerrainFeature(targetCtx, poly, feature.kind, cameraScale);
+    });
+    state.current.layoutFeaturePieces.filter((feature) => terrainFeatureKindVisible(LAYOUT_FEATURE_TYPES[feature.type]?.kind || "light")).forEach((feature) => {
+      const definition = LAYOUT_FEATURE_TYPES[feature.type];
+      const polygon = layoutFeaturePolygonToWorld(feature);
+      drawDecorativeTerrainFeature(targetCtx, polygon, definition?.kind || "light", cameraScale);
+    });
+
+    if (deploymentPath?.length >= 2) drawDeploymentPath(targetCtx, deploymentPath, cameraScale, state.current.deploymentVisible, false, "home", fit, state.current.deploymentLabelPosition);
+    else if (deploymentLine) drawDeploymentLine(targetCtx, deploymentLine, cameraScale, state.current.deploymentVisible, false, "home", fit, state.current.deploymentLabelPosition);
+    if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(targetCtx, enemyDeploymentPath, cameraScale, state.current.enemyDeploymentVisible, false, "enemy", fit, state.current.enemyDeploymentLabelPosition);
+    else if (enemyDeploymentLine) drawDeploymentLine(targetCtx, enemyDeploymentLine, cameraScale, state.current.enemyDeploymentVisible, false, "enemy", fit, state.current.enemyDeploymentLabelPosition);
+
+    const homeDeployPath = deploymentPath?.length >= 2 ? deploymentPath : (deploymentLine ? [deploymentLine.a, deploymentLine.b] : []);
+    const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
+    if (homeDeployPath.length >= 2 && !state.current.deploymentNoMansSide) drawDeploymentSideArrows(targetCtx, homeDeployPath, cameraScale, "home");
+    if (enemyDeployPath.length >= 2 && !state.current.enemyDeploymentNoMansSide) drawDeploymentSideArrows(targetCtx, enemyDeployPath, cameraScale, "enemy");
+
+    layoutObjectives.forEach((objective) => {
+      drawLayoutObjective(targetCtx, objective, pixelsPerInch || fit.w / boardWidthInches(), cameraScale);
+    });
+  }
+
+  function getBattlefieldForegroundRender(cameraScale) {
+    const { W, H } = state.current;
+    const key = battlefieldForegroundRenderKey(cameraScale);
+    if (state.current.battlefieldForegroundRender && state.current.battlefieldForegroundRenderKey === key) {
+      return state.current.battlefieldForegroundRender;
+    }
+    const canvas = ensureRenderCanvas(state.current.battlefieldForegroundRender, W, H);
+    drawBattlefieldForegroundLayer(canvas.getContext("2d"), cameraScale);
+    state.current.battlefieldForegroundRender = canvas;
+    state.current.battlefieldForegroundRenderKey = key;
+    return canvas;
+  }
+
+  function drawDynamicLayoutSelectionOverlays(ctx, cameraScale) {
+    const selectedTerrain = state.current.layoutTerrain.find((terrain) => terrain.id === selectedLayoutTerrainId);
+    if (layoutEditMode && selectedTerrain) {
+      const definition = TERRAIN_FOOTPRINTS[selectedTerrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+      const visualPoly = terrainLocalPolygonToWorld(selectedTerrain, selectedTerrain.outer || definition.outer);
+      drawPoly(ctx, visualPoly, "rgba(0,0,0,0)", "#60a5fa", true, cameraScale, false);
+    }
+    const selectedWall = state.current.layoutWalls.find((wall) => wall.id === selectedLayoutWallId);
+    if (layoutEditMode && selectedWall) {
+      const polygon = layoutWallPolygonToWorld(selectedWall);
+      ctx.save();
+      if (selectedWall.floorState === "firstFloor") ctx.setLineDash([7 / cameraScale, 5 / cameraScale]);
+      drawPoly(ctx, polygon, "rgba(0,0,0,0)", "#f8fafc", true, cameraScale, false);
+      ctx.restore();
+    }
+    const selectedFeature = state.current.layoutFeaturePieces.find((feature) => feature.id === selectedLayoutFeatureId);
+    if (layoutEditMode && selectedFeature) {
+      drawPoly(ctx, layoutFeaturePolygonToWorld(selectedFeature), "rgba(0,0,0,0)", "#f8fafc", true, cameraScale, false);
+    }
+    const selectedObjective = state.current.layoutObjectives.find((objective) => objective.id === selectedLayoutObjectiveId);
+    if (selectedObjective) {
+      const radius = Math.max(17 / cameraScale, (pixelsPerInch || state.current.fit.w / boardWidthInches()) * 1.8);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(selectedObjective.x, selectedObjective.y, radius, 0, Math.PI * 2);
+      ctx.lineWidth = 2.5 / cameraScale;
+      ctx.strokeStyle = "#f8fafc";
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function draw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const drawStartedAt = performance.now();
     const ctx = canvas.getContext("2d");
     const { W, H, fit, camera, blockers, walls, enemies, layoutObjectives, currentPoly, wallPath, wallPreview, visibility, scalePreview, rulerPreview, rulers, stickyRulers, deploymentLine, deploymentPath, deploymentDraft, deploymentPreview, deploymentVisible, deploymentLabelPosition, deploymentVisibility, enemyDeploymentLine, enemyDeploymentPath, enemyDeploymentDraft, enemyDeploymentPreview, enemyDeploymentVisible, enemyDeploymentLabelPosition, enemyDeploymentVisibility } = state.current;
     const light = getActiveLosPoint();
@@ -3813,6 +4837,7 @@ export default function InteractiveLOSTool() {
     const selectedUnitMembers = activeUnitSlot ? getUnitMembers(activeUnitSlot) : [];
     const selectedRangeValue = selectedUnitMembers.length ? getUnitRange(activeUnitSlot, selectedUnitMembers) : rangeInches;
     const numericRange = Number(selectedRangeValue);
+    const boardPpi = boardPixelsPerInch();
     const rangeRadius = !pixelsPerInch || !numericRange || numericRange <= 0 ? Infinity : numericRange * pixelsPerInch;
     const homeDeploymentNumericRange = Number(homeDeploymentRangeInches);
     const homeDeploymentRangeRadius = !pixelsPerInch || !homeDeploymentNumericRange || homeDeploymentNumericRange <= 0 ? Infinity : homeDeploymentNumericRange * pixelsPerInch;
@@ -3830,7 +4855,7 @@ export default function InteractiveLOSTool() {
     const enemyRangeCounts = enemies.map((enemy) => {
       let count = 0;
       rangedMarkers.forEach(({ marker, radius }) => {
-        if (!enemyInRange(enemy, marker, radius, pixelsPerInch)) return;
+        if (!enemyInRange(enemy, marker, radius, boardPpi)) return;
         count += 1;
         markerIdsInRange.add(marker.id);
       });
@@ -3838,47 +4863,12 @@ export default function InteractiveLOSTool() {
     });
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#151515";
-    ctx.fillRect(0, 0, W, H);
 
     ctx.save();
     ctx.translate(camera.x, camera.y);
     ctx.scale(camera.scale, camera.scale);
 
-    const img = imgRef.current;
-    ctx.fillStyle = "#24272b";
-    ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
-    if (img) {
-      ctx.drawImage(img, fit.x, fit.y, fit.w, fit.h);
-      ctx.fillStyle = "rgba(15,18,22,.72)";
-      ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
-    }
-    drawBattlefieldGrid(ctx, fit, camera.scale, boardWidthInches(), boardHeightInches());
-
-    if (homeDeployPath.length >= 2 && state.current.deploymentNoMansSide) {
-      drawDeploymentAreaWash(
-        ctx,
-        homeDeployPath,
-        state.current.deploymentNoMansSide,
-        W,
-        H,
-        fit,
-        blockers,
-        "rgba(125,211,252,.18)",
-      );
-    }
-    if (enemyDeployPath.length >= 2 && state.current.enemyDeploymentNoMansSide) {
-      drawDeploymentAreaWash(
-        ctx,
-        enemyDeployPath,
-        state.current.enemyDeploymentNoMansSide,
-        W,
-        H,
-        fit,
-        blockers,
-        "rgba(248,113,113,.18)",
-      );
-    }
+    ctx.drawImage(getBattlefieldBaseRender(camera.scale), 0, 0);
 
     const rangeMarkers = Number.isFinite(rangeRadius)
       ? (selectedUnitMembers.length ? selectedUnitMembers : [getActiveLosMarker()].filter(Boolean))
@@ -3891,21 +4881,24 @@ export default function InteractiveLOSTool() {
     ctx.rect(fit.x, fit.y, fit.w, fit.h);
     ctx.clip();
 
-    if (state.current.combinedLosRender?.oneWall || state.current.combinedLosRender?.clear) {
-      if (state.current.combinedLosRender.oneWall) {
-        ctx.drawImage(state.current.combinedLosRender.oneWall, 0, 0);
-      }
-      if (state.current.combinedLosRender.clear) {
+    [
+      state.current.stationaryLosRender,
+      state.current.movingLosRender,
+      state.current.combinedLosRender,
+    ].forEach((renderLayer) => {
+      if (!renderLayer?.oneWall && !renderLayer?.clear) return;
+      if (renderLayer.oneWall) ctx.drawImage(renderLayer.oneWall, 0, 0);
+      if (renderLayer.clear) {
         ctx.save();
         clipOutsidePolygons(ctx, blockers, W, H);
-        ctx.drawImage(state.current.combinedLosRender.clear, 0, 0);
+        ctx.drawImage(renderLayer.clear, 0, 0);
         ctx.restore();
       }
-    }
+    });
 
     if (Number.isFinite(rangeRadius)) {
       const activeZones = rangeMarkers.flatMap((marker) => {
-        const activeVisibility = state.current.losVisibilityCache.get(marker.id);
+        const activeVisibility = getCachedMarkerVisibility(marker, false);
         return activeVisibility ? [...activeVisibility.oneWallZones, ...activeVisibility.clearZones] : [];
       });
       drawMultiRangeZoneMask(ctx, activeZones, W, H, rangeMarkers, rangeRadius, "rgba(34,197,94,.18)");
@@ -3947,61 +4940,9 @@ export default function InteractiveLOSTool() {
       ctx.restore();
     }
 
-    // Footprints are drawn after the LOS overlays with a near-solid fill.
-    // This masks any small visibility edge/ray artifacts inside footprints.
-    // Footprints should not dim valid LOS inside them.
-    // First draw a subtle footprint tint, then re-brighten any part of the footprint
-    // that lies inside the clear/yellow LOS polygons.
-    state.current.layoutTerrain.forEach((layoutTerrain) => {
-      const definition = TERRAIN_FOOTPRINTS[layoutTerrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
-      const visualPoly = terrainLocalPolygonToWorld(layoutTerrain, layoutTerrain.outer || definition.outer);
-      const grouped = Boolean(layoutTerrainGroupFor(layoutTerrain.id));
-      drawPoly(ctx, visualPoly, "rgba(196,152,43,.30)", grouped ? "rgba(0,0,0,0)" : "rgba(255,255,255,.84)", true, camera.scale, false);
-      const lightPoly = terrainLocalPolygonToWorld(layoutTerrain, definition.light);
-      const densePoly = terrainLocalPolygonToWorld(layoutTerrain, definition.dense);
-      if (lightPoly.length) drawPoly(ctx, lightPoly, "rgba(222,145,25,.42)", "rgba(250,204,21,.75)", true, camera.scale, false);
-      if (densePoly.length) drawPoly(ctx, densePoly, "rgba(15,118,110,.52)", "rgba(16,185,129,.88)", true, camera.scale, false);
-      if (layoutEditMode && layoutTerrain.id === selectedLayoutTerrainId) {
-        drawPoly(ctx, visualPoly, "rgba(0,0,0,0)", "#60a5fa", true, camera.scale, false);
-      }
-    });
+    ctx.drawImage(getBattlefieldForegroundRender(camera.scale), 0, 0);
+    drawDynamicLayoutSelectionOverlays(ctx, camera.scale);
 
-    blockers.forEach((poly, index) => {
-      const blockerId = state.current.blockerIds[index] || "";
-      const generatedLayoutFootprint = blockerId.startsWith("layout-");
-      drawPoly(
-        ctx,
-        poly,
-        generatedLayoutFootprint ? "rgba(0,0,0,0)" : "rgba(18,18,18,.38)",
-        generatedLayoutFootprint && String(poly.footprintGroupId || "").startsWith("layout-group:")
-          ? "rgba(0,0,0,0)"
-          : generatedLayoutFootprint ? "rgba(255,255,255,.96)" : "rgba(255,255,255,.22)",
-        true,
-        camera.scale,
-        !generatedLayoutFootprint,
-      );
-
-    });
-    drawGroupedTerrainOutlines(ctx, blockers, camera.scale);
-    state.current.layoutWalls.forEach((wall) => {
-      const polygon = layoutWallPolygonToWorld(wall);
-      ctx.save();
-      if (wall.floorState === "firstFloor") ctx.setLineDash([7 / camera.scale, 5 / camera.scale]);
-      drawPoly(ctx, polygon, wall.floorState === "firstFloor" ? "rgba(168,85,247,.24)" : "rgba(168,85,247,.82)", layoutEditMode && wall.id === selectedLayoutWallId ? "#f8fafc" : "#c084fc", true, camera.scale, false);
-      ctx.restore();
-    });
-    state.current.layoutTerrainFeatures.filter((feature) => terrainFeatureKindVisible(feature.kind)).forEach((feature) => {
-      const poly = feature.points.map((point) => battlefieldPoint(point.x, point.y));
-      drawDecorativeTerrainFeature(ctx, poly, feature.kind, camera.scale);
-    });
-    state.current.layoutFeaturePieces.filter((feature) => terrainFeatureKindVisible(LAYOUT_FEATURE_TYPES[feature.type]?.kind || "light")).forEach((feature) => {
-      const definition = LAYOUT_FEATURE_TYPES[feature.type];
-      const polygon = layoutFeaturePolygonToWorld(feature);
-      drawDecorativeTerrainFeature(ctx, polygon, definition?.kind || "light", camera.scale);
-      if (feature.id === selectedLayoutFeatureId) {
-        drawPoly(ctx, polygon, "rgba(0,0,0,0)", "#f8fafc", true, camera.scale, false);
-      }
-    });
     if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
     rulers.forEach((ruler) => drawRulerLine(ctx, ruler.a, ruler.b, pixelsPerInch, camera.scale));
     if (rulerPreview) drawRulerLine(ctx, rulerPreview.a, rulerPreview.b, pixelsPerInch, camera.scale, true);
@@ -4025,32 +4966,9 @@ export default function InteractiveLOSTool() {
       }
     }
 
-    if (deploymentPath?.length >= 2) drawDeploymentPath(ctx, deploymentPath, camera.scale, deploymentVisible, false, "home", fit, deploymentLabelPosition);
-    else if (deploymentLine) drawDeploymentLine(ctx, deploymentLine, camera.scale, deploymentVisible, false, "home", fit, deploymentLabelPosition);
     if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true, "home", fit);
-    if (enemyDeploymentPath?.length >= 2) drawDeploymentPath(ctx, enemyDeploymentPath, camera.scale, enemyDeploymentVisible, false, "enemy", fit, enemyDeploymentLabelPosition);
-    else if (enemyDeploymentLine) drawDeploymentLine(ctx, enemyDeploymentLine, camera.scale, enemyDeploymentVisible, false, "enemy", fit, enemyDeploymentLabelPosition);
     if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy", fit);
-    if (homeDeployPath.length >= 2 && !state.current.deploymentNoMansSide) {
-      drawDeploymentSideArrows(ctx, homeDeployPath, camera.scale, "home");
-    }
-    if (enemyDeployPath.length >= 2 && !state.current.enemyDeploymentNoMansSide) {
-      drawDeploymentSideArrows(ctx, enemyDeployPath, camera.scale, "enemy");
-    }
 
-    layoutObjectives.forEach((objective) => {
-      drawLayoutObjective(ctx, objective, pixelsPerInch || fit.w / boardWidthInches(), camera.scale);
-      if (objective.id === selectedLayoutObjectiveId) {
-        const radius = Math.max(17 / camera.scale, (pixelsPerInch || fit.w / boardWidthInches()) * 1.8);
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(objective.x, objective.y, radius, 0, Math.PI * 2);
-        ctx.lineWidth = 2.5 / camera.scale;
-        ctx.strokeStyle = "#f8fafc";
-        ctx.stroke();
-        ctx.restore();
-      }
-    });
     const selectedObjective = state.current.layoutObjectives.find((objective) => objective.id === selectedLayoutObjectiveId);
     if (selectedObjective) {
       drawObjectiveVisibilityControls(ctx, layoutObjectiveVisibilityButtons(selectedObjective), selectedObjective.visible !== false, camera.scale);
@@ -4058,22 +4976,18 @@ export default function InteractiveLOSTool() {
 
     drawMovementPlanningOverlay(ctx, camera.scale);
 
+    drawConfirmedEnemyLosRays(ctx, state.current.enemyLosRays || [], camera.scale);
+
     enemies.forEach((enemy, index) => {
-      const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
-      const enemyCheckInteractive = Boolean(objectDragRef.current || draggingRef.current);
-      const losState = directEnemyLOSState(
-        enemy,
-        enemyBaseRadius(pixelsPerInch),
-        visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, enemyCheckInteractive, enemy)),
-        blockers,
-        walls,
-        enemyCheckInteractive,
-      );
+      const losState = state.current.enemyLosStates[index] || "blocked";
+      const displayLosState = state.current.enemyLosPendingIndexes?.has(index) && losState === "clear"
+        ? "oneWall"
+        : losState;
       const rangeActive = Number.isFinite(rangeRadius);
       const inRange = selectedUnitMembers.length
-        ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius, pixelsPerInch))
-        : enemyInRange(enemy, light, rangeRadius, pixelsPerInch);
-      drawEnemy(ctx, enemy, losState, inRange, rangeActive, index + 1, camera.scale, enemyRangeCounts[index], pixelsPerInch);
+        ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius, boardPpi))
+        : enemyInRange(enemy, light, rangeRadius, boardPpi);
+      drawEnemy(ctx, enemy, displayLosState, inRange, rangeActive, index + 1, camera.scale, enemyRangeCounts[index], boardPpi);
     });
 
     state.current.losMarkers.forEach((marker) => {
@@ -4188,12 +5102,17 @@ export default function InteractiveLOSTool() {
     }
 
     ctx.restore();
+    recordPerf("draw", drawStartedAt);
   }
 
-  function calculateMarkerVisibility(marker, interactive = false) {
+  function calculateMarkerVisibility(marker, interactive = false, preparedGeometry = null) {
+    const startedAt = performance.now();
     const clearZones = [];
     const oneWallZones = [];
-    if (!marker || marker.visible === false) return { clearZones, oneWallZones };
+    if (!marker || marker.visible === false) {
+      recordPerf("markerVisibility", startedAt);
+      return { clearZones, oneWallZones };
+    }
     const visibleMarkerCount = state.current.losMarkers.filter((item) => item.visible !== false).length;
     const useReducedSamples = interactive || visibleMarkerCount > 5;
     const origins = interactive
@@ -4202,7 +5121,7 @@ export default function InteractiveLOSTool() {
     const blockers = interactive && state.current.interactiveBlockers.length
       ? state.current.interactiveBlockers
       : state.current.blockers;
-    const visibilityGeometry = getPreparedVisibilityGeometry(
+    const visibilityGeometry = preparedGeometry || getPreparedVisibilityGeometry(
       blockers,
       state.current.walls,
       state.current.W,
@@ -4212,24 +5131,108 @@ export default function InteractiveLOSTool() {
       clearZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 0, visibilityGeometry));
       oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, blockers, state.current.walls, state.current.W, state.current.H, 1, visibilityGeometry));
     });
+    recordPerf("markerVisibility", startedAt);
     return { clearZones, oneWallZones };
   }
 
-  function cacheMarkerVisibility(markerId, visibility) {
-    state.current.losVisibilityCache.set(markerId, visibility);
+  function cacheMarkerVisibility(markerId, visibility, interactive = false) {
+    const marker = state.current.losMarkers.find((item) => item.id === markerId);
+    state.current.losVisibilityCache.set(markerId, {
+      key: marker ? markerVisibilityCacheKey(marker, interactive) : "",
+      visibility,
+    });
   }
 
-  function rebuildCombinedVisibility(interactive = false) {
+  function markerVisibilityCacheKey(marker, interactive = false) {
+    if (!marker) return "";
+    return [
+      state.current.visibilitySceneVersion,
+      interactive ? "interactive" : "settled",
+      marker.id,
+      roundedNumber(marker.x, 2),
+      roundedNumber(marker.y, 2),
+      marker.baseShape || "circle",
+      marker.baseLengthMm || 40,
+      marker.baseWidthMm || marker.baseLengthMm || 40,
+      roundedNumber(marker.baseRotation || 0, 4),
+      marker.visible !== false,
+      state.current.losMarkers.filter((item) => item.visible !== false).length > 5 ? "reduced" : "full",
+    ].join(":");
+  }
+
+  function getCachedMarkerVisibility(marker, interactive = false) {
+    const cached = state.current.losVisibilityCache.get(marker?.id);
+    if (!cached) return null;
+    if (cached.clearZones || cached.oneWallZones) return cached;
+    return cached.key === markerVisibilityCacheKey(marker, interactive) ? cached.visibility : null;
+  }
+
+  function losRenderCacheKey(excludedMarkerIds) {
+    const excluded = new Set(Array.isArray(excludedMarkerIds) ? excludedMarkerIds : [excludedMarkerIds].filter(Boolean));
+    const visibleIds = state.current.losMarkers
+      .filter((marker) => marker.visible !== false && !excluded.has(marker.id))
+      .map((marker) => marker.id)
+      .join("|");
+    return `${[...excluded].sort().join("|")}:${visibleIds}:${currentVisibilitySceneKey()}`;
+  }
+
+  function zonesForMarkers(markers, interactive = false) {
     let clearZones = [];
     let oneWallZones = [];
-    state.current.losMarkers.forEach((marker) => {
+    markers.forEach((marker) => {
       if (marker.visible === false) return;
-      const cached = state.current.losVisibilityCache.get(marker.id);
+      const cached = getCachedMarkerVisibility(marker, interactive);
       if (!cached) return;
       clearZones.push(...cached.clearZones);
       oneWallZones.push(...cached.oneWallZones);
     });
+    return { clearZones, oneWallZones };
+  }
+
+  function rebuildCombinedVisibility(interactive = false, activeMarkerId = null) {
+    const allVisibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+    const activeMarkerIds = new Set(Array.isArray(activeMarkerId) ? activeMarkerId : [activeMarkerId].filter(Boolean));
+    const activeMarkers = activeMarkerIds.size
+      ? allVisibleMarkers.filter((marker) => activeMarkerIds.has(marker.id))
+      : [];
+    const stationaryMarkers = activeMarkerIds.size
+      ? allVisibleMarkers.filter((marker) => !activeMarkerIds.has(marker.id))
+      : allVisibleMarkers;
+    const { clearZones, oneWallZones } = zonesForMarkers(allVisibleMarkers);
     state.current.visibility = { clearZones, oneWallZones };
+
+    if (interactive && activeMarkerIds.size) {
+      state.current.combinedLosRender = { clear: null, oneWall: null };
+      const stationaryKey = losRenderCacheKey([...activeMarkerIds]);
+      if (state.current.stationaryLosRenderKey !== stationaryKey) {
+        const stationaryZones = zonesForMarkers(stationaryMarkers);
+        state.current.stationaryLosRender = createCombinedLosLayers(
+          stationaryZones.clearZones,
+          stationaryZones.oneWallZones,
+          state.current.W,
+          state.current.H,
+          0.7,
+          state.current.stationaryLosBuffers,
+          state.current.blockers,
+        );
+        state.current.stationaryLosRenderKey = stationaryKey;
+      }
+      const movingZones = zonesForMarkers(activeMarkers, true);
+      state.current.movingLosRender = createCombinedLosLayers(
+        movingZones.clearZones,
+        movingZones.oneWallZones,
+        state.current.W,
+        state.current.H,
+        0.7,
+        state.current.movingLosBuffers,
+        state.current.blockers,
+      );
+      return;
+    }
+
+    state.current.stationaryLosRender = { clear: null, oneWall: null };
+    state.current.movingLosRender = { clear: null, oneWall: null };
+    state.current.stationaryLosRenderKey = "";
     const renderScale = interactive ? 0.7 : 1;
     state.current.combinedLosRender = createCombinedLosLayers(
       clearZones,
@@ -4243,9 +5246,16 @@ export default function InteractiveLOSTool() {
   }
 
   function updateVisibility(markerId = null, recomputeDeployment = true, interactive = false) {
+    const startedAt = performance.now();
     if (markerId) {
       const marker = state.current.losMarkers.find((item) => item.id === markerId);
-      if (marker?.visible !== false) cacheMarkerVisibility(markerId, calculateMarkerVisibility(marker, interactive));
+      if (marker?.visible !== false) {
+        const blockers = interactive && state.current.interactiveBlockers.length
+          ? state.current.interactiveBlockers
+          : state.current.blockers;
+        const preparedGeometry = getPreparedVisibilityGeometry(blockers, state.current.walls, state.current.W, state.current.H);
+        cacheMarkerVisibility(markerId, calculateMarkerVisibility(marker, interactive, preparedGeometry), interactive);
+      }
       else rebuildCombinedVisibility();
     } else {
       const currentIds = new Set(state.current.losMarkers.map((marker) => marker.id));
@@ -4254,14 +5264,25 @@ export default function InteractiveLOSTool() {
           state.current.losVisibilityCache.delete(cachedId);
         }
       }
+      const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
       state.current.losMarkers.forEach((marker) => {
-        if (marker.visible !== false) cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker));
-        else state.current.losVisibilityCache.delete(marker.id);
+        if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
       });
+      if (!requestDetailedMarkerVisibilityBatch(visibleMarkers)) {
+        const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
+        visibleMarkers.forEach((marker) => {
+          cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, preparedGeometry));
+        });
+      }
     }
 
-    rebuildCombinedVisibility(interactive);
-    if (!recomputeDeployment) return;
+    rebuildCombinedVisibility(interactive, interactive ? markerId : null);
+    if (interactive) updateEnemyLosPreviewStates();
+    else updateEnemyLosStates(false, { forceImmediate: Boolean(markerId) });
+    if (!recomputeDeployment) {
+      recordPerf("visibility", startedAt);
+      return;
+    }
 
     const deployPath = state.current.deploymentPath?.length >= 2
       ? state.current.deploymentPath
@@ -4269,9 +5290,10 @@ export default function InteractiveLOSTool() {
 
     if (deployPath.length >= 2 && state.current.deploymentVisible) {
       const deploymentOrigins = samplePathPoints(deployPath, 8);
+      const deploymentGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
       state.current.deploymentVisibility = {
-        clearZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0)),
-        oneWallZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1)),
+        clearZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0, deploymentGeometry)),
+        oneWallZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1, deploymentGeometry)),
       };
     } else {
       state.current.deploymentVisibility = { clearZones: [], oneWallZones: [] };
@@ -4283,13 +5305,15 @@ export default function InteractiveLOSTool() {
 
     if (enemyDeployPath.length >= 2 && state.current.enemyDeploymentVisible) {
       const deploymentOrigins = samplePathPoints(enemyDeployPath, 8);
+      const deploymentGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
       state.current.enemyDeploymentVisibility = {
-        clearZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0)),
-        oneWallZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1)),
+        clearZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 0, deploymentGeometry)),
+        oneWallZones: deploymentOrigins.map((origin) => computeVisibilityByFootprintWallLimit(origin, state.current.blockers, state.current.walls, state.current.W, state.current.H, 1, deploymentGeometry)),
       };
     } else {
       state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     }
+    recordPerf("visibility", startedAt);
   }
 
   function battlefieldPoint(x, y) {
@@ -4382,6 +5406,9 @@ export default function InteractiveLOSTool() {
 
   function layoutFeatureLocalPolygon(feature) {
     const definition = LAYOUT_FEATURE_TYPES[feature.type] || LAYOUT_FEATURE_TYPES.largeLightL;
+    if (Array.isArray(definition.points) && definition.points.length >= 3) {
+      return definition.points;
+    }
     const halfWidth = definition.width / 2;
     const halfHeight = definition.height / 2;
     if (definition.shape === "l") {
@@ -4415,6 +5442,7 @@ export default function InteractiveLOSTool() {
       });
     });
     state.current.walls = [...manualWalls, ...generatedWalls];
+    markVisibilityGeometryChanged({ base: false, foreground: true });
   }
 
   function setSelectedWallFloorState(floorState) {
@@ -4469,11 +5497,12 @@ export default function InteractiveLOSTool() {
     state.current.blockers = blockers;
     state.current.blockerIds = blockerIds;
     state.current.interactiveBlockers = blockers.map((poly) => {
-      const simplified = simplifyClosedPolygon(poly, 2.5);
+      const simplified = simplifyClosedPolygon(poly, 5);
       simplified.footprintGroupId = poly.footprintGroupId;
       simplified.sharedBoundaryTolerance = poly.sharedBoundaryTolerance;
       return simplified;
     });
+    markVisibilityGeometryChanged({ base: true, foreground: true });
   }
 
   function refreshActiveLayoutGeometry() {
@@ -4981,6 +6010,15 @@ export default function InteractiveLOSTool() {
   function currentLayoutFixture() {
     return {
       version: 11,
+      type: "layout",
+      exportedAt: new Date().toISOString(),
+      battlefieldOrientation: "portrait-44x60",
+      boardWidthInches: boardWidthInches(),
+      boardHeightInches: boardHeightInches(),
+      defenderForceDisposition,
+      attackerForceDisposition,
+      selectedLayoutVariant,
+      activeLayoutKey: state.current.activeLayoutKey,
       terrain: state.current.layoutTerrain.map(({ id, shape, x, y, rotation, mirrored }) => ({ id, shape, x, y, rotation, mirrored: mirrored === true })),
       terrainLinks: state.current.layoutTerrainLinks.map((link) => [...link]),
       terrainGroups: state.current.layoutTerrainGroups.map((group) => [...group]),
@@ -5014,6 +6052,21 @@ export default function InteractiveLOSTool() {
     };
   }
 
+  function downloadJsonFile(data, fallbackName) {
+    const fileSafeName = fallbackName
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${fileSafeName || "warhammer-los-export"}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function saveLayoutFixture() {
     if (!state.current.layoutTerrain.length) {
       setStatus("Apply a layout before saving its fixture positions.");
@@ -5034,16 +6087,172 @@ export default function InteractiveLOSTool() {
     const fileSafeName = `${defenderForceDisposition}-${attackerForceDisposition}-Layout-${selectedLayoutVariant}`
       .replace(/[^a-z0-9]+/gi, "-")
       .replace(/^-|-$/g, "");
-    const blob = new Blob([JSON.stringify(fixture, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${fileSafeName || "layout-fixture"}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setStatus("Layout JSON downloaded.");
+    downloadJsonFile(fixture, fileSafeName || "layout-fixture");
+    setStatus("Layout JSON exported.");
+  }
+
+  function exportGameJson() {
+    const data = {
+      ...buildSaveData(),
+      savedImageSrc: state.current.savedImageSrc || null,
+      saveName,
+    };
+    const fileSafeName = `${saveName || defenderForceDisposition + "-" + attackerForceDisposition + "-Game"}`
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
+    downloadJsonFile(data, fileSafeName || "warhammer-los-game");
+    setStatus("Game JSON exported.");
+  }
+
+  function isLayoutJsonPayload(data) {
+    if (!data || typeof data !== "object") return false;
+    if (data.type === "layout") return true;
+    return Array.isArray(data.terrain)
+      && !Array.isArray(data.losMarkers)
+      && !Array.isArray(data.enemies);
+  }
+
+  function applyImportedLayoutData(data) {
+    const fixture = data.layout || data.fixture || data;
+    if (!fixture || typeof fixture !== "object" || !Array.isArray(fixture.terrain)) {
+      setStatus("That JSON does not look like a layout export.");
+      return;
+    }
+    const hasExistingLayout = state.current.layoutTerrain.length
+      || state.current.layoutWalls.length
+      || state.current.layoutFeaturePieces.length
+      || state.current.layoutObjectives.length
+      || state.current.deploymentPath.length
+      || state.current.enemyDeploymentPath.length;
+    if (hasExistingLayout && !window.confirm("Importing this layout will replace the current map layout. Continue?")) return;
+
+    state.current.boardWidthInches = Number(fixture.boardWidthInches) || BATTLEFIELD_WIDTH_INCHES;
+    state.current.boardHeightInches = Number(fixture.boardHeightInches) || BATTLEFIELD_HEIGHT_INCHES;
+    setCustomGridLength(state.current.boardWidthInches);
+    setCustomGridWidth(state.current.boardHeightInches);
+    calculateFit();
+    if (FORCE_DISPOSITIONS.includes(fixture.defenderForceDisposition)) setDefenderForceDisposition(fixture.defenderForceDisposition);
+    if (FORCE_DISPOSITIONS.includes(fixture.attackerForceDisposition)) setAttackerForceDisposition(fixture.attackerForceDisposition);
+    if (["A", "B", "C"].includes(fixture.selectedLayoutVariant)) setSelectedLayoutVariant(fixture.selectedLayoutVariant);
+
+    imgRef.current = null;
+    state.current.savedImageSrc = null;
+    state.current.blockers = [];
+    state.current.blockerIds = [];
+    state.current.walls = Array.isArray(fixture.walls)
+      ? fixture.walls.map((wall) => ({
+        a: battlefieldPoint(wall.a.x, wall.a.y),
+        b: battlefieldPoint(wall.b.x, wall.b.y),
+      }))
+      : [];
+    state.current.layoutTerrain = fixture.terrain.map((terrain, index) => {
+      const definition = TERRAIN_FOOTPRINTS[terrain.shape] || TERRAIN_FOOTPRINTS.large_rectangle;
+      return {
+        id: terrain.id || `layout-footprint-${index}`,
+        shape: terrain.shape,
+        x: Number(terrain.x) || 0,
+        y: Number(terrain.y) || 0,
+        rotation: Number(terrain.rotation) || 0,
+        mirrored: terrain.mirrored === true,
+        width: definition.width,
+        height: definition.height,
+        outer: undefined,
+      };
+    });
+    state.current.layoutTerrainLinks = Array.isArray(fixture.terrainLinks) ? fixture.terrainLinks.filter((link) => Array.isArray(link) && link.length === 2).map((link) => [...link]) : [];
+    state.current.layoutTerrainGroups = Array.isArray(fixture.terrainGroups) ? fixture.terrainGroups.filter((group) => Array.isArray(group) && group.length >= 2).map((group) => [...group]) : [];
+    state.current.layoutWalls = Array.isArray(fixture.wallPieces) ? fixture.wallPieces.map((wall, index) => ({
+      id: wall.id || `layout-wall-${wall.type || "AB"}-${index}`,
+      type: wall.type || "AB",
+      x: Number(wall.x) || 0,
+      y: Number(wall.y) || 0,
+      rotation: Number(wall.rotation) || 0,
+      mirrored: wall.mirrored === true,
+      floorState: wall.floorState === "firstFloor" ? "firstFloor" : "ground",
+    })) : [];
+    state.current.layoutWallLinks = Array.isArray(fixture.wallLinks) ? fixture.wallLinks.filter((link) => Array.isArray(link) && link.length === 2).map((link) => [...link]) : [];
+    state.current.layoutTerrainFeatures = Array.isArray(fixture.terrainFeatures)
+      ? fixture.terrainFeatures.map((feature) => ({ ...feature, points: Array.isArray(feature.points) ? feature.points.map((point) => ({ ...point })) : [] }))
+      : [];
+    state.current.layoutFeaturePieces = Array.isArray(fixture.featurePieces) ? fixture.featurePieces.map((feature, index) => ({
+      id: feature.id || `layout-feature-${feature.type || "rapidLight1"}-${index}`,
+      type: feature.type || "rapidLight1",
+      x: Number(feature.x) || 0,
+      y: Number(feature.y) || 0,
+      rotation: Number(feature.rotation) || 0,
+      mirrored: feature.mirrored === true,
+    })) : [];
+    state.current.layoutFeatureLinks = Array.isArray(fixture.featureLinks) ? fixture.featureLinks.filter((link) => Array.isArray(link) && link.length === 2).map((link) => [...link]) : [];
+    state.current.layoutObjectives = Array.isArray(fixture.objectives) ? fixture.objectives.map((objective, index) => {
+      const boardX = Number.isFinite(objective.boardX) ? objective.boardX : Number(objective.x) || 0;
+      const boardY = Number.isFinite(objective.boardY) ? objective.boardY : Number(objective.y) || 0;
+      return {
+        id: objective.id || `layout-objective-${index}`,
+        ...battlefieldPoint(boardX, boardY),
+        boardX,
+        boardY,
+        allegiance: objective.allegiance || "neutral",
+        shape: objective.shape || "circle",
+        visible: objective.visible !== false,
+      };
+    }) : [];
+    state.current.activeLayoutKey = typeof fixture.activeLayoutKey === "string" ? fixture.activeLayoutKey : null;
+    state.current.deploymentPath = Array.isArray(fixture.homeDeploymentPath)
+      ? fixture.homeDeploymentPath.map(([x, y]) => battlefieldPoint(x, y))
+      : [];
+    state.current.deploymentLine = state.current.deploymentPath.length >= 2
+      ? { a: state.current.deploymentPath[0], b: state.current.deploymentPath[state.current.deploymentPath.length - 1] }
+      : null;
+    state.current.enemyDeploymentPath = Array.isArray(fixture.enemyDeploymentPath)
+      ? fixture.enemyDeploymentPath.map(([x, y]) => battlefieldPoint(x, y))
+      : [];
+    state.current.enemyDeploymentLine = state.current.enemyDeploymentPath.length >= 2
+      ? { a: state.current.enemyDeploymentPath[0], b: state.current.enemyDeploymentPath[state.current.enemyDeploymentPath.length - 1] }
+      : null;
+    state.current.deploymentLabelPosition = validBoardPoint(fixture.deploymentLabelPosition) ? { ...fixture.deploymentLabelPosition } : null;
+    state.current.enemyDeploymentLabelPosition = validBoardPoint(fixture.enemyDeploymentLabelPosition) ? { ...fixture.enemyDeploymentLabelPosition } : null;
+    state.current.deploymentVisible = false;
+    state.current.enemyDeploymentVisible = false;
+    state.current.deploymentNoMansSide = fixture.deploymentNoMansSide === -1 ? -1 : fixture.deploymentNoMansSide === 1 ? 1 : null;
+    state.current.enemyDeploymentNoMansSide = fixture.enemyDeploymentNoMansSide === -1 ? -1 : fixture.enemyDeploymentNoMansSide === 1 ? 1 : null;
+    state.current.currentPoly = [];
+    state.current.wallPath = [];
+    state.current.wallPreview = null;
+    state.current.layoutStagingIndex = 0;
+    setLayoutEditMode(false);
+    setSelectedLayoutTerrainId(null);
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutFeatureId(null);
+    setSelectedLayoutObjectiveId(null);
+    setLayoutLinkMode(false);
+    setImageReady(false);
+    rebuildLayoutTerrainGeometry();
+    rebuildLayoutWallGeometry();
+    setPixelsPerInch(state.current.fit.w / boardWidthInches());
+    updateVisibility();
+    draw();
+    scheduleBrowserSave();
+    setStatus("Imported layout JSON.");
+  }
+
+  async function importGameOrLayoutJson(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (isLayoutJsonPayload(data)) {
+        applyImportedLayoutData(data);
+        return;
+      }
+      if (!window.confirm("Importing this game will replace the current game state. Continue?")) return;
+      await applySaveData({ ...data, exactLayoutState: data.exactLayoutState !== false }, "Imported game JSON.");
+      setSaveName(data.saveName || data.name || file.name.replace(/\.json$/i, "") || "Imported game");
+    } catch (err) {
+      console.warn("Import failed", err);
+      setStatus("Could not import that JSON file.");
+    }
   }
 
   function applySelectedLayout(editable = false) {
@@ -5306,6 +6515,7 @@ export default function InteractiveLOSTool() {
         <div style={{ ...styles.sidebarShell, width: sidebarCollapsed ? 0 : 360 }}>
           <aside style={{ ...styles.sidebar, transform: sidebarCollapsed ? "translateX(-100%)" : "translateX(0)" }}>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={uploadImage} />
+          <input ref={importJsonRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={importGameOrLayoutJson} />
 
           <div style={{ ...styles.sidebarSection, order: 1 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("game")}>
@@ -5462,7 +6672,22 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 8 }}>
+          <div style={{ ...styles.sidebarSection, order: 3 }}>
+            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("importGame")}>
+              <span style={styles.sectionTriangle}>{sectionOpen.importGame ? "▾" : "▸"}</span>
+              <span>Import Game/Layout</span>
+            </button>
+            {sectionOpen.importGame && (
+              <div style={styles.sectionContent}>
+                <div style={styles.storageNote}>
+                  Import a layout JSON or a full game JSON shared from this app.
+                </div>
+                <ToolButton onClick={() => importJsonRef.current?.click()}>Import Game/Layout</ToolButton>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...styles.sidebarSection, order: 9 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("createUpload")}>
               <span style={styles.sectionTriangle}>{sectionOpen.createUpload ? "▾" : "▸"}</span>
               <span>Create/Upload Map</span>
@@ -5640,7 +6865,8 @@ export default function InteractiveLOSTool() {
                   </EditControlSection>
                   <EditControlSection title="Export/Download" open={editSubsectionOpen.exportDownload} onToggle={() => toggleEditSubsection("exportDownload")}>
                     <div style={styles.layoutEditorControls}>
-                      <ToolButton onClick={downloadLayoutFixture}>Download layout JSON</ToolButton>
+                      <ToolButton onClick={downloadLayoutFixture}>Export Layout</ToolButton>
+                      <ToolButton onClick={exportGameJson}>Export Game</ToolButton>
                     </div>
                   </EditControlSection>
                 </MapSubsection>
@@ -5648,7 +6874,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 6 }}>
+          <div style={{ ...styles.sidebarSection, order: 7 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("scale")}>
               <span style={styles.sectionTriangle}>{sectionOpen.scale ? "▾" : "▸"}</span>
               <span>Rulers &amp; Deepstrike</span>
@@ -5702,7 +6928,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 3 }}>
+          <div style={{ ...styles.sidebarSection, order: 4 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("army")}>
               <span style={styles.sectionTriangle}>{sectionOpen.army ? "▾" : "▸"}</span>
               <span>Army List</span>
@@ -5842,7 +7068,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 4 }}>
+          <div style={{ ...styles.sidebarSection, order: 5 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("markers")}>
               <span style={styles.sectionTriangle}>{sectionOpen.markers ? "▾" : "▸"}</span>
               <span>LOS Markers</span>
@@ -5916,7 +7142,7 @@ export default function InteractiveLOSTool() {
               </div>
             )}
           </div>
-          <div style={{ ...styles.sidebarSection, order: 5 }}>
+          <div style={{ ...styles.sidebarSection, order: 6 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("units")}>
               <span style={styles.sectionTriangle}>{sectionOpen.units ? "▾" : "▸"}</span>
               <span>Units</span>
@@ -5986,7 +7212,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
 
-          <div style={{ ...styles.sidebarSection, order: 7 }}>
+          <div style={{ ...styles.sidebarSection, order: 8 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("draw")}>
               <span style={styles.sectionTriangle}>{sectionOpen.draw ? "▾" : "▸"}</span>
               <span>Deploy &amp; Enemies</span>
@@ -6059,7 +7285,7 @@ export default function InteractiveLOSTool() {
                 </div>
               )}
               <button type="button" style={{ ...styles.planningMainButton, ...(movementPlanningEnabled ? styles.planningButtonActive : {}) }} onClick={toggleMovementPlanning}>
-                Planning movement
+                Deployment & Turn-by-Turn Planner
               </button>
             </div>
             <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} />
@@ -7209,6 +8435,125 @@ function computeVisibilityZones(source, blockers, walls, W, H) {
 
 const visibilityGeometryCache = new Map();
 const footprintBoundarySegmentCache = new WeakMap();
+const VISIBILITY_GRID_CELL_SIZE = 96;
+const VISIBILITY_ANGLE_SNAP = 0.000025;
+const VISIBILITY_ISOLATED_RAY_ANGLE = 0.012;
+
+function segmentBounds(a, b, padding = 0) {
+  return {
+    minX: Math.min(a.x, b.x) - padding,
+    maxX: Math.max(a.x, b.x) + padding,
+    minY: Math.min(a.y, b.y) - padding,
+    maxY: Math.max(a.y, b.y) + padding,
+  };
+}
+
+function boundsOverlap(a, b) {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+}
+
+function buildSegmentSpatialIndex(segments, cellSize = VISIBILITY_GRID_CELL_SIZE) {
+  const cells = new Map();
+  const cellKey = (x, y) => `${x}:${y}`;
+  segments.forEach((segment, index) => {
+    const bounds = segment.bounds || segmentBounds(segment.a, segment.b);
+    const minCellX = Math.floor(bounds.minX / cellSize);
+    const maxCellX = Math.floor(bounds.maxX / cellSize);
+    const minCellY = Math.floor(bounds.minY / cellSize);
+    const maxCellY = Math.floor(bounds.maxY / cellSize);
+    for (let x = minCellX; x <= maxCellX; x += 1) {
+      for (let y = minCellY; y <= maxCellY; y += 1) {
+        const key = cellKey(x, y);
+        if (!cells.has(key)) cells.set(key, []);
+        cells.get(key).push(index);
+      }
+    }
+  });
+  return { cells, cellSize, segments };
+}
+
+function spatialSegmentsForBounds(spatialIndex, bounds) {
+  if (!spatialIndex?.cells || !spatialIndex?.segments) return [];
+  const { cells, cellSize, segments } = spatialIndex;
+  const minCellX = Math.floor(bounds.minX / cellSize);
+  const maxCellX = Math.floor(bounds.maxX / cellSize);
+  const minCellY = Math.floor(bounds.minY / cellSize);
+  const maxCellY = Math.floor(bounds.maxY / cellSize);
+  const indexes = new Set();
+  for (let x = minCellX; x <= maxCellX; x += 1) {
+    for (let y = minCellY; y <= maxCellY; y += 1) {
+      const cellSegments = cells.get(`${x}:${y}`);
+      if (!cellSegments) continue;
+      cellSegments.forEach((index) => indexes.add(index));
+    }
+  }
+  return [...indexes]
+    .map((index) => segments[index])
+    .filter((segment) => segment && boundsOverlap(bounds, segment.bounds || segmentBounds(segment.a, segment.b)));
+}
+
+function spatialSegmentsForLine(spatialIndex, a, b, paddingCells = 1) {
+  if (!spatialIndex?.cells || !spatialIndex?.segments) return [];
+  const { cells, cellSize, segments } = spatialIndex;
+  const indexes = new Set();
+  const addCell = (cellX, cellY) => {
+    for (let dx = -paddingCells; dx <= paddingCells; dx += 1) {
+      for (let dy = -paddingCells; dy <= paddingCells; dy += 1) {
+        const cellSegments = cells.get(`${cellX + dx}:${cellY + dy}`);
+        if (cellSegments) cellSegments.forEach((index) => indexes.add(index));
+      }
+    }
+  };
+
+  let cellX = Math.floor(a.x / cellSize);
+  let cellY = Math.floor(a.y / cellSize);
+  const endCellX = Math.floor(b.x / cellSize);
+  const endCellY = Math.floor(b.y / cellSize);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const stepX = dx >= 0 ? 1 : -1;
+  const stepY = dy >= 0 ? 1 : -1;
+  const tDeltaX = Math.abs(dx) > 0.000001 ? Math.abs(cellSize / dx) : Infinity;
+  const tDeltaY = Math.abs(dy) > 0.000001 ? Math.abs(cellSize / dy) : Infinity;
+  const nextBoundaryX = stepX > 0 ? (cellX + 1) * cellSize : cellX * cellSize;
+  const nextBoundaryY = stepY > 0 ? (cellY + 1) * cellSize : cellY * cellSize;
+  let tMaxX = Math.abs(dx) > 0.000001 ? (nextBoundaryX - a.x) / dx : Infinity;
+  let tMaxY = Math.abs(dy) > 0.000001 ? (nextBoundaryY - a.y) / dy : Infinity;
+  if (tMaxX < 0) tMaxX = 0;
+  if (tMaxY < 0) tMaxY = 0;
+
+  const maxSteps = Math.max(1, Math.abs(endCellX - cellX) + Math.abs(endCellY - cellY) + 8);
+  for (let step = 0; step <= maxSteps; step += 1) {
+    addCell(cellX, cellY);
+    if (cellX === endCellX && cellY === endCellY) break;
+    if (tMaxX < tMaxY) {
+      cellX += stepX;
+      tMaxX += tDeltaX;
+    } else {
+      cellY += stepY;
+      tMaxY += tDeltaY;
+    }
+  }
+
+  const bounds = segmentBounds(a, b, 1);
+  return [...indexes]
+    .map((index) => segments[index])
+    .filter((segment) => segment && boundsOverlap(bounds, segment.bounds || segmentBounds(segment.a, segment.b)));
+}
+
+function candidateSegmentsForRay(source, ray, geometry, W, H) {
+  if (!geometry?.spatialIndex) return geometry?.segments || [];
+  const reach = Math.hypot(W, H) * 1.2;
+  const end = { x: source.x + ray.x * reach, y: source.y + ray.y * reach };
+  const candidates = spatialSegmentsForLine(geometry.spatialIndex, source, end);
+  return candidates.length ? candidates : geometry.segments;
+}
+
+function candidateSegmentsForSegment(a, b, geometry) {
+  if (!geometry?.spatialIndex) return geometry?.segments || [];
+  const candidates = spatialSegmentsForLine(geometry.spatialIndex, a, b);
+  return candidates.length ? candidates : geometry.segments;
+}
 
 function visibilityGeometryKey(blockers, walls, W, H) {
   let hash = 2166136261;
@@ -7236,43 +8581,52 @@ function visibilityGeometryKey(blockers, walls, W, H) {
   return `${blockers.length}:${walls.length}:${hash >>> 0}`;
 }
 
+function buildVisibilityEdgeModel(blockers, walls, W, H) {
+  const bounds = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
+  const footprintSegments = getFootprintBoundarySegments(blockers).map((segment) => ({
+    a: segment.a,
+    b: segment.b,
+    meta: segment.cap
+      ? { type: "wall", index: -1, cap: true }
+      : { type: "footprint", index: segment.index, groupKey: segment.groupKey },
+  }));
+  const wallSegments = walls.map((wall, index) => ({
+    a: wall.a,
+    b: wall.b,
+    meta: { type: "wall", index },
+  }));
+  const boundsSegments = [];
+  addSegments(bounds, boundsSegments, { type: "bounds" });
+  return {
+    bounds,
+    boundsSegments,
+    footprintSegments,
+    wallSegments,
+    segments: [...boundsSegments, ...footprintSegments, ...wallSegments],
+  };
+}
+
 function getPreparedVisibilityGeometry(blockers, walls, W, H) {
   const key = visibilityGeometryKey(blockers, walls, W, H);
   const cached = visibilityGeometryCache.get(key);
   if (cached) return cached;
 
-  const bounds = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }];
-  const footprintSegments = getFootprintBoundarySegments(blockers);
-  const edgeSampleVertices = [];
-  const addEdgeSamples = (a, b, spacing = 18) => {
-    const length = dist(a, b);
-    if (!Number.isFinite(length) || length <= spacing) return;
-    const count = Math.min(24, Math.floor(length / spacing));
-    for (let index = 1; index < count; index += 1) {
-      edgeSampleVertices.push(interpolatePoint(a, b, index / count));
-    }
-  };
-  footprintSegments.forEach((segment) => addEdgeSamples(segment.a, segment.b));
-  walls.forEach((wall) => addEdgeSamples(wall.a, wall.b, 12));
-  const vertices = [
-    ...bounds,
-    ...footprintSegments.flatMap((segment) => [segment.a, segment.b]),
-    ...edgeSampleVertices,
-    ...walls.flatMap((wall) => [wall.a, wall.b]),
-  ];
-  const segments = [];
-  addSegments(bounds, segments, { type: "bounds" });
-  footprintSegments.forEach((segment) => {
-    segments.push({
-      a: segment.a,
-      b: segment.b,
-      meta: segment.cap
-        ? { type: "wall", index: -1, cap: true }
-        : { type: "footprint", index: segment.index, groupKey: segment.groupKey },
-    });
-  });
-  walls.forEach((wall, index) => segments.push({ a: wall.a, b: wall.b, meta: { type: "wall", index } }));
-  const geometry = { bounds, vertices, segments };
+  const edgeModel = buildVisibilityEdgeModel(blockers, walls, W, H);
+  const vertices = dedupeVisibilityVertices([
+    ...edgeModel.bounds,
+    ...edgeModel.footprintSegments.flatMap((segment) => [segment.a, segment.b]),
+    ...adaptiveVisibilityEdgeVertices(edgeModel.footprintSegments),
+    ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
+  ]);
+  const preparedSegments = edgeModel.segments.map((segment) => ({
+    ...segment,
+    bounds: segmentBounds(segment.a, segment.b),
+  }));
+  const spatialIndex = buildSegmentSpatialIndex(
+    preparedSegments,
+    Math.max(48, Math.min(160, Math.max(W, H) / 8)),
+  );
+  const geometry = { ...edgeModel, vertices, segments: preparedSegments, spatialIndex };
   visibilityGeometryCache.set(key, geometry);
   if (visibilityGeometryCache.size > 6) {
     visibilityGeometryCache.delete(visibilityGeometryCache.keys().next().value);
@@ -7280,11 +8634,35 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
   return geometry;
 }
 
+function dedupeVisibilityVertices(vertices) {
+  const seen = new Set();
+  return vertices.filter((vertex) => {
+    if (!vertex || !Number.isFinite(vertex.x) || !Number.isFinite(vertex.y)) return false;
+    const key = `${Math.round(vertex.x * 1000)}:${Math.round(vertex.y * 1000)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function adaptiveVisibilityEdgeVertices(segments) {
+  const vertices = [];
+  segments.forEach((segment) => {
+    const length = dist(segment.a, segment.b);
+    if (!Number.isFinite(length) || length < 42) return;
+    const count = Math.min(4, Math.floor(length / 42));
+    for (let index = 1; index <= count; index += 1) {
+      vertices.push(interpolatePoint(segment.a, segment.b, index / (count + 1)));
+    }
+  });
+  return vertices;
+}
+
 function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null) {
   if (!source || !W || !H) return [];
   const eps = 0.0001;
   const geometry = preparedGeometry || getPreparedVisibilityGeometry(blockers, walls, W, H);
-  const { vertices, segments } = geometry;
+  const { vertices } = geometry;
   const angles = [];
   vertices.forEach((v) => {
     const a = Math.atan2(v.y - source.y, v.x - source.x);
@@ -7297,10 +8675,10 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
   });
 
   const hits = [];
-  angles.forEach((a) => {
+  snapVisibilityAngles(angles).forEach((a) => {
     const ray = { x: Math.cos(a), y: Math.sin(a) };
     const intersections = [];
-    segments.forEach((s) => {
+    candidateSegmentsForRay(source, ray, geometry, W, H).forEach((s) => {
       const hit = raySegmentIntersection(source, ray, s.a, s.b);
       if (hit && hit.t > 0.0001) intersections.push({ ...hit, meta: s.meta });
     });
@@ -7355,20 +8733,22 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
   return sanitizeVisibilityPolygon(source, hits, W, H);
 }
 
-function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false) {
+function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false, preparedGeometry = null) {
   if (!origins.length) return "blocked";
   let hasCenterOneWallPath = false;
   let hasEdgeOneWallPath = false;
+  let hasClearPath = false;
+  const enemyTouchesFootprint = enemyBaseTouchesFootprint(enemy, enemyRadius, blockers);
   for (const origin of origins) {
-    const state = classifySightSegment(origin, enemy, blockers, walls);
-    if (state === "clear") return "clear";
+    const state = classifySightSegment(origin, enemy, blockers, walls, preparedGeometry);
+    if (state === "clear") hasClearPath = true;
     if (state === "oneWall") hasCenterOneWallPath = true;
   }
 
   // A base whose centre is blocked or in cover can still have a clear edge.
   // Check all meaningful edge arcs for clear LOS before promoting the marker
   // to yellow, otherwise a tiny cover-grazing line can overrule a clean view.
-  const targetSamples = interactive ? 16 : 48;
+  const targetSamples = interactive ? 8 : 16;
   for (const origin of origins) {
     const edgeStates = [];
     for (let index = 0; index < targetSamples; index += 1) {
@@ -7377,13 +8757,27 @@ function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, inter
         x: enemy.x + Math.cos(angle) * enemyRadius,
         y: enemy.y + Math.sin(angle) * enemyRadius,
       };
-      edgeStates.push(classifySightSegment(origin, target, blockers, walls));
+      edgeStates.push(classifySightSegment(origin, target, blockers, walls, preparedGeometry));
     }
-    if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) return "clear";
+    if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) hasClearPath = true;
     if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) hasEdgeOneWallPath = true;
   }
   if (hasCenterOneWallPath || hasEdgeOneWallPath) return "oneWall";
+  if (hasClearPath) return enemyTouchesFootprint ? "oneWall" : "clear";
   return "blocked";
+}
+
+function enemyBaseTouchesFootprint(enemy, enemyRadius, blockers) {
+  const samples = [{ x: enemy.x, y: enemy.y }];
+  const sampleCount = 12;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const angle = index / sampleCount * Math.PI * 2;
+    samples.push({
+      x: enemy.x + Math.cos(angle) * enemyRadius,
+      y: enemy.y + Math.sin(angle) * enemyRadius,
+    });
+  }
+  return samples.some((sample) => blockers.some((poly) => pointInPoly(sample, poly)));
 }
 
 function hasAdjacentEnemyEdgeSamples(states, targetState) {
@@ -7393,8 +8787,14 @@ function hasAdjacentEnemyEdgeSamples(states, targetState) {
   ));
 }
 
-function classifySightSegment(origin, target, blockers, walls) {
-  for (const wall of walls) {
+function classifySightSegment(origin, target, blockers, walls, preparedGeometry = null) {
+  const candidateSegments = preparedGeometry
+    ? candidateSegmentsForSegment(origin, target, preparedGeometry)
+    : null;
+  const wallSegments = candidateSegments
+    ? candidateSegments.filter((segment) => segment.meta?.type === "wall")
+    : walls.map((wall, index) => ({ a: wall.a, b: wall.b, meta: { type: "wall", index } }));
+  for (const wall of wallSegments) {
     const hit = segmentIntersectionParameters(origin, target, wall.a, wall.b);
     if (hit && hit.t > 0.0001 && hit.t < 0.9999) return "blocked";
   }
@@ -7403,7 +8803,17 @@ function classifySightSegment(origin, target, blockers, walls) {
   blockers.forEach((polygon, index) => {
     intersectionsBySurface.set(footprintSurfaceKey(blockers, index), []);
   });
-  getFootprintBoundarySegments(blockers).forEach((segment) => {
+  const boundarySegments = preparedGeometry
+    ? candidateSegments
+      .filter((segment) => segment.meta?.type === "footprint")
+      .map((segment) => ({
+        a: segment.a,
+        b: segment.b,
+        index: segment.meta.index,
+        groupKey: segment.meta.groupKey,
+      }))
+    : getFootprintBoundarySegments(blockers);
+  boundarySegments.forEach((segment) => {
     const hit = segmentIntersectionParameters(origin, target, segment.a, segment.b);
     if (!hit || hit.t <= 0.0001 || hit.t >= 0.9999) return;
     intersectionsBySurface.get(segment.groupKey)?.push(hit.t);
@@ -7469,13 +8879,30 @@ function sanitizeVisibilityPolygon(source, hits, W, H) {
     const maximumNeighbourRadius = Math.max(previousRadius, nextRadius, 1);
     const angularGap = Math.abs(normalizeAngle(point.angle - previous.angle))
       + Math.abs(normalizeAngle(next.angle - point.angle));
-    const neighboursAgree = maximumNeighbourRadius / minimumNeighbourRadius < 1.35;
-    const isolatedFarSpike = radius > maximumNeighbourRadius * 1.8;
-    const isolatedNearSpike = radius < minimumNeighbourRadius * 0.55;
-    return !(neighboursAgree && (isolatedFarSpike || isolatedNearSpike) && angularGap < 0.003);
+    const neighboursAgree = maximumNeighbourRadius / minimumNeighbourRadius < 1.45;
+    const isolatedFarSpike = radius > maximumNeighbourRadius * 1.55;
+    const isolatedNearSpike = radius < minimumNeighbourRadius * 0.68;
+    return !(neighboursAgree && (isolatedFarSpike || isolatedNearSpike) && angularGap < VISIBILITY_ISOLATED_RAY_ANGLE);
   });
   sanitized.source = { ...source };
   return sanitized;
+}
+
+function snapVisibilityAngles(angles) {
+  if (!angles.length) return [];
+  const sorted = [...angles].sort((left, right) => left - right);
+  const snapped = [];
+  let cluster = [sorted[0]];
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (Math.abs(sorted[index] - cluster[cluster.length - 1]) <= VISIBILITY_ANGLE_SNAP) {
+      cluster.push(sorted[index]);
+      continue;
+    }
+    snapped.push(cluster[Math.floor(cluster.length / 2)]);
+    cluster = [sorted[index]];
+  }
+  snapped.push(cluster[Math.floor(cluster.length / 2)]);
+  return snapped;
 }
 
 function normalizeAngle(angle) {
@@ -8329,7 +9756,7 @@ function visibilityZoneTriangles(poly) {
     const minimumRadius = Math.max(1, Math.min(firstRadius, secondRadius));
     const radiusRatio = Math.max(firstRadius, secondRadius) / minimumRadius;
     const angularGap = Math.abs(normalizeAngle(second.angle - first.angle));
-    if (radiusRatio > 1.55 && angularGap < 0.025) continue;
+    if (radiusRatio > 2.2 && angularGap < 0.006) continue;
     triangles.push([source, first, second]);
   }
   return triangles;
@@ -8368,7 +9795,7 @@ function fillVisibilityZone(ctx, poly) {
     const angularGap = Math.abs(normalizeAngle(second.angle - first.angle));
     // Adjacent rays at an occluder corner can jump from the near edge to a far
     // boundary. Connecting that discontinuity creates a false triangular wedge.
-    if (radiusRatio > 1.55 && angularGap < 0.025) continue;
+    if (radiusRatio > 2.2 && angularGap < 0.006) continue;
     ctx.beginPath();
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(first.x, first.y);
@@ -8926,6 +10353,26 @@ function drawEnemy(ctx, enemy, state, inRange, rangeActive, number, scale = 1, r
     ctx.font = `bold ${Math.max(8, 9 / scale)}px system-ui`;
     ctx.fillText(String(rangeCount), badgeX, badgeY);
   }
+  ctx.restore();
+}
+
+function drawConfirmedEnemyLosRays(ctx, rays, scale = 1) {
+  const visibleRays = (rays || []).filter((ray) => (
+    ray?.a && ray?.b && (ray.state === "clear" || ray.state === "oneWall")
+  ));
+  if (!visibleRays.length) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  visibleRays.forEach((ray) => {
+    ctx.beginPath();
+    ctx.moveTo(ray.a.x, ray.a.y);
+    ctx.lineTo(ray.b.x, ray.b.y);
+    ctx.strokeStyle = ray.state === "clear" ? "rgba(239,68,68,0.58)" : "rgba(250,204,21,0.62)";
+    ctx.lineWidth = Math.max(1, 1.25 / scale);
+    ctx.setLineDash(ray.state === "oneWall" ? [6 / scale, 4 / scale] : []);
+    ctx.stroke();
+  });
   ctx.restore();
 }
 
