@@ -3,12 +3,66 @@ const footprintBoundarySegmentCache = new WeakMap();
 const VISIBILITY_GRID_CELL_SIZE = 96;
 const VISIBILITY_ANGLE_SNAP = 0.000025;
 const VISIBILITY_ISOLATED_RAY_ANGLE = 0.012;
+const LOS_WORKER_DIAGNOSTICS = true;
+const LOS_WORKER_SLOW_ENEMY_MS = 20;
+const LOS_WORKER_SLOW_MARKER_MS = 40;
+let currentScene = null;
+let latestVisibilityJobId = 0;
+let latestEnemyJobId = 0;
+let visibilityCancelToken = 0;
+
+function workerNow() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function logWorkerPerf(label, startedAt, details = "") {
+  if (!LOS_WORKER_DIAGNOSTICS) return;
+  const elapsed = workerNow() - startedAt;
+  console.info(`[LOS worker] ${label} ${elapsed.toFixed(1)}ms${details ? ` ${details}` : ""}`);
+}
 
 self.onmessage = async (event) => {
   const message = event.data || {};
-  if (message.type === "enemyLos") {
+  const messageStartedAt = workerNow();
+  if (message.type === "setScene") {
     try {
-      const states = calculateEnemyLosStates(message);
+      visibilityCancelToken += 1;
+      setCurrentScene(message);
+      logWorkerPerf("setScene", messageStartedAt, `scene=${message.sceneKey} blockers=${message.blockers?.length || 0} walls=${message.walls?.length || 0}`);
+      self.postMessage({ type: "sceneReady", sceneKey: message.sceneKey });
+    } catch (error) {
+      self.postMessage({
+        type: "sceneError",
+        sceneKey: message.sceneKey,
+        message: error?.message || "LOS scene setup failed",
+      });
+    }
+    return;
+  }
+  if (message.type === "enemyLos") {
+    const jobId = ++latestEnemyJobId;
+    latestVisibilityJobId += 1;
+    visibilityCancelToken += 1;
+    try {
+      const states = await calculateEnemyLosStates(
+        message,
+        () => jobId !== latestEnemyJobId,
+        message.progressive
+          ? (states) => {
+              if (jobId !== latestEnemyJobId) return;
+              self.postMessage({
+                type: "enemyLosResult",
+                requestId: message.requestId,
+                sceneKey: message.sceneKey,
+                cacheKey: message.cacheKey,
+                states,
+                partial: true,
+              });
+            }
+          : null,
+      );
+      if (jobId !== latestEnemyJobId) return;
+      logWorkerPerf("enemyLos", messageStartedAt, `scene=${message.sceneKey} enemies=${message.enemies?.length || 0} markers=${message.markers?.length || 0}`);
       self.postMessage({
         type: "enemyLosResult",
         requestId: message.requestId,
@@ -27,15 +81,28 @@ self.onmessage = async (event) => {
     return;
   }
   if (message.type !== "markerVisibility" && message.type !== "markerVisibilityBatch") return;
+  const jobId = message.jobGroupId || message.requestId || ++latestVisibilityJobId;
+  latestVisibilityJobId = Math.max(latestVisibilityJobId, jobId);
+  const visibilityToken = visibilityCancelToken;
   try {
     const markers = message.type === "markerVisibilityBatch"
       ? (message.markers || [])
       : [message.marker].filter(Boolean);
+    if (currentScene?.sceneKey && currentScene.sceneKey !== message.sceneKey) {
+      if (LOS_WORKER_DIAGNOSTICS) console.info(`[LOS worker] stale marker request dropped scene=${message.sceneKey} current=${currentScene.sceneKey}`);
+      return;
+    }
     const results = await calculateMarkerVisibilityBatch({
       ...message,
       markers,
-      onResult: message.progressive
+      isStale: () => (
+        jobId !== latestVisibilityJobId
+        || visibilityToken !== visibilityCancelToken
+        || currentScene?.sceneKey !== message.sceneKey
+      ),
+      onOriginResult: message.progressive
         ? (result) => {
+            if (jobId !== latestVisibilityJobId) return;
             self.postMessage({
               type: message.type === "markerVisibilityBatch" ? "markerVisibilityBatchResult" : "markerVisibilityResult",
               requestId: message.requestId,
@@ -47,7 +114,23 @@ self.onmessage = async (event) => {
             });
           }
         : null,
+      onResult: message.progressive
+        ? (result) => {
+            if (jobId !== latestVisibilityJobId) return;
+            self.postMessage({
+              type: message.type === "markerVisibilityBatch" ? "markerVisibilityBatchResult" : "markerVisibilityResult",
+              requestId: message.requestId,
+              sceneKey: message.sceneKey,
+              markerId: result.markerId,
+              visibility: result.visibility,
+              results: [result],
+              partial: false,
+            });
+          }
+        : null,
     });
+    if (jobId !== latestVisibilityJobId) return;
+    logWorkerPerf(message.type, messageStartedAt, `scene=${message.sceneKey} markers=${markers.length} progressive=${!!message.progressive}`);
     if (message.progressive) return;
     if (message.type === "markerVisibilityBatch") {
       self.postMessage({
@@ -75,27 +158,113 @@ self.onmessage = async (event) => {
   }
 };
 
-function calculateEnemyLosStates({ enemies = [], markers = [], blockers = [], walls = [], W, H, pixelsPerInch, interactive = false, previewStates = [], candidateEnemyIndexes = null }) {
+function setCurrentScene({ sceneKey, blockers = [], walls = [], W, H }) {
   const normalizedBlockers = normalizeBlockers(blockers);
-  const visibilityGeometry = getPreparedVisibilityGeometry(normalizedBlockers, walls, W, H);
+  const normalizedWalls = normalizeWalls(walls);
+  const visibilityGeometry = getPreparedVisibilityGeometry(normalizedBlockers, normalizedWalls, W, H);
+  currentScene = {
+    sceneKey,
+    blockers: normalizedBlockers,
+    walls: normalizedWalls,
+    W,
+    H,
+    visibilityGeometry,
+  };
+}
+
+function sceneForMessage(message) {
+  if (currentScene?.sceneKey === message.sceneKey) {
+    if (LOS_WORKER_DIAGNOSTICS) console.info(`[LOS worker] scene reused scene=${message.sceneKey}`);
+    return currentScene;
+  }
+  const hasScenePayload = Array.isArray(message.blockers) || Array.isArray(message.walls);
+  if (!hasScenePayload) {
+    if (LOS_WORKER_DIAGNOSTICS) console.info(`[LOS worker] stale scene dropped scene=${message.sceneKey} current=${currentScene?.sceneKey || "none"}`);
+    return null;
+  }
+  const startedAt = workerNow();
+  setCurrentScene(message);
+  logWorkerPerf("scene fallback rebuild", startedAt, `scene=${message.sceneKey} blockers=${message.blockers?.length || 0} walls=${message.walls?.length || 0}`);
+  return currentScene;
+}
+
+async function calculateEnemyLosStates(message, isStale = () => false, onPartialStates = null) {
+  const { enemies = [], markers = [], pixelsPerInch, interactive = false, previewStates = [], candidateEnemyIndexes = null } = message;
+  const startedAt = workerNow();
+  const scene = sceneForMessage(message);
+  if (!scene) return enemies.map((_, index) => previewStates[index] || "blocked");
+  const { blockers: normalizedBlockers, walls, visibilityGeometry } = scene;
   const visibleMarkers = markers.filter((marker) => marker && marker.visible !== false);
   const radius = enemyBaseRadius(pixelsPerInch);
   const states = enemies.map((_, index) => previewStates[index] || "blocked");
   const indexes = Array.isArray(candidateEnemyIndexes)
     ? candidateEnemyIndexes.filter((index) => index >= 0 && index < enemies.length)
     : enemies.map((_, index) => index);
-  indexes.forEach((enemyIndex) => {
+  const diagnostics = {
+    candidates: indexes.length,
+    enemies: enemies.length,
+    visibleMarkers: visibleMarkers.length,
+    totalOrigins: 0,
+    totalClassifyCalls: 0,
+    slowEnemies: [],
+  };
+  for (let index = 0; index < indexes.length; index += 1) {
+    if (isStale()) break;
+    const enemyIndex = indexes[index];
     const enemy = enemies[enemyIndex];
+    const enemyStartedAt = workerNow();
+    const originsStartedAt = workerNow();
+    const origins = visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, pixelsPerInch, interactive, enemy));
+    const originsMs = workerNow() - originsStartedAt;
+    const enemyDiagnostics = {
+      enemyIndex,
+      origins: origins.length,
+      originsMs,
+      centerCalls: 0,
+      edgeCalls: 0,
+      centerMs: 0,
+      edgeMs: 0,
+    };
     states[enemyIndex] = directEnemyLOSState(
       enemy,
       radius,
-      visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, pixelsPerInch, interactive, enemy)),
+      origins,
       normalizedBlockers,
       walls,
       interactive,
       visibilityGeometry,
+      enemyDiagnostics,
     );
-  });
+    const enemyMs = workerNow() - enemyStartedAt;
+    diagnostics.totalOrigins += origins.length;
+    diagnostics.totalClassifyCalls += enemyDiagnostics.centerCalls + enemyDiagnostics.edgeCalls;
+    if (enemyMs >= LOS_WORKER_SLOW_ENEMY_MS) {
+      diagnostics.slowEnemies.push({
+        enemyIndex,
+        ms: Number(enemyMs.toFixed(1)),
+        origins: origins.length,
+        originsMs: Number(originsMs.toFixed(1)),
+        centerMs: Number(enemyDiagnostics.centerMs.toFixed(1)),
+        edgeMs: Number(enemyDiagnostics.edgeMs.toFixed(1)),
+        calls: enemyDiagnostics.centerCalls + enemyDiagnostics.edgeCalls,
+        state: states[enemyIndex],
+      });
+    }
+    if (onPartialStates) onPartialStates(states.slice());
+    if (index < indexes.length - 1) await yieldToWorkerEventLoop();
+  }
+  if (LOS_WORKER_DIAGNOSTICS) {
+    const elapsed = workerNow() - startedAt;
+    const slowDetails = diagnostics.slowEnemies.length
+      ? ` slow=${JSON.stringify(diagnostics.slowEnemies.slice(0, 4))}`
+      : "";
+    console.info(
+      `[LOS worker detail] enemyLosBreakdown ${elapsed.toFixed(1)}ms `
+      + `scene=${message.sceneKey} candidates=${diagnostics.candidates}/${diagnostics.enemies} `
+      + `visibleMarkers=${diagnostics.visibleMarkers} origins=${diagnostics.totalOrigins} `
+      + `classifyCalls=${diagnostics.totalClassifyCalls}${slowDetails}`,
+    );
+  }
   return states;
 }
 
@@ -103,34 +272,79 @@ function yieldToWorkerEventLoop() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function calculateMarkerVisibilityBatch({ markers = [], blockers = [], walls = [], W, H, pixelsPerInch, reducedOrigins = false, onResult = null }) {
-  const normalizedBlockers = normalizeBlockers(blockers);
-  const visibilityGeometry = getPreparedVisibilityGeometry(normalizedBlockers, walls, W, H);
+async function calculateMarkerVisibilityBatch({ markers = [], pixelsPerInch, reducedOrigins = false, onResult = null, onOriginResult = null, isStale = () => false, ...message }) {
+  const scene = sceneForMessage(message);
+  if (!scene) return [];
+  const { blockers: normalizedBlockers, walls, W, H, visibilityGeometry } = scene;
   const results = [];
+  const slowMarkers = [];
   for (let index = 0; index < markers.length; index += 1) {
+    if (isStale()) break;
     const marker = markers[index];
+    const markerStartedAt = workerNow();
+    const visibility = await calculateMarkerVisibility(
+      marker,
+      normalizedBlockers,
+      walls,
+      W,
+      H,
+      pixelsPerInch,
+      visibilityGeometry,
+      reducedOrigins,
+      onOriginResult
+        ? (partialVisibility) => onOriginResult({ markerId: marker?.id, x: marker?.x, y: marker?.y, visibility: partialVisibility })
+        : null,
+      isStale,
+    );
+    if (isStale()) break;
     const result = {
       markerId: marker?.id,
       x: marker?.x,
       y: marker?.y,
-      visibility: calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H, pixelsPerInch, visibilityGeometry, reducedOrigins),
+      visibility,
     };
+    const markerMs = workerNow() - markerStartedAt;
+    if (LOS_WORKER_DIAGNOSTICS && markerMs >= LOS_WORKER_SLOW_MARKER_MS) {
+      slowMarkers.push({
+        markerId: marker?.id,
+        ms: Number(markerMs.toFixed(1)),
+        reducedOrigins: !!reducedOrigins,
+      });
+    }
     results.push(result);
     if (onResult) onResult(result);
     if (index < markers.length - 1) await yieldToWorkerEventLoop();
   }
+  if (LOS_WORKER_DIAGNOSTICS && slowMarkers.length) {
+    console.info(
+      `[LOS worker detail] markerVisibilitySlow scene=${message.sceneKey} `
+      + `markers=${markers.length} slow=${JSON.stringify(slowMarkers.slice(0, 6))}`,
+    );
+  }
   return results;
 }
 
-function calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H, pixelsPerInch, visibilityGeometry, reducedOrigins = false) {
+async function calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H, pixelsPerInch, visibilityGeometry, reducedOrigins = false, onOriginResult = null, isStale = () => false) {
   const clearZones = [];
   const oneWallZones = [];
   if (!marker || marker.visible === false) return { clearZones, oneWallZones };
   const origins = getLOSOriginsForMarker(marker, pixelsPerInch, reducedOrigins ? "reduced" : "full");
-  origins.forEach((origin) => {
-    clearZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 0, visibilityGeometry));
-    oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 1, visibilityGeometry));
-  });
+  const angleMode = reducedOrigins ? "coarse" : "full";
+  for (let index = 0; index < origins.length; index += 1) {
+    if (isStale()) break;
+    const origin = origins[index];
+    clearZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 0, visibilityGeometry, angleMode));
+    if (isStale()) break;
+    oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 1, visibilityGeometry, angleMode));
+    if (isStale()) break;
+    if (onOriginResult && (index === 0 || index === origins.length - 1 || index % 2 === 1)) {
+      onOriginResult({
+        clearZones: clearZones.slice(),
+        oneWallZones: oneWallZones.slice(),
+      });
+    }
+    if (index < origins.length - 1) await yieldToWorkerEventLoop();
+  }
   return { clearZones, oneWallZones };
 }
 
@@ -144,6 +358,15 @@ function normalizeBlockers(blockers) {
   });
 }
 
+function normalizeWalls(walls) {
+  return (walls || [])
+    .filter((wall) => wall?.a && wall?.b)
+    .map((wall) => ({
+      a: { x: wall.a.x, y: wall.a.y },
+      b: { x: wall.b.x, y: wall.b.y },
+    }));
+}
+
 function getLOSOriginsForMarker(marker, pixelsPerInch, sampleMode = "full", targetPoint = null) {
   if (!marker) return [];
   const center = { x: marker.x, y: marker.y };
@@ -154,12 +377,13 @@ function getLOSOriginsForMarker(marker, pixelsPerInch, sampleMode = "full", targ
   const samples = interactive
     ? (marker.baseShape === "circle" ? 3 : 4)
     : reduced
-      ? (marker.baseShape === "circle" ? 6 : 8)
+      ? (marker.baseShape === "circle" ? 3 : 4)
       : (marker.baseShape === "circle" ? 20 : 28);
   const points = [center];
+  if (reduced && !targetPoint) return points;
 
   if (marker.baseShape === "rectangle") {
-    const perSide = interactive ? 1 : reduced ? 2 : 8;
+    const perSide = interactive || reduced ? 1 : 8;
     for (let i = 0; i <= perSide; i += 1) {
       const t = -1 + (2 * i) / perSide;
       [
@@ -436,6 +660,11 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
     ...adaptiveVisibilityEdgeVertices(edgeModel.footprintSegments),
     ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
   ]);
+  const coarseVertices = dedupeVisibilityVertices([
+    ...edgeModel.bounds,
+    ...edgeModel.footprintSegments.flatMap((segment, index) => (index % 3 === 0 ? [segment.a, segment.b] : [])),
+    ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
+  ]);
   const preparedSegments = edgeModel.segments.map((segment) => ({
     ...segment,
     bounds: segmentBounds(segment.a, segment.b),
@@ -444,7 +673,7 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
     preparedSegments,
     Math.max(48, Math.min(160, Math.max(W, H) / 8)),
   );
-  const geometry = { ...edgeModel, vertices, segments: preparedSegments, spatialIndex };
+  const geometry = { ...edgeModel, vertices, coarseVertices, segments: preparedSegments, spatialIndex };
   visibilityGeometryCache.set(key, geometry);
   if (visibilityGeometryCache.size > 6) visibilityGeometryCache.delete(visibilityGeometryCache.keys().next().value);
   return geometry;
@@ -474,11 +703,11 @@ function adaptiveVisibilityEdgeVertices(segments) {
   return vertices;
 }
 
-function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null) {
+function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null, angleMode = "full") {
   if (!source || !W || !H) return [];
   const eps = 0.0001;
   const geometry = preparedGeometry || getPreparedVisibilityGeometry(blockers, walls, W, H);
-  const { vertices } = geometry;
+  const vertices = angleMode === "coarse" ? (geometry.coarseVertices || geometry.vertices) : geometry.vertices;
   const angles = [];
   vertices.forEach((v) => {
     const a = Math.atan2(v.y - source.y, v.x - source.x);
@@ -605,19 +834,25 @@ function footprintSurfaceKey(blockers, index) {
   return groupId.startsWith("layout-group:") ? groupId : `footprint:${index}`;
 }
 
-function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false, preparedGeometry = null) {
+function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false, preparedGeometry = null, diagnostics = null) {
   if (!origins.length) return "blocked";
   let hasCenterOneWallPath = false;
   let hasEdgeOneWallPath = false;
   let hasClearPath = false;
   const enemyTouchesFootprint = enemyBaseTouchesFootprint(enemy, enemyRadius, blockers);
+  const centerStartedAt = workerNow();
   for (const origin of origins) {
     const state = classifySightSegment(origin, enemy, blockers, walls, preparedGeometry);
+    if (diagnostics) diagnostics.centerCalls += 1;
     if (state === "clear") hasClearPath = true;
     if (state === "oneWall") hasCenterOneWallPath = true;
   }
+  if (diagnostics) diagnostics.centerMs += workerNow() - centerStartedAt;
+  if (hasCenterOneWallPath) return "oneWall";
+  if (hasClearPath && enemyTouchesFootprint) return "oneWall";
 
   const targetSamples = interactive ? 8 : 16;
+  const edgeStartedAt = workerNow();
   for (const origin of origins) {
     const edgeStates = [];
     for (let index = 0; index < targetSamples; index += 1) {
@@ -626,11 +861,13 @@ function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, inter
         x: enemy.x + Math.cos(angle) * enemyRadius,
         y: enemy.y + Math.sin(angle) * enemyRadius,
       };
+      if (diagnostics) diagnostics.edgeCalls += 1;
       edgeStates.push(classifySightSegment(origin, target, blockers, walls, preparedGeometry));
     }
     if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) hasClearPath = true;
     if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) hasEdgeOneWallPath = true;
   }
+  if (diagnostics) diagnostics.edgeMs += workerNow() - edgeStartedAt;
   if (hasCenterOneWallPath || hasEdgeOneWallPath) return "oneWall";
   if (hasClearPath) return enemyTouchesFootprint ? "oneWall" : "clear";
   return "blocked";

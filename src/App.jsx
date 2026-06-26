@@ -278,11 +278,13 @@ export default function InteractiveLOSTool() {
   const imgRef = useRef(null);
   const losWorkerRef = useRef(null);
   const losWorkerRequestIdRef = useRef(0);
+  const losWorkerSceneKeyRef = useRef("");
   const latestLosWorkerRequestsRef = useRef(new Map());
   const latestEnemyLosWorkerRequestRef = useRef(null);
   const enemyLosCacheRef = useRef({ key: "", states: [] });
   const markerEnemyLosCacheRef = useRef(new Map());
   const lastInteractiveEnemyLosRef = useRef(0);
+  const pendingEnemyLosTimerRef = useRef(null);
   const draggingRef = useRef(false);
   const panningRef = useRef(false);
   const panLastRef = useRef(null);
@@ -451,6 +453,7 @@ export default function InteractiveLOSTool() {
     battlefieldForegroundRender: null,
     battlefieldForegroundRenderKey: "",
     visibilitySceneVersion: 0,
+    workerSceneVersion: 0,
     battlefieldBaseVersion: 0,
     battlefieldForegroundVersion: 0,
     combinedLosBuffers: {
@@ -517,6 +520,7 @@ export default function InteractiveLOSTool() {
     window.addEventListener("blur", cancelActiveDrag);
     return () => {
       if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
+      if (pendingEnemyLosTimerRef.current) window.clearTimeout(pendingEnemyLosTimerRef.current);
       if (losWorkerRef.current) losWorkerRef.current.terminate();
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", handleKeyDown);
@@ -559,7 +563,7 @@ export default function InteractiveLOSTool() {
   }
 
   function currentVisibilitySceneKey(blockers = state.current.blockers) {
-    return `${state.current.visibilitySceneVersion}:${state.current.W}:${state.current.H}:${blockers.length}:${state.current.walls.length}`;
+    return `${state.current.workerSceneVersion}:${state.current.W}:${state.current.H}:${blockers.length}:${state.current.walls.length}`;
   }
 
   function serializeBlockersForWorker(blockers) {
@@ -577,6 +581,21 @@ export default function InteractiveLOSTool() {
     }));
   }
 
+  function ensureLosWorkerScene(worker, sceneKey = currentVisibilitySceneKey()) {
+    if (!worker) return false;
+    if (losWorkerSceneKeyRef.current === sceneKey) return true;
+    worker.postMessage({
+      type: "setScene",
+      sceneKey,
+      blockers: serializeBlockersForWorker(state.current.blockers),
+      walls: serializeWallsForWorker(state.current.walls),
+      W: state.current.W,
+      H: state.current.H,
+    });
+    losWorkerSceneKeyRef.current = sceneKey;
+    return true;
+  }
+
   function requestDetailedMarkerVisibility(marker) {
     return requestDetailedMarkerVisibilityBatch([marker], { single: true });
   }
@@ -590,17 +609,18 @@ export default function InteractiveLOSTool() {
     const markersToRequest = uncachedMarkers;
     if (!markersToRequest.length) return false;
     const sceneKey = currentVisibilitySceneKey();
+    ensureLosWorkerScene(worker, sceneKey);
     const chunks = options.single && markersToRequest.length === 1
       ? [markersToRequest]
       : chunkArray(markersToRequest, options.batchSize || (markersToRequest.length > 8 ? 2 : 3));
+    const jobGroupId = ++losWorkerRequestIdRef.current;
     const sharedPayload = {
       sceneKey,
-      blockers: serializeBlockersForWorker(state.current.blockers),
-      walls: serializeWallsForWorker(state.current.walls),
       W: state.current.W,
       H: state.current.H,
       pixelsPerInch,
       reducedOrigins: visibleMarkers.length > 5,
+      jobGroupId,
     };
     chunks.forEach((chunk, chunkIndex) => {
       const requestId = ++losWorkerRequestIdRef.current;
@@ -615,8 +635,17 @@ export default function InteractiveLOSTool() {
         markers: options.single && chunk.length === 1 ? undefined : chunk.map((marker) => ({ ...marker })),
         progressive: true,
       });
-      if (chunkIndex === 0) postChunk();
-      else window.setTimeout(postChunk, chunkIndex * 10);
+      const postChunkIfCurrent = () => {
+        if (sceneKey !== currentVisibilitySceneKey()) return;
+        const chunkStillCurrent = chunk.every((marker) => {
+          const latest = latestLosWorkerRequestsRef.current.get(marker.id);
+          return latest?.requestId === requestId && latest?.sceneKey === sceneKey;
+        });
+        if (!chunkStillCurrent) return;
+        postChunk();
+      };
+      if (chunkIndex === 0) postChunkIfCurrent();
+      else window.setTimeout(postChunkIfCurrent, chunkIndex * 10);
     });
     return true;
   }
@@ -668,6 +697,7 @@ export default function InteractiveLOSTool() {
     );
     const requestId = ++losWorkerRequestIdRef.current;
     const sceneKey = currentVisibilitySceneKey();
+    ensureLosWorkerScene(worker, sceneKey);
     latestEnemyLosWorkerRequestRef.current = { requestId, sceneKey, cacheKey };
     worker.postMessage({
       type: "enemyLos",
@@ -678,21 +708,21 @@ export default function InteractiveLOSTool() {
       enemies: state.current.enemies.map((enemy) => ({ x: enemy.x, y: enemy.y })),
       previewStates,
       candidateEnemyIndexes,
-      blockers: serializeBlockersForWorker(state.current.blockers),
-      walls: serializeWallsForWorker(state.current.walls),
       W: state.current.W,
       H: state.current.H,
       pixelsPerInch: boardPixelsPerInch() || pixelsPerInch,
       interactive,
+      progressive: true,
     });
     return true;
   }
 
   function handleLosWorkerMessage(message) {
-    if (!message || message.type === "markerVisibilityError" || message.type === "markerVisibilityBatchError" || message.type === "enemyLosError") {
+    if (!message || message.type === "markerVisibilityError" || message.type === "markerVisibilityBatchError" || message.type === "enemyLosError" || message.type === "sceneError") {
       if (message?.message) console.warn("LOS worker failed", message.message);
       return;
     }
+    if (message.type === "sceneReady") return;
     if (message.type === "enemyLosResult") {
       const latest = latestEnemyLosWorkerRequestRef.current;
       if (!latest || latest.requestId !== message.requestId || latest.sceneKey !== message.sceneKey) return;
@@ -700,9 +730,11 @@ export default function InteractiveLOSTool() {
       if (latest.cacheKey !== message.cacheKey) return;
       const states = Array.isArray(message.states) ? message.states : [];
       state.current.enemyLosStates = states;
-      state.current.enemyLosPendingIndexes = new Set();
-      enemyLosCacheRef.current = { key: message.cacheKey, states };
-      latestEnemyLosWorkerRequestRef.current = null;
+      if (!message.partial) {
+        state.current.enemyLosPendingIndexes = new Set();
+        enemyLosCacheRef.current = { key: message.cacheKey, states };
+        latestEnemyLosWorkerRequestRef.current = null;
+      }
       draw();
       return;
     }
@@ -717,12 +749,12 @@ export default function InteractiveLOSTool() {
         if (!marker || marker.visible === false) return;
         if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
         cacheMarkerVisibility(result.markerId, result.visibility || { clearZones: [], oneWallZones: [] });
-        latestLosWorkerRequestsRef.current.delete(result.markerId);
+        if (!message.partial) latestLosWorkerRequestsRef.current.delete(result.markerId);
         changed = true;
       });
       if (!changed) return;
       rebuildCombinedVisibility(false);
-      updateEnemyLosStates(false, { forceImmediate: true });
+      updateEnemyLosStates(false, { deferred: true });
       draw();
       return;
     }
@@ -735,8 +767,8 @@ export default function InteractiveLOSTool() {
     if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
     cacheMarkerVisibility(message.markerId, message.visibility || { clearZones: [], oneWallZones: [] });
     rebuildCombinedVisibility(false);
-    updateEnemyLosStates(false, { forceImmediate: true });
-    latestLosWorkerRequestsRef.current.delete(message.markerId);
+    updateEnemyLosStates(false, { deferred: true });
+    if (!message.partial) latestLosWorkerRequestsRef.current.delete(message.markerId);
     draw();
   }
 
@@ -922,6 +954,8 @@ export default function InteractiveLOSTool() {
 
   function markVisibilityGeometryChanged({ base = true, foreground = true, clearVisibility = true } = {}) {
     state.current.visibilitySceneVersion += 1;
+    state.current.workerSceneVersion += 1;
+    losWorkerSceneKeyRef.current = "";
     if (base) state.current.battlefieldBaseVersion += 1;
     if (foreground) state.current.battlefieldForegroundVersion += 1;
     state.current.combinedLosRender = { clear: null, oneWall: null };
@@ -943,7 +977,6 @@ export default function InteractiveLOSTool() {
     state.current.stationaryLosRender = { clear: null, oneWall: null };
     state.current.stationaryLosRenderKey = "";
     state.current.visibilitySceneVersion += 1;
-    invalidateBattlefieldRenderCaches();
     clearLosBufferSet(state.current.combinedLosBuffers);
     clearLosBufferSet(state.current.movingLosBuffers);
     clearLosBufferSet(state.current.stationaryLosBuffers);
@@ -4528,6 +4561,14 @@ export default function InteractiveLOSTool() {
   function updateEnemyLosStates(interactive = false, options = {}) {
     const startedAt = performance.now();
     const forceImmediate = options.forceImmediate === true;
+    if (options.deferred && !interactive) {
+      if (pendingEnemyLosTimerRef.current) window.clearTimeout(pendingEnemyLosTimerRef.current);
+      pendingEnemyLosTimerRef.current = window.setTimeout(() => {
+        pendingEnemyLosTimerRef.current = null;
+        updateEnemyLosStates(false, { forceImmediate: true });
+      }, options.delayMs ?? 120);
+      return;
+    }
     const cacheKey = enemyLosCacheKey(interactive);
     if (!forceImmediate && enemyLosCacheRef.current.key === cacheKey) {
       state.current.enemyLosStates = enemyLosCacheRef.current.states;
@@ -4618,7 +4659,6 @@ export default function InteractiveLOSTool() {
       W,
       H,
       version: state.current.battlefieldForegroundVersion,
-      scale: roundedNumber(cameraScale, 3),
       boardPpi: roundedNumber(boardPixelsPerInch(), 3),
       lightVisible: terrainFeatureKindVisible("light"),
       denseVisible: terrainFeatureKindVisible("dense"),
@@ -4785,6 +4825,14 @@ export default function InteractiveLOSTool() {
     const key = battlefieldForegroundRenderKey(cameraScale);
     if (state.current.battlefieldForegroundRender && state.current.battlefieldForegroundRenderKey === key) {
       return state.current.battlefieldForegroundRender;
+    }
+    if (state.current.battlefieldForegroundRenderKey && state.current.battlefieldForegroundRenderKey !== key) {
+      console.info("[LOS perf] foreground cache miss", {
+        foregroundVersion: state.current.battlefieldForegroundVersion,
+        scale: roundedNumber(cameraScale, 3),
+        previousKeyLength: state.current.battlefieldForegroundRenderKey.length,
+        nextKeyLength: key.length,
+      });
     }
     const canvas = ensureRenderCanvas(state.current.battlefieldForegroundRender, W, H);
     drawBattlefieldForegroundLayer(canvas.getContext("2d"), cameraScale);
