@@ -3,15 +3,6 @@ import BASE_DATABASE from "./baseSizes.json";
 import LAYOUT_PRESETS from "./layoutPresets.json";
 import LOS_TERRAIN_DATA from "./losTerrain.json";
 
-function chunkArray(items, size) {
-  const chunks = [];
-  const chunkSize = Math.max(1, size || 1);
-  for (let index = 0; index < items.length; index += chunkSize) {
-    chunks.push(items.slice(index, index + chunkSize));
-  }
-  return chunks;
-}
-
 const FORCE_DISPOSITIONS = [
   "Take and Hold",
   "Purge the Foe",
@@ -122,6 +113,7 @@ const BATTLEFIELD_WIDTH_INCHES = 44;
 const BATTLEFIELD_HEIGHT_INCHES = 60;
 const SOURCE_LAYOUT_WIDTH_INCHES = 60;
 const MOVEMENT_PHASES = ["deployment", "turn1", "turn2", "turn3", "turn4", "turn5"];
+const LOS_PERF_DIAGNOSTICS = false;
 const MOVEMENT_PHASE_LABELS = {
   deployment: "Deployment",
   turn1: "Turn 1",
@@ -277,9 +269,17 @@ export default function InteractiveLOSTool() {
   const importJsonRef = useRef(null);
   const imgRef = useRef(null);
   const losWorkerRef = useRef(null);
+  const losPreviewWorkerRef = useRef(null);
+  const enemyLosWorkerRef = useRef(null);
   const losWorkerRequestIdRef = useRef(0);
   const losWorkerSceneKeyRef = useRef("");
+  const losPreviewWorkerSceneKeyRef = useRef("");
+  const enemyLosWorkerSceneKeyRef = useRef("");
   const latestLosWorkerRequestsRef = useRef(new Map());
+  const interactivePreviewInFlightRef = useRef(false);
+  const pendingInteractivePreviewRef = useRef(null);
+  const losDragRevisionRef = useRef(0);
+  const lastAcceptedDragRevisionRef = useRef(0);
   const latestEnemyLosWorkerRequestRef = useRef(null);
   const enemyLosCacheRef = useRef({ key: "", states: [] });
   const markerEnemyLosCacheRef = useRef(new Map());
@@ -344,6 +344,8 @@ export default function InteractiveLOSTool() {
   const [activeUnitSlot, setActiveUnitSlot] = useState(null);
   const [armyListText, setArmyListText] = useState("");
   const [armyResults, setArmyResults] = useState([]);
+  const [modelSearch, setModelSearch] = useState("");
+  const [modelSearchIndex, setModelSearchIndex] = useState(0);
   const [armyPresetName, setArmyPresetName] = useState("Army 1");
   const [armyPresetNames, setArmyPresetNames] = useState([]);
   const [selectedArmyPreset, setSelectedArmyPreset] = useState("");
@@ -356,6 +358,7 @@ export default function InteractiveLOSTool() {
   const [customGridLength, setCustomGridLength] = useState(60);
   const [showLightTerrainFeatures, setShowLightTerrainFeatures] = useState(true);
   const [showDenseTerrainFeatures, setShowDenseTerrainFeatures] = useState(true);
+  const [showObjectives, setShowObjectives] = useState(true);
   const [movementPlanningEnabled, setMovementPlanningEnabled] = useState(false);
   const [activeMovementPhase, setActiveMovementPhase] = useState("deployment");
   const [mapSectionOpen, setMapSectionOpen] = useState({
@@ -448,6 +451,8 @@ export default function InteractiveLOSTool() {
     movingLosRender: { clear: null, oneWall: null },
     stationaryLosRender: { clear: null, oneWall: null },
     stationaryLosRenderKey: "",
+    compositedLosRender: { clear: null, oneWall: null },
+    losRenderRevision: 0,
     battlefieldBaseRender: null,
     battlefieldBaseRenderKey: "",
     battlefieldForegroundRender: null,
@@ -492,6 +497,17 @@ export default function InteractiveLOSTool() {
       oneWallCleanupA: null,
       oneWallCleanupB: null,
     },
+    compositedLosBuffers: {
+      clearMask: null,
+      oneWallMask: null,
+      footprintMask: null,
+      clearColour: null,
+      oneWallColour: null,
+      render: null,
+      revision: -1,
+      width: 0,
+      height: 0,
+    },
   });
 
   useEffect(() => {
@@ -504,6 +520,20 @@ export default function InteractiveLOSTool() {
           losWorkerRef.current = null;
         };
         losWorkerRef.current = worker;
+        const previewWorker = new Worker(new URL("./losWorker.js", import.meta.url), { type: "module" });
+        previewWorker.onmessage = (event) => handleLosWorkerMessage(event.data);
+        previewWorker.onerror = (error) => {
+          console.warn("LOS preview worker error", error);
+          losPreviewWorkerRef.current = null;
+        };
+        losPreviewWorkerRef.current = previewWorker;
+        const enemyWorker = new Worker(new URL("./losWorker.js", import.meta.url), { type: "module" });
+        enemyWorker.onmessage = (event) => handleLosWorkerMessage(event.data);
+        enemyWorker.onerror = (error) => {
+          console.warn("Enemy LOS worker error", error);
+          enemyLosWorkerRef.current = null;
+        };
+        enemyLosWorkerRef.current = enemyWorker;
       } catch (error) {
         console.warn("LOS worker unavailable", error);
         losWorkerRef.current = null;
@@ -522,6 +552,8 @@ export default function InteractiveLOSTool() {
       if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
       if (pendingEnemyLosTimerRef.current) window.clearTimeout(pendingEnemyLosTimerRef.current);
       if (losWorkerRef.current) losWorkerRef.current.terminate();
+      if (losPreviewWorkerRef.current) losPreviewWorkerRef.current.terminate();
+      if (enemyLosWorkerRef.current) enemyLosWorkerRef.current.terminate();
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("pointerup", pointerUp);
@@ -540,6 +572,7 @@ export default function InteractiveLOSTool() {
   }, [sidebarCollapsed]);
 
   function recordPerf(label, startedAt) {
+    if (!LOS_PERF_DIAGNOSTICS) return;
     const elapsed = performance.now() - startedAt;
     const stats = perfStatsRef.current[label];
     if (!stats) return;
@@ -581,9 +614,9 @@ export default function InteractiveLOSTool() {
     }));
   }
 
-  function ensureLosWorkerScene(worker, sceneKey = currentVisibilitySceneKey()) {
+  function ensureLosWorkerScene(worker, sceneKey = currentVisibilitySceneKey(), sceneKeyRef = losWorkerSceneKeyRef) {
     if (!worker) return false;
-    if (losWorkerSceneKeyRef.current === sceneKey) return true;
+    if (sceneKeyRef.current === sceneKey) return true;
     worker.postMessage({
       type: "setScene",
       sceneKey,
@@ -592,7 +625,7 @@ export default function InteractiveLOSTool() {
       W: state.current.W,
       H: state.current.H,
     });
-    losWorkerSceneKeyRef.current = sceneKey;
+    sceneKeyRef.current = sceneKey;
     return true;
   }
 
@@ -600,32 +633,130 @@ export default function InteractiveLOSTool() {
     return requestDetailedMarkerVisibilityBatch([marker], { single: true });
   }
 
+  function settledUnitBoundaryMarkerIds(markers) {
+    const boundaryIds = new Set();
+    const groups = new Map();
+    markers.forEach((marker) => {
+      if (marker.groupingMode !== "unit" || !marker.unitSlot) {
+        boundaryIds.add(marker.id);
+        return;
+      }
+      const key = String(marker.unitSlot);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(marker);
+    });
+    groups.forEach((members) => {
+      if (members.length <= 4) {
+        members.forEach((marker) => boundaryIds.add(marker.id));
+        return;
+      }
+      const sorted = [...members].sort((left, right) => left.x - right.x || left.y - right.y);
+      const buildHalf = (points) => {
+        const half = [];
+        points.forEach((point) => {
+          while (half.length >= 2) {
+            const first = half[half.length - 2];
+            const second = half[half.length - 1];
+            const turn = (second.x - first.x) * (point.y - first.y)
+              - (second.y - first.y) * (point.x - first.x);
+            if (turn > 0) break;
+            half.pop();
+          }
+          half.push(point);
+        });
+        return half;
+      };
+      const hull = [
+        ...buildHalf(sorted).slice(0, -1),
+        ...buildHalf([...sorted].reverse()).slice(0, -1),
+      ];
+      (hull.length ? hull : members).forEach((marker) => boundaryIds.add(marker.id));
+    });
+    return boundaryIds;
+  }
+
+  function markerVisibilityRequestPriority(marker) {
+    const { camera, W, H, enemies } = state.current;
+    const margin = 80 / Math.max(0.1, camera.scale || 1);
+    const left = -camera.x / camera.scale - margin;
+    const top = -camera.y / camera.scale - margin;
+    const right = (W - camera.x) / camera.scale + margin;
+    const bottom = (H - camera.y) / camera.scale + margin;
+    const onScreen = marker.x >= left && marker.x <= right && marker.y >= top && marker.y <= bottom;
+    const nearestEnemyDistance = enemies.reduce((nearest, enemy) => Math.min(
+      nearest,
+      (marker.x - enemy.x) ** 2 + (marker.y - enemy.y) ** 2,
+    ), Infinity);
+    return [
+      marker.id === activeLosId ? 0 : 1,
+      onScreen ? 0 : 1,
+      nearestEnemyDistance,
+    ];
+  }
+
+  function compareMarkerVisibilityPriority(left, right) {
+    const leftPriority = markerVisibilityRequestPriority(left);
+    const rightPriority = markerVisibilityRequestPriority(right);
+    for (let index = 0; index < leftPriority.length; index += 1) {
+      if (leftPriority[index] !== rightPriority[index]) return leftPriority[index] - rightPriority[index];
+    }
+    return String(left.id).localeCompare(String(right.id));
+  }
+
   function requestDetailedMarkerVisibilityBatch(markers, options = {}) {
-    const worker = losWorkerRef.current;
+    const interactive = Boolean(options.interactive);
+    const worker = interactive ? (losPreviewWorkerRef.current || losWorkerRef.current) : losWorkerRef.current;
     const visibleMarkers = (markers || []).filter((marker) => marker && marker.visible !== false);
-    const uncachedMarkers = visibleMarkers.filter((marker) => !getCachedMarkerVisibility(marker, false));
+    const uncachedMarkers = (options.forceRequest
+      ? visibleMarkers
+      : visibleMarkers.filter((marker) => !getCachedMarkerVisibility(marker, interactive)))
+      .sort(compareMarkerVisibilityPriority);
     if (!uncachedMarkers.length) return true;
     if (!worker) return false;
-    const markersToRequest = uncachedMarkers;
+    const allVisibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+    const largeLosSet = !interactive && allVisibleMarkers.length > 5;
+    const boundaryMarkerIds = largeLosSet ? settledUnitBoundaryMarkerIds(allVisibleMarkers) : new Set();
+    const markersToRequest = uncachedMarkers.map((marker) => (
+      largeLosSet
+        ? { ...marker, visibilityOriginMode: boundaryMarkerIds.has(marker.id) ? "unit" : "reduced" }
+        : marker
+    ));
     if (!markersToRequest.length) return false;
+    if (!interactive) worker.postMessage({ type: "cancelVisibility" });
     const sceneKey = currentVisibilitySceneKey();
-    ensureLosWorkerScene(worker, sceneKey);
-    const chunks = options.single && markersToRequest.length === 1
-      ? [markersToRequest]
-      : chunkArray(markersToRequest, options.batchSize || (markersToRequest.length > 8 ? 2 : 3));
+    ensureLosWorkerScene(
+      worker,
+      sceneKey,
+      interactive && losPreviewWorkerRef.current ? losPreviewWorkerSceneKeyRef : losWorkerSceneKeyRef,
+    );
+    // Keep one progressive worker job per request. Multiple tiny async batches can
+    // interleave inside a worker and repeat the same scene work.
+    const chunks = [markersToRequest];
     const jobGroupId = ++losWorkerRequestIdRef.current;
     const sharedPayload = {
       sceneKey,
       W: state.current.W,
       H: state.current.H,
       pixelsPerInch,
-      reducedOrigins: visibleMarkers.length > 5,
+      reducedOrigins: interactive,
+      originMode: interactive ? "reduced" : (largeLosSet ? "unit" : "full"),
       jobGroupId,
+      interactive,
+      clearOnly: interactive && Boolean(options.preview),
     };
     chunks.forEach((chunk, chunkIndex) => {
       const requestId = ++losWorkerRequestIdRef.current;
       chunk.forEach((marker) => {
-        latestLosWorkerRequestsRef.current.set(marker.id, { requestId, sceneKey, x: marker.x, y: marker.y });
+        latestLosWorkerRequestsRef.current.set(marker.id, {
+          requestId,
+          sceneKey,
+          x: marker.x,
+          y: marker.y,
+          interactive,
+          preview: Boolean(options.preview),
+          dragRevision: options.dragRevision,
+          activeMarkerIds: options.activeMarkerIds || chunk.map((item) => item.id),
+        });
       });
       const postChunk = () => worker.postMessage({
         ...sharedPayload,
@@ -633,7 +764,7 @@ export default function InteractiveLOSTool() {
         requestId,
         marker: options.single && chunk.length === 1 ? { ...chunk[0] } : undefined,
         markers: options.single && chunk.length === 1 ? undefined : chunk.map((marker) => ({ ...marker })),
-        progressive: true,
+        progressive: !options.preview,
       });
       const postChunkIfCurrent = () => {
         if (sceneKey !== currentVisibilitySceneKey()) return;
@@ -677,27 +808,26 @@ export default function InteractiveLOSTool() {
   }
 
   function requestEnemyLosStates(interactive = false, cacheKey = enemyLosCacheKey(interactive)) {
-    const worker = losWorkerRef.current;
+    const worker = enemyLosWorkerRef.current || losWorkerRef.current;
     const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
     if (!worker || interactive || !visibleMarkers.length || !state.current.enemies.length) return false;
     const previewStates = calculateEnemyLosPreviewStates();
-    const candidateEnemyIndexes = previewStates
-      .map((state, index) => state !== "blocked" ? index : -1)
-      .filter((index) => index >= 0);
+    // Preview polygons are deliberately cheaper and can miss narrow valid paths.
+    // The worker remains authoritative, so every enemy must receive an exact check.
+    const candidateEnemyIndexes = state.current.enemies.map((_, index) => index);
     state.current.enemyLosStates = previewStates;
     state.current.enemyLosRays = [];
-    if (!candidateEnemyIndexes.length) {
-      state.current.enemyLosPendingIndexes = new Set();
-      enemyLosCacheRef.current = { key: cacheKey, states: previewStates };
-      latestEnemyLosWorkerRequestRef.current = null;
-      return true;
-    }
     state.current.enemyLosPendingIndexes = new Set(
-      candidateEnemyIndexes.filter((index) => previewStates[index] === "clear"),
+      candidateEnemyIndexes.filter((index) => previewStates[index] !== "oneWall"),
     );
     const requestId = ++losWorkerRequestIdRef.current;
     const sceneKey = currentVisibilitySceneKey();
-    ensureLosWorkerScene(worker, sceneKey);
+    worker.postMessage({ type: "cancelEnemyLos" });
+    ensureLosWorkerScene(
+      worker,
+      sceneKey,
+      enemyLosWorkerRef.current ? enemyLosWorkerSceneKeyRef : losWorkerSceneKeyRef,
+    );
     latestEnemyLosWorkerRequestRef.current = { requestId, sceneKey, cacheKey };
     worker.postMessage({
       type: "enemyLos",
@@ -720,6 +850,10 @@ export default function InteractiveLOSTool() {
   function handleLosWorkerMessage(message) {
     if (!message || message.type === "markerVisibilityError" || message.type === "markerVisibilityBatchError" || message.type === "enemyLosError" || message.type === "sceneError") {
       if (message?.message) console.warn("LOS worker failed", message.message);
+      if (message?.type === "markerVisibilityError" || message?.type === "markerVisibilityBatchError") {
+        interactivePreviewInFlightRef.current = false;
+        startNextInteractivePreview();
+      }
       return;
     }
     if (message.type === "sceneReady") return;
@@ -741,21 +875,45 @@ export default function InteractiveLOSTool() {
     if (message.type === "markerVisibilityBatchResult") {
       if (currentVisibilitySceneKey() !== message.sceneKey) return;
       let changed = false;
+      let resultRequest = null;
       (message.results || []).forEach((result) => {
         if (!result?.markerId) return;
         const latest = latestLosWorkerRequestsRef.current.get(result.markerId);
         if (!latest || latest.requestId !== message.requestId || latest.sceneKey !== message.sceneKey) return;
+        if (!resultRequest) resultRequest = latest;
         const marker = state.current.losMarkers.find((item) => item.id === result.markerId);
         if (!marker || marker.visible === false) return;
-        if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
-        cacheMarkerVisibility(result.markerId, result.visibility || { clearZones: [], oneWallZones: [] });
+        if (latest.interactive && latest.dragRevision < losDragRevisionRef.current - 2) return;
+        if (latest.interactive && latest.dragRevision < lastAcceptedDragRevisionRef.current) return;
+        if (!latest.interactive && (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01)) return;
+        const visibility = latest.preview
+          ? collapseInteractivePreviewVisibility(result.visibility)
+          : (result.visibility || { clearZones: [], oneWallZones: [] });
+        cacheMarkerVisibility(
+          result.markerId,
+          visibility,
+          Boolean(latest.interactive),
+        );
         if (!message.partial) latestLosWorkerRequestsRef.current.delete(result.markerId);
         changed = true;
       });
-      if (!changed) return;
-      rebuildCombinedVisibility(false);
-      updateEnemyLosStates(false, { deferred: true });
+      if (!changed) {
+        finishInteractivePreview(resultRequest, message.partial);
+        return;
+      }
+      if (resultRequest?.interactive) {
+        lastAcceptedDragRevisionRef.current = Math.max(
+          lastAcceptedDragRevisionRef.current,
+          resultRequest.dragRevision || 0,
+        );
+        rebuildCombinedVisibility(true, resultRequest.activeMarkerIds || []);
+        if (!message.partial) updateEnemyLosPreviewStates();
+      } else {
+        rebuildCombinedVisibility(false);
+        updateEnemyLosStates(false, { deferred: true });
+      }
       draw();
+      finishInteractivePreview(resultRequest, message.partial);
       return;
     }
     if (message.type !== "markerVisibilityResult" || !message.markerId) return;
@@ -764,12 +922,36 @@ export default function InteractiveLOSTool() {
     if (currentVisibilitySceneKey() !== message.sceneKey) return;
     const marker = state.current.losMarkers.find((item) => item.id === message.markerId);
     if (!marker || marker.visible === false) return;
-    if (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01) return;
-    cacheMarkerVisibility(message.markerId, message.visibility || { clearZones: [], oneWallZones: [] });
-    rebuildCombinedVisibility(false);
-    updateEnemyLosStates(false, { deferred: true });
+    if (latest.interactive && (
+      latest.dragRevision < losDragRevisionRef.current - 2
+      || latest.dragRevision < lastAcceptedDragRevisionRef.current
+    )) {
+      finishInteractivePreview(latest, message.partial);
+      return;
+    }
+    if (!latest.interactive && (Math.abs(marker.x - latest.x) > 0.01 || Math.abs(marker.y - latest.y) > 0.01)) return;
+    const visibility = latest.preview
+      ? collapseInteractivePreviewVisibility(message.visibility)
+      : (message.visibility || { clearZones: [], oneWallZones: [] });
+    cacheMarkerVisibility(
+      message.markerId,
+      visibility,
+      Boolean(latest.interactive),
+    );
+    if (latest.interactive) {
+      lastAcceptedDragRevisionRef.current = Math.max(
+        lastAcceptedDragRevisionRef.current,
+        latest.dragRevision || 0,
+      );
+      rebuildCombinedVisibility(true, latest.activeMarkerIds || [message.markerId]);
+      if (!message.partial) updateEnemyLosPreviewStates();
+    } else {
+      rebuildCombinedVisibility(false);
+      updateEnemyLosStates(false, { deferred: true });
+    }
     if (!message.partial) latestLosWorkerRequestsRef.current.delete(message.markerId);
     draw();
+    finishInteractivePreview(latest, message.partial);
   }
 
   useEffect(() => {
@@ -797,7 +979,7 @@ export default function InteractiveLOSTool() {
   useEffect(() => {
     draw();
     scheduleBrowserSave();
-  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectiveFootprintRemoveMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId, selectedLayoutObjectiveId, showLightTerrainFeatures, showDenseTerrainFeatures, movementPlanningEnabled, activeMovementPhase]);
+  }, [mode, activeLosId, activeUnitSlot, losVersion, scaleInches, rangeInches, homeDeploymentRangeInches, enemyDeploymentRangeInches, deepstrikeRangeInches, deepstrikeVisible, layoutEditMode, selectiveFootprintRemoveMode, selectedLayoutTerrainId, selectedLayoutWallId, selectedLayoutFeatureId, selectedLayoutObjectiveId, showLightTerrainFeatures, showDenseTerrainFeatures, showObjectives, movementPlanningEnabled, activeMovementPhase]);
 
   useEffect(() => {
     if (!layoutSaveReadyRef.current) {
@@ -805,7 +987,7 @@ export default function InteractiveLOSTool() {
       return;
     }
     scheduleBrowserSave();
-  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible, opponentMissionCardsVisible, showLightTerrainFeatures, showDenseTerrainFeatures]);
+  }, [defenderForceDisposition, attackerForceDisposition, selectedLayoutVariant, missionCardsVisible, opponentMissionCardsVisible, showLightTerrainFeatures, showDenseTerrainFeatures, showObjectives]);
 
   function resize() {
     const canvas = canvasRef.current;
@@ -953,14 +1135,20 @@ export default function InteractiveLOSTool() {
   }
 
   function markVisibilityGeometryChanged({ base = true, foreground = true, clearVisibility = true } = {}) {
+    cancelInteractivePreview();
     state.current.visibilitySceneVersion += 1;
     state.current.workerSceneVersion += 1;
     losWorkerSceneKeyRef.current = "";
+    losPreviewWorkerSceneKeyRef.current = "";
+    enemyLosWorkerSceneKeyRef.current = "";
     if (base) state.current.battlefieldBaseVersion += 1;
     if (foreground) state.current.battlefieldForegroundVersion += 1;
     state.current.combinedLosRender = { clear: null, oneWall: null };
     state.current.movingLosRender = { clear: null, oneWall: null };
     state.current.stationaryLosRender = { clear: null, oneWall: null };
+    state.current.compositedLosRender = { clear: null, oneWall: null };
+    state.current.compositedLosBuffers.revision = -1;
+    state.current.losRenderRevision += 1;
     state.current.stationaryLosRenderKey = "";
     enemyLosCacheRef.current = { key: "", states: [] };
     markerEnemyLosCacheRef.current.clear();
@@ -975,11 +1163,15 @@ export default function InteractiveLOSTool() {
     state.current.combinedLosRender = { clear: null, oneWall: null };
     state.current.movingLosRender = { clear: null, oneWall: null };
     state.current.stationaryLosRender = { clear: null, oneWall: null };
+    state.current.compositedLosRender = { clear: null, oneWall: null };
+    state.current.compositedLosBuffers.revision = -1;
+    state.current.losRenderRevision += 1;
     state.current.stationaryLosRenderKey = "";
     state.current.visibilitySceneVersion += 1;
     clearLosBufferSet(state.current.combinedLosBuffers);
     clearLosBufferSet(state.current.movingLosBuffers);
     clearLosBufferSet(state.current.stationaryLosBuffers);
+    clearLosBufferSet(state.current.compositedLosBuffers);
     enemyLosCacheRef.current = { key: "", states: [] };
     markerEnemyLosCacheRef.current.clear();
     latestEnemyLosWorkerRequestRef.current = null;
@@ -1118,6 +1310,7 @@ export default function InteractiveLOSTool() {
       layoutFeatureLinks: state.current.layoutFeatureLinks,
       showLightTerrainFeatures,
       showDenseTerrainFeatures,
+      showObjectives,
       activeLayoutKey: state.current.activeLayoutKey,
       deploymentLine: state.current.deploymentLine,
       deploymentPath: state.current.deploymentPath,
@@ -1182,6 +1375,7 @@ export default function InteractiveLOSTool() {
     if (typeof data.selectedArmyPreset === "string") setSelectedArmyPreset(data.selectedArmyPreset);
     setShowLightTerrainFeatures(data.showLightTerrainFeatures !== false);
     setShowDenseTerrainFeatures(data.showDenseTerrainFeatures !== false);
+    setShowObjectives(data.showObjectives !== false);
 
     if (Array.isArray(data.losMarkers)) {
       state.current.losMarkers = data.losMarkers.map((marker, index) => normalizeLosMarker(marker, index, data.rangeInches));
@@ -2233,6 +2427,35 @@ export default function InteractiveLOSTool() {
     scheduleBrowserSave();
   }
 
+  function addDatabaseLosMarker(name, base) {
+    const id = `los-${Date.now()}`;
+    const spawn = nextLosMarkerStagingPoint();
+    const marker = createLosMarker(id, name, spawn.x, spawn.y);
+    marker.baseShape = base.shape || "circle";
+    marker.baseLengthMm = Number(marker.baseShape === "circle" ? base.diameter : base.length) || 40;
+    marker.baseWidthMm = marker.baseShape === "circle"
+      ? marker.baseLengthMm
+      : Number(base.width) || marker.baseLengthMm;
+    state.current.losMarkers.push(marker);
+    setActiveUnitSlot(null);
+    setActiveLosId(id);
+    setLosName(marker.name);
+    setBaseShape(marker.baseShape);
+    setBaseLengthMm(marker.baseLengthMm);
+    setBaseWidthMm(marker.baseWidthMm);
+    setBaseRotation(0);
+    setRangeInches("unlimited");
+    setMarkerGroupingMode("model");
+    setUnitModelCount(1);
+    setSelectedUnitSlot(1);
+    state.current.light = { x: marker.x, y: marker.y };
+    setModelSearch("");
+    setModelSearchIndex(0);
+    setLosVersion((v) => v + 1);
+    setStatus(`Added ${name}.`);
+    scheduleBrowserSave();
+  }
+
   function renameActiveLosMarker() {
     const name = losName.trim() || "LOS";
     updateActiveLosMarker({ name });
@@ -2663,12 +2886,6 @@ export default function InteractiveLOSTool() {
       setSelectedTerrainFootprintRelation(terrainRelationChoice);
       return;
     }
-    const objectiveVisibilityChoice = selectedLayoutObjectiveId ? findLayoutObjectiveVisibilityButton(p) : null;
-    if (objectiveVisibilityChoice !== null) {
-      setSelectedLayoutObjectiveVisibility(objectiveVisibilityChoice);
-      return;
-    }
-
     if (selectedLayoutWallId && (mode === "denseTF" || mode === "lightTF")) {
       setSelectedLayoutWallId(null);
     }
@@ -2749,7 +2966,7 @@ export default function InteractiveLOSTool() {
     if (selectedLayoutWallId) setSelectedLayoutWallId(null);
     if (selectedLayoutFeatureId) setSelectedLayoutFeatureId(null);
 
-    if (mode !== "denseTF" && mode !== "lightTF") {
+    if (layoutEditMode && showObjectives && mode !== "denseTF" && mode !== "lightTF") {
       const objectiveIndex = findLayoutObjectiveAtPoint(p);
       if (objectiveIndex >= 0) {
         const objective = state.current.layoutObjectives[objectiveIndex];
@@ -2758,7 +2975,7 @@ export default function InteractiveLOSTool() {
         setSelectedLayoutWallId(null);
         setSelectedLayoutFeatureId(null);
         if (layoutEditMode) objectDragRef.current = { type: "layoutObjective", index: objectiveIndex };
-        setStatus(layoutEditMode ? "Objective marker selected. Drag it to reposition it." : "Objective marker selected. Use the eye controls to show or fade it.");
+        setStatus("Objective marker selected. Drag it to reposition it.");
         draw();
         return;
       }
@@ -2824,6 +3041,11 @@ export default function InteractiveLOSTool() {
     const draggable = findDraggableObject(p);
     if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "denseTF" && mode !== "lightTF" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler") {
       const draggedMarker = draggable.type === "light" ? state.current.losMarkers.find((marker) => marker.id === draggable.id) : null;
+      if (draggable.type === "light") {
+        losWorkerRef.current?.postMessage({ type: "cancelVisibility" });
+        losPreviewWorkerRef.current?.postMessage({ type: "cancelVisibility" });
+        enemyLosWorkerRef.current?.postMessage({ type: "cancelEnemyLos" });
+      }
       const moveSelectedUnit = draggedMarker?.groupingMode === "unit" && draggedMarker.unitSlot === activeUnitSlot;
       if (draggable.type === "light" && !moveSelectedUnit) selectLosMarker(draggable.id);
       objectDragRef.current = moveSelectedUnit
@@ -2832,10 +3054,24 @@ export default function InteractiveLOSTool() {
           unitSlot: activeUnitSlot,
           startPoint: p,
           memberStarts: getUnitMembers(activeUnitSlot).map((member) => ({ id: member.id, x: member.x, y: member.y })),
+          movementMeasureStart: unitCoherencyCircleCenter(getUnitMembers(activeUnitSlot)),
           lastLosUpdate: 0,
           previewMemberIndex: 0,
         }
-        : { ...draggable, lastLosUpdate: 0 };
+        : {
+          ...draggable,
+          lastLosUpdate: 0,
+          movementMeasureStart: draggable.type === "light"
+            ? { x: draggedMarker.x, y: draggedMarker.y }
+            : null,
+        };
+      if (draggable.type === "light") {
+        const activeMarkerIds = moveSelectedUnit
+          ? getUnitMembers(activeUnitSlot).filter((marker) => marker.visible !== false).map((marker) => marker.id)
+          : [draggable.id];
+        rebuildCombinedVisibility(true, activeMarkerIds);
+        draw();
+      }
       if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
       const active = draggable.type === "light" ? state.current.losMarkers.find((m) => m.id === draggable.id) : null;
       setStatus(moveSelectedUnit
@@ -3144,15 +3380,114 @@ export default function InteractiveLOSTool() {
     const lastPoint = dragged.lastLosPoint;
     const moved = lastPoint ? dist(point, lastPoint) : Infinity;
     const inch = pixelsPerInch || (state.current.fit.w / boardWidthInches()) || 0;
-    const smallMoveThreshold = inch ? inch * 0.18 : 12;
-    const forceMoveThreshold = inch ? inch * 0.45 : 28;
+    const smallMoveThreshold = inch ? inch * 0.1 : 7;
+    const forceMoveThreshold = inch ? inch * 0.25 : 16;
     const elapsed = now - (dragged.lastLosUpdate || 0);
-    const shouldRun = !dragged.lastLosUpdate || elapsed >= 120 || moved >= forceMoveThreshold;
+    if (interactivePreviewInFlightRef.current) {
+      if (moved < smallMoveThreshold) return false;
+      dragged.lastLosPoint = { x: point.x, y: point.y };
+      return true;
+    }
+    const shouldRun = !dragged.lastLosUpdate || elapsed >= 24 || moved >= forceMoveThreshold;
     if (!shouldRun && moved < smallMoveThreshold) return false;
     if (!shouldRun) return false;
     dragged.lastLosUpdate = now;
     dragged.lastLosPoint = { x: point.x, y: point.y };
     return true;
+  }
+
+  function startNextInteractivePreview() {
+    const pending = pendingInteractivePreviewRef.current;
+    if (!pending || interactivePreviewInFlightRef.current || objectDragRef.current?.type !== "light") return;
+    pendingInteractivePreviewRef.current = null;
+    interactivePreviewInFlightRef.current = true;
+    const requested = requestDetailedMarkerVisibilityBatch([pending.marker], {
+      single: true,
+      interactive: true,
+      preview: true,
+      forceRequest: true,
+      activeMarkerIds: pending.activeMarkerIds,
+      dragRevision: pending.dragRevision,
+    });
+    if (!requested) interactivePreviewInFlightRef.current = false;
+  }
+
+  function queueInteractivePreview(marker, activeMarkerIds, dragRevision = losDragRevisionRef.current) {
+    if (!marker) return;
+    pendingInteractivePreviewRef.current = { marker, activeMarkerIds, dragRevision };
+    startNextInteractivePreview();
+  }
+
+  function finishInteractivePreview(request, partial) {
+    if (!request?.preview || partial) return;
+    interactivePreviewInFlightRef.current = false;
+    if (objectDragRef.current?.type === "light") startNextInteractivePreview();
+  }
+
+  function cancelInteractivePreview() {
+    pendingInteractivePreviewRef.current = null;
+    interactivePreviewInFlightRef.current = false;
+    losPreviewWorkerRef.current?.postMessage({ type: "cancelVisibility" });
+    for (const [markerId, request] of latestLosWorkerRequestsRef.current.entries()) {
+      if (request.preview) latestLosWorkerRequestsRef.current.delete(markerId);
+    }
+  }
+
+  function collapseInteractivePreviewVisibility(visibility) {
+    return {
+      clearZones: [...(visibility?.clearZones || [])],
+      oneWallZones: [],
+    };
+  }
+
+  function markerPreviewPerimeterPoints(marker) {
+    const { rx, ry } = getBaseRadii(1, marker);
+    const points = [];
+    if (marker.baseShape === "rectangle") {
+      [
+        { x: -rx, y: -ry },
+        { x: 0, y: -ry },
+        { x: rx, y: -ry },
+        { x: rx, y: 0 },
+        { x: rx, y: ry },
+        { x: 0, y: ry },
+        { x: -rx, y: ry },
+        { x: -rx, y: 0 },
+      ].forEach((local) => {
+        const rotated = rotatePoint(local.x, local.y, marker.baseRotation || 0);
+        points.push({ x: marker.x + rotated.x, y: marker.y + rotated.y });
+      });
+      return points;
+    }
+    for (let index = 0; index < 20; index += 1) {
+      const angle = index / 20 * Math.PI * 2;
+      const rotated = rotatePoint(Math.cos(angle) * rx, Math.sin(angle) * ry, marker.baseRotation || 0);
+      points.push({ x: marker.x + rotated.x, y: marker.y + rotated.y });
+    }
+    return points;
+  }
+
+  function radialUnitPreviewOutline(points, center) {
+    if (points.length <= 3) return points;
+    const bins = new Array(36).fill(null);
+    points.forEach((point) => {
+      const angle = Math.atan2(point.y - center.y, point.x - center.x);
+      const normalized = (angle + Math.PI * 2) % (Math.PI * 2);
+      const index = Math.floor(normalized / (Math.PI * 2) * bins.length) % bins.length;
+      const radius = dist(center, point);
+      if (!bins[index] || radius > bins[index].radius) bins[index] = { point, radius };
+    });
+    return bins.filter(Boolean).map((entry) => entry.point);
+  }
+
+  function interactiveUnitPreviewMarker(markers, preferredMarkerId) {
+    if (!markers.length) return null;
+    const preferred = markers.find((marker) => marker.id === preferredMarkerId) || markers[0];
+    const center = markers.reduce((total, marker) => ({ x: total.x + marker.x, y: total.y + marker.y }), { x: 0, y: 0 });
+    center.x /= markers.length;
+    center.y /= markers.length;
+    const previewOutline = radialUnitPreviewOutline(markers.flatMap(markerPreviewPerimeterPoints), center);
+    return { ...preferred, x: center.x, y: center.y, previewOutline };
   }
 
   function applyPendingObjectDrag() {
@@ -3162,6 +3497,12 @@ export default function InteractiveLOSTool() {
     pendingDragPointRef.current = null;
 
     if (dragged.type === "light") {
+      const dragRevision = ++losDragRevisionRef.current;
+      latestEnemyLosWorkerRequestRef.current = null;
+      if (pendingEnemyLosTimerRef.current) {
+        window.clearTimeout(pendingEnemyLosTimerRef.current);
+        pendingEnemyLosTimerRef.current = null;
+      }
       if (dragged.unitSlot && dragged.startPoint && dragged.memberStarts) {
         const dx = p.x - dragged.startPoint.x;
         const dy = p.y - dragged.startPoint.y;
@@ -3175,12 +3516,9 @@ export default function InteractiveLOSTool() {
         });
         if (shouldRunInteractiveLos(dragged, p)) {
           const visibleMembers = getUnitMembers(dragged.unitSlot).filter((marker) => marker.visible !== false);
-          visibleMembers.forEach((marker) => state.current.losVisibilityCache.delete(marker.id));
-          visibleMembers.forEach((marker) => {
-            cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, true), true);
-          });
-          rebuildCombinedVisibility(true, visibleMembers.length ? visibleMembers.map((marker) => marker.id) : dragged.id);
-          updateEnemyLosPreviewStates();
+          const activeMarkerIds = visibleMembers.length ? visibleMembers.map((marker) => marker.id) : [dragged.id];
+          const previewMarker = interactiveUnitPreviewMarker(visibleMembers, dragged.id);
+          queueInteractivePreview(previewMarker, activeMarkerIds, dragRevision);
         }
       } else {
         const markerIndex = state.current.losMarkers.findIndex((marker) => marker.id === dragged.id);
@@ -3189,7 +3527,9 @@ export default function InteractiveLOSTool() {
           state.current.losMarkers[markerIndex] = { ...marker, x: p.x, y: p.y };
           if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
           if (marker.id === activeLosId) state.current.light = { x: p.x, y: p.y };
-          if (shouldRunInteractiveLos(dragged, p)) updateVisibility(dragged.id, false, true);
+          if (shouldRunInteractiveLos(dragged, p)) {
+            queueInteractivePreview(state.current.losMarkers[markerIndex], [dragged.id], dragRevision);
+          }
         }
       }
     } else if (dragged.type === "enemy") {
@@ -3253,6 +3593,8 @@ export default function InteractiveLOSTool() {
       }
       const dragged = objectDragRef.current;
       applyPendingObjectDrag();
+      if (dragged.type === "light") losDragRevisionRef.current += 1;
+      if (dragged.type === "light") cancelInteractivePreview();
       objectDragRef.current = null;
       pendingDragPointRef.current = null;
       draggingRef.current = false;
@@ -3547,35 +3889,6 @@ export default function InteractiveLOSTool() {
       if (dist(p, state.current.layoutObjectives[index]) <= radius) return index;
     }
     return -1;
-  }
-
-  function layoutObjectiveVisibilityButtons(objective) {
-    const scale = state.current.camera.scale || 1;
-    const size = 26 / scale;
-    const gap = 6 / scale;
-    const y = objective.y - size * 1.55;
-    return [
-      { visible: true, x: objective.x - size - gap / 2, y, size },
-      { visible: false, x: objective.x + gap / 2, y, size },
-    ];
-  }
-
-  function findLayoutObjectiveVisibilityButton(p) {
-    const objective = state.current.layoutObjectives.find((item) => item.id === selectedLayoutObjectiveId);
-    if (!objective) return null;
-    const button = layoutObjectiveVisibilityButtons(objective).find((item) => (
-      p.x >= item.x && p.x <= item.x + item.size && p.y >= item.y && p.y <= item.y + item.size
-    ));
-    return button ? button.visible : null;
-  }
-
-  function setSelectedLayoutObjectiveVisibility(visible) {
-    const objective = state.current.layoutObjectives.find((item) => item.id === selectedLayoutObjectiveId);
-    if (!objective) return;
-    objective.visible = visible;
-    draw();
-    scheduleBrowserSave();
-    setStatus(`Objective marker ${visible ? "shown" : "faded"}.`);
   }
 
   function captureMovementPhaseSnapshot() {
@@ -4064,12 +4377,17 @@ export default function InteractiveLOSTool() {
     const lengthMm = marker?.baseLengthMm ?? baseLengthMm;
     const widthMm = marker?.baseWidthMm ?? baseWidthMm;
 
-    if (!pixelsPerInch) {
+    const fitPpi = state.current.fit?.w > 0 ? state.current.fit.w / boardWidthInches() : null;
+    const resolvedPixelsPerInch = state.current.activeLayoutKey
+      ? fitPpi
+      : (Number.isFinite(pixelsPerInch) && pixelsPerInch > 0 ? pixelsPerInch : fitPpi);
+
+    if (!resolvedPixelsPerInch) {
       const fallback = 15 / cameraScale;
       return { rx: fallback, ry: fallback };
     }
 
-    const pxPerMm = pixelsPerInch / 25.4;
+    const pxPerMm = resolvedPixelsPerInch / 25.4;
     if (shape === "circle") {
       const r = Math.max(1, (Number(lengthMm) || 25) * pxPerMm / 2);
       return { rx: r, ry: r };
@@ -4307,18 +4625,12 @@ export default function InteractiveLOSTool() {
       setStatus("This layout does not have deployment lines saved yet.");
       return;
     }
-    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => {
-      const point = rotateLayoutPoint(x, y);
-      return battlefieldPoint(point.x, point.y);
-    });
+    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => presetDeploymentPoint(preset, x, y));
     state.current.deploymentLine = {
       a: state.current.deploymentPath[0],
       b: state.current.deploymentPath[state.current.deploymentPath.length - 1],
     };
-    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => {
-      const point = rotateLayoutPoint(x, y);
-      return battlefieldPoint(point.x, point.y);
-    });
+    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => presetDeploymentPoint(preset, x, y));
     state.current.enemyDeploymentLine = {
       a: state.current.enemyDeploymentPath[0],
       b: state.current.enemyDeploymentPath[state.current.enemyDeploymentPath.length - 1],
@@ -4383,6 +4695,26 @@ export default function InteractiveLOSTool() {
       });
     }
     return results;
+  }
+
+  function unitCoherencyCircleCenter(members) {
+    if (!members?.length) return null;
+    if (members.length === 1) return { x: members[0].x, y: members[0].y };
+    let furthest = null;
+    let furthestDistance = -1;
+    for (let first = 0; first < members.length; first++) {
+      for (let second = first + 1; second < members.length; second++) {
+        const edge = closestEllipseEdgePoints(markerEllipse(members[first]), markerEllipse(members[second]));
+        const edgeDistance = dist(edge.a, edge.b);
+        if (edgeDistance > furthestDistance) {
+          furthestDistance = edgeDistance;
+          furthest = edge;
+        }
+      }
+    }
+    return furthest
+      ? { x: (furthest.a.x + furthest.b.x) / 2, y: (furthest.a.y + furthest.b.y) / 2 }
+      : { x: members[0].x, y: members[0].y };
   }
 
   function markerEllipse(marker) {
@@ -4486,7 +4818,7 @@ export default function InteractiveLOSTool() {
     const hasZones = clearZones.some((zone) => zone?.length >= 3)
       || oneWallZones.some((zone) => zone?.length >= 3);
     if (!hasZones) {
-      return enemies.map(() => "blocked");
+      return enemies.map((_, index) => state.current.enemyLosStates[index] || "blocked");
     }
     const radius = enemyBaseRadius(boardPixelsPerInch());
     const blockers = state.current.blockers || [];
@@ -4495,7 +4827,10 @@ export default function InteractiveLOSTool() {
       if (samples.some((sample) => pointInAnyVisibilityZone(sample, clearZones))) {
         return enemyBaseTouchesFootprint(enemy, radius, blockers) ? "oneWall" : "clear";
       }
-      if (samples.some((sample) => pointInAnyVisibilityZone(sample, oneWallZones))) return "oneWall";
+      if (
+        enemyBaseTouchesFootprint(enemy, radius, blockers)
+        && samples.some((sample) => pointInAnyVisibilityZone(sample, oneWallZones))
+      ) return "oneWall";
       return "blocked";
     });
   }
@@ -4577,7 +4912,7 @@ export default function InteractiveLOSTool() {
     }
     if (interactive) {
       const now = performance.now();
-      if (now - lastInteractiveEnemyLosRef.current < 180) return;
+      if (now - lastInteractiveEnemyLosRef.current < 32) return;
       lastInteractiveEnemyLosRef.current = now;
       updateEnemyLosPreviewStates();
       recordPerf("enemyLos", startedAt);
@@ -4625,15 +4960,27 @@ export default function InteractiveLOSTool() {
     return points.map(roundedPoint);
   }
 
-  function ensureRenderCanvas(canvas, W, H) {
+  function battlefieldRenderPixelRatio(cameraScale) {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.min(4, Math.max(1, dpr * Math.max(1, cameraScale || 1)));
+  }
+
+  function ensureRenderCanvas(canvas, W, H, pixelRatio = 1) {
     const target = canvas || document.createElement("canvas");
-    if (target.width !== W) target.width = W;
-    if (target.height !== H) target.height = H;
+    const width = Math.max(1, Math.round(W * pixelRatio));
+    const height = Math.max(1, Math.round(H * pixelRatio));
+    if (target.width !== width) target.width = width;
+    if (target.height !== height) target.height = height;
+    const context = target.getContext("2d");
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     return target;
   }
 
   function battlefieldBaseRenderKey(cameraScale) {
     const { W, H, fit, deploymentPath, deploymentLine, enemyDeploymentPath, enemyDeploymentLine } = state.current;
+    const pixelRatio = battlefieldRenderPixelRatio(cameraScale);
     const homeDeployPath = deploymentPath?.length >= 2 ? deploymentPath : (deploymentLine ? [deploymentLine.a, deploymentLine.b] : []);
     const enemyDeployPath = enemyDeploymentPath?.length >= 2 ? enemyDeploymentPath : (enemyDeploymentLine ? [enemyDeploymentLine.a, enemyDeploymentLine.b] : []);
     return JSON.stringify({
@@ -4644,6 +4991,7 @@ export default function InteractiveLOSTool() {
       boardW: boardWidthInches(),
       boardH: boardHeightInches(),
       scale: roundedNumber(cameraScale, 3),
+      pixelRatio: roundedNumber(pixelRatio, 3),
       image: Boolean(imgRef.current),
       imageSrc: state.current.savedImageSrc ? String(state.current.savedImageSrc).slice(0, 128) : "",
       homeDeployPathLength: homeDeployPath.length,
@@ -4655,13 +5003,17 @@ export default function InteractiveLOSTool() {
 
   function battlefieldForegroundRenderKey(cameraScale) {
     const { W, H } = state.current;
+    const pixelRatio = battlefieldRenderPixelRatio(cameraScale);
     return JSON.stringify({
       W,
       H,
       version: state.current.battlefieldForegroundVersion,
+      scale: roundedNumber(cameraScale, 3),
+      pixelRatio: roundedNumber(pixelRatio, 3),
       boardPpi: roundedNumber(boardPixelsPerInch(), 3),
       lightVisible: terrainFeatureKindVisible("light"),
       denseVisible: terrainFeatureKindVisible("dense"),
+      objectivesVisible: showObjectives,
       terrainCount: state.current.layoutTerrain.length,
       terrain: state.current.layoutTerrain.map((terrain) => [
         terrain.id,
@@ -4744,11 +5096,12 @@ export default function InteractiveLOSTool() {
 
   function getBattlefieldBaseRender(cameraScale) {
     const { W, H } = state.current;
+    const pixelRatio = battlefieldRenderPixelRatio(cameraScale);
     const key = battlefieldBaseRenderKey(cameraScale);
     if (state.current.battlefieldBaseRender && state.current.battlefieldBaseRenderKey === key) {
       return state.current.battlefieldBaseRender;
     }
-    const canvas = ensureRenderCanvas(state.current.battlefieldBaseRender, W, H);
+    const canvas = ensureRenderCanvas(state.current.battlefieldBaseRender, W, H, pixelRatio);
     drawBattlefieldBaseLayer(canvas.getContext("2d"), cameraScale);
     state.current.battlefieldBaseRender = canvas;
     state.current.battlefieldBaseRenderKey = key;
@@ -4815,18 +5168,21 @@ export default function InteractiveLOSTool() {
     if (homeDeployPath.length >= 2 && !state.current.deploymentNoMansSide) drawDeploymentSideArrows(targetCtx, homeDeployPath, cameraScale, "home");
     if (enemyDeployPath.length >= 2 && !state.current.enemyDeploymentNoMansSide) drawDeploymentSideArrows(targetCtx, enemyDeployPath, cameraScale, "enemy");
 
-    layoutObjectives.forEach((objective) => {
-      drawLayoutObjective(targetCtx, objective, pixelsPerInch || fit.w / boardWidthInches(), cameraScale);
-    });
+    if (showObjectives) {
+      layoutObjectives.forEach((objective) => {
+        drawLayoutObjective(targetCtx, objective, pixelsPerInch || fit.w / boardWidthInches(), cameraScale);
+      });
+    }
   }
 
   function getBattlefieldForegroundRender(cameraScale) {
     const { W, H } = state.current;
+    const pixelRatio = battlefieldRenderPixelRatio(cameraScale);
     const key = battlefieldForegroundRenderKey(cameraScale);
     if (state.current.battlefieldForegroundRender && state.current.battlefieldForegroundRenderKey === key) {
       return state.current.battlefieldForegroundRender;
     }
-    if (state.current.battlefieldForegroundRenderKey && state.current.battlefieldForegroundRenderKey !== key) {
+    if (LOS_PERF_DIAGNOSTICS && state.current.battlefieldForegroundRenderKey && state.current.battlefieldForegroundRenderKey !== key) {
       console.info("[LOS perf] foreground cache miss", {
         foregroundVersion: state.current.battlefieldForegroundVersion,
         scale: roundedNumber(cameraScale, 3),
@@ -4834,7 +5190,7 @@ export default function InteractiveLOSTool() {
         nextKeyLength: key.length,
       });
     }
-    const canvas = ensureRenderCanvas(state.current.battlefieldForegroundRender, W, H);
+    const canvas = ensureRenderCanvas(state.current.battlefieldForegroundRender, W, H, pixelRatio);
     drawBattlefieldForegroundLayer(canvas.getContext("2d"), cameraScale);
     state.current.battlefieldForegroundRender = canvas;
     state.current.battlefieldForegroundRenderKey = key;
@@ -4916,7 +5272,18 @@ export default function InteractiveLOSTool() {
     ctx.translate(camera.x, camera.y);
     ctx.scale(camera.scale, camera.scale);
 
-    ctx.drawImage(getBattlefieldBaseRender(camera.scale), 0, 0);
+    const battlefieldBaseRender = getBattlefieldBaseRender(camera.scale);
+    ctx.drawImage(
+      battlefieldBaseRender,
+      0,
+      0,
+      battlefieldBaseRender.width,
+      battlefieldBaseRender.height,
+      0,
+      0,
+      W,
+      H,
+    );
 
     const rangeMarkers = Number.isFinite(rangeRadius)
       ? (selectedUnitMembers.length ? selectedUnitMembers : [getActiveLosMarker()].filter(Boolean))
@@ -4929,20 +5296,19 @@ export default function InteractiveLOSTool() {
     ctx.rect(fit.x, fit.y, fit.w, fit.h);
     ctx.clip();
 
-    [
+    const compositedLosRender = getCompositedLosRender([
       state.current.stationaryLosRender,
       state.current.movingLosRender,
       state.current.combinedLosRender,
-    ].forEach((renderLayer) => {
-      if (!renderLayer?.oneWall && !renderLayer?.clear) return;
-      if (renderLayer.oneWall) ctx.drawImage(renderLayer.oneWall, 0, 0);
-      if (renderLayer.clear) {
-        ctx.save();
-        clipOutsidePolygons(ctx, blockers, W, H);
-        ctx.drawImage(renderLayer.clear, 0, 0);
-        ctx.restore();
-      }
-    });
+    ], W, H, state.current.compositedLosBuffers, state.current.losRenderRevision, blockers);
+    state.current.compositedLosRender = compositedLosRender;
+    if (compositedLosRender.oneWall) ctx.drawImage(compositedLosRender.oneWall, 0, 0);
+    if (compositedLosRender.clear) {
+      ctx.save();
+      clipOutsidePolygons(ctx, blockers, W, H);
+      ctx.drawImage(compositedLosRender.clear, 0, 0);
+      ctx.restore();
+    }
 
     if (Number.isFinite(rangeRadius)) {
       const activeZones = rangeMarkers.flatMap((marker) => {
@@ -4988,7 +5354,18 @@ export default function InteractiveLOSTool() {
       ctx.restore();
     }
 
-    ctx.drawImage(getBattlefieldForegroundRender(camera.scale), 0, 0);
+    const battlefieldForegroundRender = getBattlefieldForegroundRender(camera.scale);
+    ctx.drawImage(
+      battlefieldForegroundRender,
+      0,
+      0,
+      battlefieldForegroundRender.width,
+      battlefieldForegroundRender.height,
+      0,
+      0,
+      W,
+      H,
+    );
     drawDynamicLayoutSelectionOverlays(ctx, camera.scale);
 
     if (scalePreview) drawMeasurementLine(ctx, scalePreview.a, scalePreview.b, `${scaleInches}"`, camera.scale);
@@ -4998,6 +5375,16 @@ export default function InteractiveLOSTool() {
       const geometry = getStickyRulerGeometry(ruler);
       if (geometry) drawStickyRulerLine(ctx, geometry.a, geometry.b, pixelsPerInch, camera.scale);
     });
+    const movementDrag = objectDragRef.current;
+    if (movementDrag?.type === "light" && movementDrag.movementMeasureStart) {
+      const currentPoint = movementDrag.unitSlot
+        ? unitCoherencyCircleCenter(getUnitMembers(movementDrag.unitSlot))
+        : (() => {
+          const marker = state.current.losMarkers.find((item) => item.id === movementDrag.id);
+          return marker ? { x: marker.x, y: marker.y } : null;
+        })();
+      if (currentPoint) drawRulerLine(ctx, movementDrag.movementMeasureStart, currentPoint, pixelsPerInch, camera.scale, true);
+    }
     if (currentPoly.length) {
       const fill = mode === "denseTF" ? "rgba(34,197,94,.28)" : mode === "lightTF" ? "rgba(250,204,21,.30)" : "rgba(255,255,255,.10)";
       const stroke = mode === "denseTF" ? "#22c55e" : mode === "lightTF" ? "#facc15" : "#fff";
@@ -5017,20 +5404,13 @@ export default function InteractiveLOSTool() {
     if (deploymentDraft?.length) drawDeploymentPath(ctx, deploymentPreview ? [...deploymentDraft, deploymentPreview] : deploymentDraft, camera.scale, true, true, "home", fit);
     if (enemyDeploymentDraft?.length) drawDeploymentPath(ctx, enemyDeploymentPreview ? [...enemyDeploymentDraft, enemyDeploymentPreview] : enemyDeploymentDraft, camera.scale, true, true, "enemy", fit);
 
-    const selectedObjective = state.current.layoutObjectives.find((objective) => objective.id === selectedLayoutObjectiveId);
-    if (selectedObjective) {
-      drawObjectiveVisibilityControls(ctx, layoutObjectiveVisibilityButtons(selectedObjective), selectedObjective.visible !== false, camera.scale);
-    }
-
     drawMovementPlanningOverlay(ctx, camera.scale);
 
     drawConfirmedEnemyLosRays(ctx, state.current.enemyLosRays || [], camera.scale);
 
     enemies.forEach((enemy, index) => {
       const losState = state.current.enemyLosStates[index] || "blocked";
-      const displayLosState = state.current.enemyLosPendingIndexes?.has(index) && losState === "clear"
-        ? "oneWall"
-        : losState;
+      const displayLosState = losState;
       const rangeActive = Number.isFinite(rangeRadius);
       const inRange = selectedUnitMembers.length
         ? selectedUnitMembers.some((marker) => enemyInRange(enemy, marker, rangeRadius, boardPpi))
@@ -5251,9 +5631,9 @@ export default function InteractiveLOSTool() {
 
     if (interactive && activeMarkerIds.size) {
       state.current.combinedLosRender = { clear: null, oneWall: null };
+      const stationaryZones = zonesForMarkers(stationaryMarkers);
       const stationaryKey = losRenderCacheKey([...activeMarkerIds]);
       if (state.current.stationaryLosRenderKey !== stationaryKey) {
-        const stationaryZones = zonesForMarkers(stationaryMarkers);
         state.current.stationaryLosRender = createCombinedLosLayers(
           stationaryZones.clearZones,
           stationaryZones.oneWallZones,
@@ -5265,7 +5645,14 @@ export default function InteractiveLOSTool() {
         );
         state.current.stationaryLosRenderKey = stationaryKey;
       }
-      const movingZones = zonesForMarkers(activeMarkers, true);
+      let movingZones = zonesForMarkers(activeMarkers, true);
+      if (!movingZones.clearZones.length && !movingZones.oneWallZones.length) {
+        movingZones = zonesForMarkers(activeMarkers, false);
+      }
+      state.current.visibility = {
+        clearZones: [...stationaryZones.clearZones, ...movingZones.clearZones],
+        oneWallZones: [...stationaryZones.oneWallZones, ...movingZones.oneWallZones],
+      };
       state.current.movingLosRender = createCombinedLosLayers(
         movingZones.clearZones,
         movingZones.oneWallZones,
@@ -5275,6 +5662,7 @@ export default function InteractiveLOSTool() {
         state.current.movingLosBuffers,
         state.current.blockers,
       );
+      state.current.losRenderRevision += 1;
       return;
     }
 
@@ -5291,6 +5679,7 @@ export default function InteractiveLOSTool() {
       state.current.combinedLosBuffers,
       state.current.blockers,
     );
+    state.current.losRenderRevision += 1;
   }
 
   function updateVisibility(markerId = null, recomputeDeployment = true, interactive = false) {
@@ -5332,6 +5721,11 @@ export default function InteractiveLOSTool() {
       return;
     }
 
+    recomputeDeploymentVisibility();
+    recordPerf("visibility", startedAt);
+  }
+
+  function recomputeDeploymentVisibility() {
     const deployPath = state.current.deploymentPath?.length >= 2
       ? state.current.deploymentPath
       : (state.current.deploymentLine ? [state.current.deploymentLine.a, state.current.deploymentLine.b] : []);
@@ -5361,7 +5755,6 @@ export default function InteractiveLOSTool() {
     } else {
       state.current.enemyDeploymentVisibility = { clearZones: [], oneWallZones: [] };
     }
-    recordPerf("visibility", startedAt);
   }
 
   function battlefieldPoint(x, y) {
@@ -5404,6 +5797,13 @@ export default function InteractiveLOSTool() {
 
   function rotateLayoutPoint(x, y) {
     return { x: y, y: SOURCE_LAYOUT_WIDTH_INCHES - x };
+  }
+
+  function presetDeploymentPoint(preset, x, y) {
+    const usesPortraitCoordinates = preset?.deploymentCoordinates === "portrait"
+      || (preset?.deploymentCoordinates !== "landscape" && preset?.portraitCoordinates === true);
+    const point = usesPortraitCoordinates ? { x, y } : rotateLayoutPoint(x, y);
+    return battlefieldPoint(point.x, point.y);
   }
 
   function terrainLocalPolygonToWorld(terrain, localPolygon) {
@@ -5474,7 +5874,7 @@ export default function InteractiveLOSTool() {
     return terrainLocalPolygonToWorld(feature, layoutFeatureLocalPolygon(feature));
   }
 
-  function rebuildLayoutWallGeometry() {
+  function rebuildLayoutWallGeometry({ clearVisibility = true } = {}) {
     const manualWalls = state.current.walls.filter((wall) => !wall.generatedLayoutWall);
     const generatedWalls = [];
     state.current.layoutWalls.forEach((wall) => {
@@ -5490,17 +5890,66 @@ export default function InteractiveLOSTool() {
       });
     });
     state.current.walls = [...manualWalls, ...generatedWalls];
-    markVisibilityGeometryChanged({ base: false, foreground: true });
+    markVisibilityGeometryChanged({ base: false, foreground: true, clearVisibility });
+  }
+
+  function polygonsOverlapOrTouch(first, second) {
+    if (!first?.length || !second?.length) return false;
+    if (first.some((point) => pointInPoly(point, second))) return true;
+    if (second.some((point) => pointInPoly(point, first))) return true;
+    for (let firstIndex = 0; firstIndex < first.length; firstIndex += 1) {
+      const firstA = first[firstIndex];
+      const firstB = first[(firstIndex + 1) % first.length];
+      for (let secondIndex = 0; secondIndex < second.length; secondIndex += 1) {
+        const secondA = second[secondIndex];
+        const secondB = second[(secondIndex + 1) % second.length];
+        if (segmentIntersectionParameters(firstA, firstB, secondA, secondB)) return true;
+      }
+    }
+    return false;
+  }
+
+  function markerVisibilityTouchesWall(marker, wallPolygon) {
+    const visibility = getCachedMarkerVisibility(marker, false);
+    if (!visibility) return true;
+    return [...(visibility.clearZones || []), ...(visibility.oneWallZones || [])]
+      .some((zone) => polygonsOverlapOrTouch(zone, wallPolygon));
   }
 
   function setSelectedWallFloorState(floorState) {
     const wall = state.current.layoutWalls.find((item) => item.id === selectedLayoutWallId);
     if (!wall) return;
+    if ((wall.floorState || "ground") === floorState) {
+      setSelectedLayoutWallId(null);
+      draw();
+      return;
+    }
+    const wallPolygon = layoutWallPolygonToWorld(wall);
+    const visibleMarkers = state.current.losMarkers.filter((marker) => marker.visible !== false);
+    const affectedMarkers = visibleMarkers.filter((marker) => markerVisibilityTouchesWall(marker, wallPolygon));
+    const affectedIds = new Set(affectedMarkers.map((marker) => marker.id));
+    const preservedVisibility = visibleMarkers
+      .filter((marker) => !affectedIds.has(marker.id))
+      .map((marker) => [marker.id, getCachedMarkerVisibility(marker, false)])
+      .filter(([, visibility]) => visibility);
     wall.floorState = floorState;
-    rebuildLayoutWallGeometry();
-        setSelectedLayoutWallId(null);
-        setSelectedLayoutFeatureId(null);
-    updateVisibility();
+    rebuildLayoutWallGeometry({ clearVisibility: false });
+    preservedVisibility.forEach(([markerId, visibility]) => cacheMarkerVisibility(markerId, visibility, false));
+    affectedMarkers.forEach((marker) => state.current.losVisibilityCache.delete(marker.id));
+    rebuildCombinedVisibility(false);
+    recomputeDeploymentVisibility();
+    if (affectedMarkers.length) {
+      if (!requestDetailedMarkerVisibilityBatch(affectedMarkers, { forceRequest: true })) {
+        const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
+        affectedMarkers.forEach((marker) => {
+          cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, preparedGeometry), false);
+        });
+        rebuildCombinedVisibility(false);
+        updateEnemyLosStates(false, { forceImmediate: true });
+      }
+    }
+    setSelectedLayoutWallId(null);
+    setSelectedLayoutFeatureId(null);
     draw();
     scheduleBrowserSave();
     setStatus(`${wall.type} wall set to ${floorState === "firstFloor" ? "1st Floor" : "Ground"}.`);
@@ -5581,17 +6030,11 @@ export default function InteractiveLOSTool() {
     });
     const homeDeploymentPath = Array.isArray(preset.homeDeploymentPath) ? preset.homeDeploymentPath : [];
     const enemyDeploymentPath = Array.isArray(preset.enemyDeploymentPath) ? preset.enemyDeploymentPath : [];
-    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => {
-      const point = rotateLayoutPoint(x, y);
-      return battlefieldPoint(point.x, point.y);
-    });
+    state.current.deploymentPath = homeDeploymentPath.map(([x, y]) => presetDeploymentPoint(preset, x, y));
     state.current.deploymentLine = state.current.deploymentPath.length >= 2
       ? { a: state.current.deploymentPath[0], b: state.current.deploymentPath[state.current.deploymentPath.length - 1] }
       : null;
-    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => {
-      const point = rotateLayoutPoint(x, y);
-      return battlefieldPoint(point.x, point.y);
-    });
+    state.current.enemyDeploymentPath = enemyDeploymentPath.map(([x, y]) => presetDeploymentPoint(preset, x, y));
     state.current.enemyDeploymentLine = state.current.enemyDeploymentPath.length >= 2
       ? { a: state.current.enemyDeploymentPath[0], b: state.current.enemyDeploymentPath[state.current.enemyDeploymentPath.length - 1] }
       : null;
@@ -6542,6 +6985,19 @@ export default function InteractiveLOSTool() {
   }
 
   const sortedMarkers = sortedLosMarkers();
+  const unresolvedArmyResults = armyResults.filter((result) => !result.markerId);
+  const normalizedModelSearch = normaliseName(modelSearch);
+  const modelSearchResults = normalizedModelSearch
+    ? Object.entries(BASE_DATABASE)
+      .map(([name, base]) => ({ name, base, normalized: normaliseName(name) }))
+      .filter((entry) => entry.normalized.includes(normalizedModelSearch))
+      .sort((a, b) => {
+        const aStarts = a.normalized.startsWith(normalizedModelSearch) ? 0 : 1;
+        const bStarts = b.normalized.startsWith(normalizedModelSearch) ? 0 : 1;
+        return aStarts - bStarts || a.name.localeCompare(b.name);
+      })
+      .slice(0, 8)
+    : [];
   const sortedUnits = Array.from({ length: 20 }, (_, index) => index + 1)
     .map((slot) => ({ slot, members: getUnitMembers(slot) }))
     .filter((unit) => unit.members.length);
@@ -6641,11 +7097,11 @@ export default function InteractiveLOSTool() {
               <div style={styles.sectionContent}>
                 <div style={styles.layoutField}>
                   <span style={styles.markerDetailLabel}>Defender&apos;s Force Disposition</span>
-                  <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Defender's Force Disposition" />
+                  <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Your Force Disposition" />
                 </div>
                 <div style={styles.layoutField}>
                   <span style={styles.markerDetailLabel}>Attacker&apos;s Force Disposition</span>
-                  <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Attacker's Force Disposition" />
+                  <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Opponent's Force Disposition" />
                 </div>
                 <label style={styles.layoutField}>
                   <span style={styles.markerDetailLabel}>Layout A/B/C</span>
@@ -6750,11 +7206,11 @@ export default function InteractiveLOSTool() {
                 >
                   <div style={styles.layoutField}>
                     <span style={styles.markerDetailLabel}>Defender&apos;s Force Disposition</span>
-                    <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Defender's Force Disposition" />
+                    <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Your Force Disposition" />
                   </div>
                   <div style={styles.layoutField}>
                     <span style={styles.markerDetailLabel}>Attacker&apos;s Force Disposition</span>
-                    <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Attacker's Force Disposition" />
+                    <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Opponent's Force Disposition" />
                   </div>
                   <label style={styles.layoutField}>
                     <span style={styles.markerDetailLabel}>Layout A/B/C</span>
@@ -7033,9 +7489,9 @@ export default function InteractiveLOSTool() {
                 </div>
                 <ToolButton onClick={clearArmyGeneratedLosMarkers}>Remove generated LOS marker(s)</ToolButton>
 
-                {armyResults.length > 0 && (
+                {unresolvedArmyResults.length > 0 && (
                   <div style={styles.armyResultList}>
-                    {armyResults.map((result) => (
+                    {unresolvedArmyResults.map((result) => (
                       <div key={result.id} style={styles.armyResultItem}>
                         <input
                           value={result.unit}
@@ -7119,11 +7575,56 @@ export default function InteractiveLOSTool() {
           <div style={{ ...styles.sidebarSection, order: 5 }}>
             <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("markers")}>
               <span style={styles.sectionTriangle}>{sectionOpen.markers ? "▾" : "▸"}</span>
-              <span>LOS Markers</span>
+              <span>Your Model(s)/LOS Marker(s)</span>
             </button>
             {sectionOpen.markers && (
               <div style={styles.sectionContent}>
                 <ToolButton onClick={addLosMarker}>Add LOS</ToolButton>
+                <div style={styles.modelSearchWrap}>
+                  <input
+                    value={modelSearch}
+                    onChange={(event) => {
+                      setModelSearch(event.target.value);
+                      setModelSearchIndex(0);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!modelSearchResults.length) return;
+                      if (event.key === "ArrowDown") {
+                        event.preventDefault();
+                        setModelSearchIndex((index) => Math.min(index + 1, modelSearchResults.length - 1));
+                      } else if (event.key === "ArrowUp") {
+                        event.preventDefault();
+                        setModelSearchIndex((index) => Math.max(index - 1, 0));
+                      } else if (event.key === "Enter") {
+                        event.preventDefault();
+                        const selected = modelSearchResults[Math.min(modelSearchIndex, modelSearchResults.length - 1)];
+                        if (selected) addDatabaseLosMarker(selected.name, selected.base);
+                      }
+                    }}
+                    style={styles.fullInput}
+                    placeholder="Search models by name..."
+                    aria-label="Search the base-size database"
+                  />
+                  {modelSearchResults.length > 0 && (
+                    <div style={styles.modelSearchResults}>
+                      {modelSearchResults.map((entry, index) => (
+                        <button
+                          key={entry.name}
+                          type="button"
+                          onMouseEnter={() => setModelSearchIndex(index)}
+                          onClick={() => addDatabaseLosMarker(entry.name, entry.base)}
+                          style={{
+                            ...styles.modelSearchResult,
+                            background: index === modelSearchIndex ? "#2563eb" : "#111827",
+                          }}
+                        >
+                          <span>{entry.name}</span>
+                          <span style={styles.modelSearchBase}>{formatBase(resultBaseFromMatch({ name: entry.name, base: entry.base }))}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {!sortedMarkers.length && (
                   <div style={styles.emptyMarkerNote}>No LOS markers on this map.</div>
                 )}
@@ -7315,6 +7816,15 @@ export default function InteractiveLOSTool() {
             <ToolButton active={!showDenseTerrainFeatures} onClick={() => setShowDenseTerrainFeatures((visible) => !visible)}>
               {showDenseTerrainFeatures ? "Hide dense terrain features" : "Show dense terrain features"}
             </ToolButton>
+            <ToolButton
+              active={!showObjectives}
+              onClick={() => {
+                setShowObjectives((visible) => !visible);
+                setSelectedLayoutObjectiveId(null);
+              }}
+            >
+              {showObjectives ? "Hide objectives" : "Show objectives"}
+            </ToolButton>
             <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase (X)</ToolButton>
             <ToolButton onClick={undo}>Undo (Z)</ToolButton>
           </div>
@@ -7473,10 +7983,12 @@ const styles = {
     textAlign: "left",
   },
   sectionTriangle: {
-    width: 16,
+    width: 18,
     display: "inline-block",
     color: "#93c5fd",
-    fontSize: 14,
+    fontSize: 18,
+    lineHeight: 1,
+    flexShrink: 0,
   },
   sectionContent: {
     display: "flex",
@@ -7996,6 +8508,40 @@ const styles = {
     color: "#94a3b8",
     fontSize: 12,
     textAlign: "center",
+  },
+  modelSearchWrap: {
+    position: "relative",
+    width: "100%",
+  },
+  modelSearchResults: {
+    position: "absolute",
+    zIndex: 30,
+    top: "calc(100% + 4px)",
+    left: 0,
+    right: 0,
+    maxHeight: 260,
+    overflowY: "auto",
+    padding: 4,
+    border: "1px solid rgba(255,255,255,.2)",
+    borderRadius: 9,
+    background: "#0b1220",
+    boxShadow: "0 10px 24px rgba(0,0,0,.45)",
+  },
+  modelSearchResult: {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    padding: "7px 8px",
+    border: 0,
+    borderRadius: 6,
+    color: "white",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  modelSearchBase: {
+    fontSize: 11,
+    color: "#cbd5e1",
   },
   markerDetailLabel: {
     marginBottom: 6,
@@ -8816,16 +9362,15 @@ function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, inter
 }
 
 function enemyBaseTouchesFootprint(enemy, enemyRadius, blockers) {
-  const samples = [{ x: enemy.x, y: enemy.y }];
-  const sampleCount = 12;
-  for (let index = 0; index < sampleCount; index += 1) {
-    const angle = index / sampleCount * Math.PI * 2;
-    samples.push({
-      x: enemy.x + Math.cos(angle) * enemyRadius,
-      y: enemy.y + Math.sin(angle) * enemyRadius,
+  const surfaceKeys = [...new Set(blockers.map((_, index) => footprintSurfaceKey(blockers, index)))];
+  const boundarySegments = getFootprintBoundarySegments(blockers);
+  return surfaceKeys.some((surfaceKey) => {
+    if (pointInFootprintSurface(enemy, blockers, surfaceKey)) return true;
+    return boundarySegments.some((segment) => {
+      if (segment.groupKey !== surfaceKey) return false;
+      return dist(enemy, closestPointOnSegment(enemy, segment.a, segment.b)) <= enemyRadius + 0.01;
     });
-  }
-  return samples.some((sample) => blockers.some((poly) => pointInPoly(sample, poly)));
+  });
 }
 
 function hasAdjacentEnemyEdgeSamples(states, targetState) {
@@ -9095,8 +9640,8 @@ function getFootprintBoundarySegments(blockers) {
 
 function createTouchingFootprintCaps(segments) {
   const caps = [];
-  const tolerance = 0.12;
-  const capRadius = 0.18;
+  const tolerance = 0.85;
+  const capRadius = 0.7;
   const endpoints = [];
   segments.forEach((segment) => {
     endpoints.push({ point: segment.a, segment });
@@ -9448,7 +9993,7 @@ function drawLayoutObjective(ctx, objective, pixelsPerInch, scale = 1) {
     ? "#075985"
     : objective.allegiance === "enemy" ? "#991b1b" : "#0f766e";
   ctx.save();
-  ctx.globalAlpha = objective.visible === false ? 0.05 : 1;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   if (objective.shape === "diamond") {
     ctx.moveTo(objective.x, objective.y - radius * 1.15);
@@ -9571,7 +10116,7 @@ function drawDecorativeTerrainFeature(ctx, poly, kind, scale = 1) {
     ctx,
     poly,
     "rgba(0,0,0,0)",
-    dense ? "rgba(22,163,74,.95)" : "rgba(244,114,182,.98)",
+    dense ? "rgba(22,163,74,.95)" : "rgba(202,138,4,.98)",
     true,
     scale,
     false,
@@ -9732,21 +10277,84 @@ function createCombinedLosLayers(clearZones, oneWallZones, W, H, renderScale = 1
     context.restore();
   }
 
-  reusableBuffers.oneWallColour = colorizeLosMask(
-    oneWallMask,
-    W,
-    H,
-    "rgba(245,190,55,.20)",
-    reusableBuffers.oneWallColour,
-  );
-  reusableBuffers.clearColour = colorizeLosMask(
+  return {
+    clear: null,
+    oneWall: null,
     clearMask,
-    W,
-    H,
-    "rgba(255,255,255,.20)",
-    reusableBuffers.clearColour,
-  );
-  return { clear: reusableBuffers.clearColour, oneWall: reusableBuffers.oneWallColour };
+    oneWallMask,
+  };
+}
+
+function getCompositedLosRender(renderLayers, W, H, buffers, revision, blockers = []) {
+  if (buffers.revision === revision && buffers.width === W && buffers.height === H) {
+    return buffers.render || { clear: null, oneWall: null };
+  }
+
+  const layers = renderLayers.filter((layer) => layer?.clearMask || layer?.oneWallMask);
+  if (!layers.length) {
+    buffers.revision = revision;
+    buffers.width = W;
+    buffers.height = H;
+    buffers.render = { clear: null, oneWall: null };
+    return buffers.render;
+  }
+
+  const prepareMask = (existing) => {
+    const canvas = existing || document.createElement("canvas");
+    if (canvas.width !== W) canvas.width = W;
+    if (canvas.height !== H) canvas.height = H;
+    const context = canvas.getContext("2d");
+    context.globalCompositeOperation = "source-over";
+    context.clearRect(0, 0, W, H);
+    return { canvas, context };
+  };
+
+  const clear = prepareMask(buffers.clearMask);
+  const oneWall = prepareMask(buffers.oneWallMask);
+  buffers.clearMask = clear.canvas;
+  buffers.oneWallMask = oneWall.canvas;
+
+  layers.forEach((layer) => {
+    if (layer.clearMask) clear.context.drawImage(layer.clearMask, 0, 0);
+    if (layer.oneWallMask) oneWall.context.drawImage(layer.oneWallMask, 0, 0);
+  });
+
+  const footprint = prepareMask(buffers.footprintMask);
+  buffers.footprintMask = footprint.canvas;
+  footprint.context.fillStyle = "#fff";
+  blockers.forEach((polygon) => {
+    if (!polygon?.length) return;
+    footprint.context.beginPath();
+    footprint.context.moveTo(polygon[0].x, polygon[0].y);
+    for (let index = 1; index < polygon.length; index += 1) {
+      footprint.context.lineTo(polygon[index].x, polygon[index].y);
+    }
+    footprint.context.closePath();
+    footprint.context.fill();
+  });
+
+  clear.context.save();
+  clear.context.globalCompositeOperation = "destination-out";
+  clear.context.drawImage(footprint.canvas, 0, 0);
+  clear.context.restore();
+
+  oneWall.context.save();
+  oneWall.context.globalCompositeOperation = "destination-in";
+  oneWall.context.drawImage(footprint.canvas, 0, 0);
+  oneWall.context.restore();
+
+  oneWall.context.save();
+  oneWall.context.globalCompositeOperation = "destination-out";
+  oneWall.context.drawImage(clear.canvas, 0, 0);
+  oneWall.context.restore();
+
+  buffers.clearColour = colorizeLosMask(clear.canvas, W, H, "rgba(255,255,255,.20)", buffers.clearColour);
+  buffers.oneWallColour = colorizeLosMask(oneWall.canvas, W, H, "rgba(245,190,55,.20)", buffers.oneWallColour);
+  buffers.revision = revision;
+  buffers.width = W;
+  buffers.height = H;
+  buffers.render = { clear: buffers.clearColour, oneWall: buffers.oneWallColour };
+  return buffers.render;
 }
 
 function cleanThinMaskArtifacts(mask, W, H, radius, reusableWork = null, reusableOutput = null) {

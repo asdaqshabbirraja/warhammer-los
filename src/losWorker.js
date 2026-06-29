@@ -3,13 +3,18 @@ const footprintBoundarySegmentCache = new WeakMap();
 const VISIBILITY_GRID_CELL_SIZE = 96;
 const VISIBILITY_ANGLE_SNAP = 0.000025;
 const VISIBILITY_ISOLATED_RAY_ANGLE = 0.012;
-const LOS_WORKER_DIAGNOSTICS = true;
+const LOS_WORKER_DIAGNOSTICS = false;
 const LOS_WORKER_SLOW_ENEMY_MS = 20;
 const LOS_WORKER_SLOW_MARKER_MS = 40;
+const VISIBILITY_RAY_YIELD_INTERVAL = 48;
+const VISIBILITY_ORIGIN_BUDGET_MS = 220;
+const VISIBILITY_MARKER_BUDGET_MS = 900;
+const ENEMY_CLASSIFY_YIELD_INTERVAL = 64;
 let currentScene = null;
 let latestVisibilityJobId = 0;
 let latestEnemyJobId = 0;
 let visibilityCancelToken = 0;
+let enemyCancelToken = 0;
 
 function workerNow() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -24,6 +29,14 @@ function logWorkerPerf(label, startedAt, details = "") {
 self.onmessage = async (event) => {
   const message = event.data || {};
   const messageStartedAt = workerNow();
+  if (message.type === "cancelVisibility") {
+    visibilityCancelToken += 1;
+    return;
+  }
+  if (message.type === "cancelEnemyLos") {
+    enemyCancelToken += 1;
+    return;
+  }
   if (message.type === "setScene") {
     try {
       visibilityCancelToken += 1;
@@ -41,12 +54,13 @@ self.onmessage = async (event) => {
   }
   if (message.type === "enemyLos") {
     const jobId = ++latestEnemyJobId;
+    const cancelToken = enemyCancelToken;
     latestVisibilityJobId += 1;
     visibilityCancelToken += 1;
     try {
       const states = await calculateEnemyLosStates(
         message,
-        () => jobId !== latestEnemyJobId,
+        () => jobId !== latestEnemyJobId || cancelToken !== enemyCancelToken,
         message.progressive
           ? (states) => {
               if (jobId !== latestEnemyJobId) return;
@@ -82,7 +96,7 @@ self.onmessage = async (event) => {
   }
   if (message.type !== "markerVisibility" && message.type !== "markerVisibilityBatch") return;
   const jobId = message.jobGroupId || message.requestId || ++latestVisibilityJobId;
-  latestVisibilityJobId = Math.max(latestVisibilityJobId, jobId);
+  latestVisibilityJobId = jobId;
   const visibilityToken = visibilityCancelToken;
   try {
     const markers = message.type === "markerVisibilityBatch"
@@ -169,7 +183,26 @@ function setCurrentScene({ sceneKey, blockers = [], walls = [], W, H }) {
     W,
     H,
     visibilityGeometry,
+    markerVisibilityCache: new Map(),
+    enemyPairCache: new Map(),
   };
+}
+
+function enemyPairCacheKey(marker, enemy, pixelsPerInch, interactive) {
+  const rounded = (value, scale = 10) => Math.round((Number(value) || 0) * scale) / scale;
+  return [
+    interactive ? "interactive" : "settled",
+    rounded(pixelsPerInch, 100),
+    marker?.id || "",
+    rounded(marker?.x),
+    rounded(marker?.y),
+    marker?.baseShape || "circle",
+    marker?.baseLengthMm || 40,
+    marker?.baseWidthMm || marker?.baseLengthMm || 40,
+    rounded(marker?.baseRotation, 1000),
+    rounded(enemy?.x),
+    rounded(enemy?.y),
+  ].join(":");
 }
 
 function sceneForMessage(message) {
@@ -195,11 +228,24 @@ async function calculateEnemyLosStates(message, isStale = () => false, onPartial
   if (!scene) return enemies.map((_, index) => previewStates[index] || "blocked");
   const { blockers: normalizedBlockers, walls, visibilityGeometry } = scene;
   const visibleMarkers = markers.filter((marker) => marker && marker.visible !== false);
+  const markerSources = visibleMarkers.map((marker) => ({
+    marker,
+    sourceSurfaceKeys: markerTouchedFootprintSurfaceKeys(marker, pixelsPerInch, normalizedBlockers),
+  }));
   const radius = enemyBaseRadius(pixelsPerInch);
   const states = enemies.map((_, index) => previewStates[index] || "blocked");
-  const indexes = Array.isArray(candidateEnemyIndexes)
+  const indexes = (Array.isArray(candidateEnemyIndexes)
     ? candidateEnemyIndexes.filter((index) => index >= 0 && index < enemies.length)
-    : enemies.map((_, index) => index);
+    : enemies.map((_, index) => index))
+    .sort((leftIndex, rightIndex) => {
+      const statePriority = (state) => state === "clear" ? 0 : state === "oneWall" ? 1 : 2;
+      const stateDelta = statePriority(states[leftIndex]) - statePriority(states[rightIndex]);
+      if (stateDelta) return stateDelta;
+      const nearestMarkerDistance = (enemyIndex) => markerSources.reduce((nearest, { marker }) => (
+        Math.min(nearest, (marker.x - enemies[enemyIndex].x) ** 2 + (marker.y - enemies[enemyIndex].y) ** 2)
+      ), Infinity);
+      return nearestMarkerDistance(leftIndex) - nearestMarkerDistance(rightIndex);
+    });
   const diagnostics = {
     candidates: indexes.length,
     enemies: enemies.length,
@@ -214,35 +260,62 @@ async function calculateEnemyLosStates(message, isStale = () => false, onPartial
     const enemy = enemies[enemyIndex];
     const enemyStartedAt = workerNow();
     const originsStartedAt = workerNow();
-    const origins = visibleMarkers.flatMap((marker) => getLOSOriginsForMarker(marker, pixelsPerInch, interactive, enemy));
-    const originsMs = workerNow() - originsStartedAt;
     const enemyDiagnostics = {
       enemyIndex,
-      origins: origins.length,
-      originsMs,
+      origins: 0,
+      originsMs: 0,
       centerCalls: 0,
       edgeCalls: 0,
       centerMs: 0,
       edgeMs: 0,
     };
-    states[enemyIndex] = directEnemyLOSState(
-      enemy,
-      radius,
-      origins,
-      normalizedBlockers,
-      walls,
-      interactive,
-      visibilityGeometry,
-      enemyDiagnostics,
-    );
+    let resolvedState = "blocked";
+    for (const { marker, sourceSurfaceKeys } of markerSources) {
+      if (isStale()) break;
+      const pairKey = enemyPairCacheKey(marker, enemy, pixelsPerInch, interactive);
+      let pairState = scene.enemyPairCache.get(pairKey);
+      if (!pairState) {
+        const pairOriginsStartedAt = workerNow();
+        const origins = getLOSOriginsForMarker(marker, pixelsPerInch, interactive, enemy)
+          .map((origin) => ({ ...origin, sourceSurfaceKeys }));
+        enemyDiagnostics.origins += origins.length;
+        enemyDiagnostics.originsMs += workerNow() - pairOriginsStartedAt;
+        pairState = await directEnemyLOSState(
+          enemy,
+          radius,
+          origins,
+          normalizedBlockers,
+          walls,
+          interactive,
+          visibilityGeometry,
+          enemyDiagnostics,
+          isStale,
+        );
+        if (!isStale()) {
+          scene.enemyPairCache.set(pairKey, pairState);
+          if (scene.enemyPairCache.size > 12000) {
+            scene.enemyPairCache.delete(scene.enemyPairCache.keys().next().value);
+          }
+        }
+      }
+      if (pairState === "clear") {
+        resolvedState = "clear";
+        break;
+      }
+      if (pairState === "oneWall") resolvedState = "oneWall";
+    }
+    states[enemyIndex] = resolvedState;
+    if (isStale()) break;
+    const originsMs = workerNow() - originsStartedAt;
+    enemyDiagnostics.originsMs = Math.min(enemyDiagnostics.originsMs, originsMs);
     const enemyMs = workerNow() - enemyStartedAt;
-    diagnostics.totalOrigins += origins.length;
+    diagnostics.totalOrigins += enemyDiagnostics.origins;
     diagnostics.totalClassifyCalls += enemyDiagnostics.centerCalls + enemyDiagnostics.edgeCalls;
     if (enemyMs >= LOS_WORKER_SLOW_ENEMY_MS) {
       diagnostics.slowEnemies.push({
         enemyIndex,
         ms: Number(enemyMs.toFixed(1)),
-        origins: origins.length,
+        origins: enemyDiagnostics.origins,
         originsMs: Number(originsMs.toFixed(1)),
         centerMs: Number(enemyDiagnostics.centerMs.toFixed(1)),
         edgeMs: Number(enemyDiagnostics.edgeMs.toFixed(1)),
@@ -272,7 +345,7 @@ function yieldToWorkerEventLoop() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-async function calculateMarkerVisibilityBatch({ markers = [], pixelsPerInch, reducedOrigins = false, onResult = null, onOriginResult = null, isStale = () => false, ...message }) {
+async function calculateMarkerVisibilityBatch({ markers = [], pixelsPerInch, reducedOrigins = false, originMode = null, onResult = null, onOriginResult = null, isStale = () => false, ...message }) {
   const scene = sceneForMessage(message);
   if (!scene) return [];
   const { blockers: normalizedBlockers, walls, W, H, visibilityGeometry } = scene;
@@ -282,20 +355,33 @@ async function calculateMarkerVisibilityBatch({ markers = [], pixelsPerInch, red
     if (isStale()) break;
     const marker = markers[index];
     const markerStartedAt = workerNow();
-    const visibility = await calculateMarkerVisibility(
-      marker,
-      normalizedBlockers,
-      walls,
-      W,
-      H,
-      pixelsPerInch,
-      visibilityGeometry,
-      reducedOrigins,
-      onOriginResult
-        ? (partialVisibility) => onOriginResult({ markerId: marker?.id, x: marker?.x, y: marker?.y, visibility: partialVisibility })
-        : null,
-      isStale,
-    );
+    const cacheKey = markerVisibilityResultKey(marker, pixelsPerInch, reducedOrigins, originMode, Boolean(message.interactive), Boolean(message.clearOnly));
+    let visibility = scene.markerVisibilityCache.get(cacheKey) || null;
+    if (!visibility) {
+      visibility = await calculateMarkerVisibility(
+        marker,
+        normalizedBlockers,
+        walls,
+        W,
+        H,
+        pixelsPerInch,
+        visibilityGeometry,
+        reducedOrigins,
+        originMode,
+        Boolean(message.interactive),
+        Boolean(message.clearOnly),
+        onOriginResult
+          ? (partialVisibility) => onOriginResult({ markerId: marker?.id, x: marker?.x, y: marker?.y, visibility: partialVisibility })
+          : null,
+        isStale,
+      );
+      if (!isStale()) {
+        scene.markerVisibilityCache.set(cacheKey, visibility);
+        if (scene.markerVisibilityCache.size > 500) {
+          scene.markerVisibilityCache.delete(scene.markerVisibilityCache.keys().next().value);
+        }
+      }
+    }
     if (isStale()) break;
     const result = {
       markerId: marker?.id,
@@ -324,18 +410,121 @@ async function calculateMarkerVisibilityBatch({ markers = [], pixelsPerInch, red
   return results;
 }
 
-async function calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H, pixelsPerInch, visibilityGeometry, reducedOrigins = false, onOriginResult = null, isStale = () => false) {
+function markerVisibilityResultKey(marker, pixelsPerInch, reducedOrigins, originMode, interactive, clearOnly) {
+  return [
+    marker?.id || "",
+    Math.round((marker?.x || 0) * 10) / 10,
+    Math.round((marker?.y || 0) * 10) / 10,
+    marker?.baseShape || "circle",
+    marker?.baseLengthMm || 40,
+    marker?.baseWidthMm || marker?.baseLengthMm || 40,
+    Math.round((marker?.baseRotation || 0) * 1000) / 1000,
+    marker?.visibilityOriginMode || "",
+    Math.round((pixelsPerInch || 0) * 100) / 100,
+    reducedOrigins ? 1 : 0,
+    originMode || "",
+    interactive ? 1 : 0,
+    clearOnly ? 1 : 0,
+  ].join(":");
+}
+
+async function calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H, pixelsPerInch, visibilityGeometry, reducedOrigins = false, originMode = null, previewMode = false, clearOnly = false, onOriginResult = null, isStale = () => false) {
   const clearZones = [];
   const oneWallZones = [];
   if (!marker || marker.visible === false) return { clearZones, oneWallZones };
-  const origins = getLOSOriginsForMarker(marker, pixelsPerInch, reducedOrigins ? "reduced" : "full");
-  const angleMode = reducedOrigins ? "coarse" : "full";
+  const resolvedOriginMode = marker.visibilityOriginMode || originMode || (reducedOrigins ? "reduced" : "full");
+  const origins = getLOSOriginsForMarker(marker, pixelsPerInch, resolvedOriginMode);
+  const sourceSurfaceKeys = markerTouchedFootprintSurfaceKeys(marker, pixelsPerInch, normalizedBlockers);
+  const angleMode = previewMode
+    ? "drag"
+    : resolvedOriginMode === "unit" ? "unit"
+      : resolvedOriginMode === "reduced" || reducedOrigins ? "coarse" : "full";
+  const previewOutline = Array.isArray(marker.previewOutline) && marker.previewOutline.length >= 3
+    ? marker.previewOutline
+    : null;
+  const sharedRayIntersectionCache = new Map();
+  const markerDeadline = workerNow() + (previewMode ? 180 : VISIBILITY_MARKER_BUDGET_MS);
+  const fallbackAngleMode = previewMode ? "drag" : "preview";
+  let usedAdaptiveFallback = false;
   for (let index = 0; index < origins.length; index += 1) {
     if (isStale()) break;
     const origin = origins[index];
-    clearZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 0, visibilityGeometry, angleMode));
+    const requestedAngleMode = usedAdaptiveFallback ? "preview" : angleMode;
+    const originDeadline = Math.min(markerDeadline, workerNow() + VISIBILITY_ORIGIN_BUDGET_MS);
+    let clearVisibility = await computeVisibilityByFootprintWallLimit(
+      origin,
+      normalizedBlockers,
+      walls,
+      W,
+      H,
+      0,
+      visibilityGeometry,
+      requestedAngleMode,
+      previewOutline,
+      sourceSurfaceKeys,
+      isStale,
+      originDeadline,
+      sharedRayIntersectionCache,
+    );
     if (isStale()) break;
-    oneWallZones.push(computeVisibilityByFootprintWallLimit(origin, normalizedBlockers, walls, W, H, 1, visibilityGeometry, angleMode));
+    if (!clearVisibility) {
+      usedAdaptiveFallback = true;
+      clearVisibility = await computeVisibilityByFootprintWallLimit(
+        origin,
+        normalizedBlockers,
+        walls,
+        W,
+        H,
+        0,
+        visibilityGeometry,
+        fallbackAngleMode,
+        previewOutline,
+        sourceSurfaceKeys,
+        isStale,
+        Infinity,
+        sharedRayIntersectionCache,
+      );
+    }
+    if (isStale()) break;
+    let oneWallVisibility = [];
+    if (!clearOnly) {
+      oneWallVisibility = await computeVisibilityByFootprintWallLimit(
+        origin,
+        normalizedBlockers,
+        walls,
+        W,
+        H,
+        1,
+        visibilityGeometry,
+        usedAdaptiveFallback ? "preview" : angleMode,
+        previewOutline,
+        sourceSurfaceKeys,
+        isStale,
+        Math.min(markerDeadline, workerNow() + VISIBILITY_ORIGIN_BUDGET_MS),
+        sharedRayIntersectionCache,
+      );
+      if (isStale()) break;
+      if (!oneWallVisibility) {
+        usedAdaptiveFallback = true;
+        oneWallVisibility = await computeVisibilityByFootprintWallLimit(
+          origin,
+          normalizedBlockers,
+          walls,
+          W,
+          H,
+          1,
+          visibilityGeometry,
+          fallbackAngleMode,
+          previewOutline,
+          sourceSurfaceKeys,
+          isStale,
+          Infinity,
+          sharedRayIntersectionCache,
+        );
+      }
+    }
+    clearZones.push(clearVisibility || []);
+    oneWallZones.push(oneWallVisibility || []);
     if (isStale()) break;
     if (onOriginResult && (index === 0 || index === origins.length - 1 || index % 2 === 1)) {
       onOriginResult({
@@ -344,6 +533,7 @@ async function calculateMarkerVisibility(marker, normalizedBlockers, walls, W, H
       });
     }
     if (index < origins.length - 1) await yieldToWorkerEventLoop();
+    if (workerNow() >= markerDeadline) usedAdaptiveFallback = true;
   }
   return { clearZones, oneWallZones };
 }
@@ -374,16 +564,19 @@ function getLOSOriginsForMarker(marker, pixelsPerInch, sampleMode = "full", targ
   const { rx, ry } = getBaseRadii(marker, pixelsPerInch);
   const interactive = sampleMode === true || sampleMode === "interactive";
   const reduced = sampleMode === "reduced";
+  const unit = sampleMode === "unit";
   const samples = interactive
     ? (marker.baseShape === "circle" ? 3 : 4)
     : reduced
       ? (marker.baseShape === "circle" ? 3 : 4)
-      : (marker.baseShape === "circle" ? 20 : 28);
+      : unit
+        ? (marker.baseShape === "circle" ? 4 : 6)
+        : (marker.baseShape === "circle" ? 20 : 28);
   const points = [center];
   if (reduced && !targetPoint) return points;
 
   if (marker.baseShape === "rectangle") {
-    const perSide = interactive || reduced ? 1 : 8;
+    const perSide = interactive || reduced || unit ? 1 : 8;
     for (let i = 0; i <= perSide; i += 1) {
       const t = -1 + (2 * i) / perSide;
       [
@@ -496,7 +689,22 @@ function boundsOverlap(a, b) {
 }
 
 function buildSegmentSpatialIndex(segments, cellSize = VISIBILITY_GRID_CELL_SIZE) {
-  const cells = new Map();
+  let minCellX = Infinity;
+  let maxCellX = -Infinity;
+  let minCellY = Infinity;
+  let maxCellY = -Infinity;
+  segments.forEach((segment) => {
+    const bounds = segment.bounds || segmentBounds(segment.a, segment.b);
+    minCellX = Math.min(minCellX, Math.floor(bounds.minX / cellSize));
+    maxCellX = Math.max(maxCellX, Math.floor(bounds.maxX / cellSize));
+    minCellY = Math.min(minCellY, Math.floor(bounds.minY / cellSize));
+    maxCellY = Math.max(maxCellY, Math.floor(bounds.maxY / cellSize));
+  });
+  if (!Number.isFinite(minCellX)) return { cells: [], cellSize, segments, minCellX: 0, minCellY: 0, columns: 0, rows: 0 };
+  const columns = maxCellX - minCellX + 1;
+  const rows = maxCellY - minCellY + 1;
+  const cells = new Array(columns * rows);
+  const cellIndex = (x, y) => (y - minCellY) * columns + (x - minCellX);
   segments.forEach((segment, index) => {
     const bounds = segment.bounds || segmentBounds(segment.a, segment.b);
     const minCellX = Math.floor(bounds.minX / cellSize);
@@ -505,13 +713,21 @@ function buildSegmentSpatialIndex(segments, cellSize = VISIBILITY_GRID_CELL_SIZE
     const maxCellY = Math.floor(bounds.maxY / cellSize);
     for (let x = minCellX; x <= maxCellX; x += 1) {
       for (let y = minCellY; y <= maxCellY; y += 1) {
-        const key = `${x}:${y}`;
-        if (!cells.has(key)) cells.set(key, []);
-        cells.get(key).push(index);
+        const indexKey = cellIndex(x, y);
+        if (!cells[indexKey]) cells[indexKey] = [];
+        cells[indexKey].push(index);
       }
     }
   });
-  return { cells, cellSize, segments };
+  return { cells, cellSize, segments, minCellX, minCellY, columns, rows };
+}
+
+function spatialCellSegments(spatialIndex, cellX, cellY) {
+  const { cells, minCellX, minCellY, columns, rows } = spatialIndex;
+  const x = cellX - minCellX;
+  const y = cellY - minCellY;
+  if (x < 0 || y < 0 || x >= columns || y >= rows) return null;
+  return cells[y * columns + x] || null;
 }
 
 function spatialSegmentsForBounds(spatialIndex, bounds) {
@@ -524,7 +740,7 @@ function spatialSegmentsForBounds(spatialIndex, bounds) {
   const indexes = new Set();
   for (let x = minCellX; x <= maxCellX; x += 1) {
     for (let y = minCellY; y <= maxCellY; y += 1) {
-      const cellSegments = cells.get(`${x}:${y}`);
+      const cellSegments = spatialCellSegments(spatialIndex, x, y);
       if (!cellSegments) continue;
       cellSegments.forEach((index) => indexes.add(index));
     }
@@ -541,7 +757,7 @@ function spatialSegmentsForLine(spatialIndex, a, b, paddingCells = 1) {
   const addCell = (cellX, cellY) => {
     for (let dx = -paddingCells; dx <= paddingCells; dx += 1) {
       for (let dy = -paddingCells; dy <= paddingCells; dy += 1) {
-        const cellSegments = cells.get(`${cellX + dx}:${cellY + dy}`);
+        const cellSegments = spatialCellSegments(spatialIndex, cellX + dx, cellY + dy);
         if (cellSegments) cellSegments.forEach((index) => indexes.add(index));
       }
     }
@@ -665,6 +881,23 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
     ...edgeModel.footprintSegments.flatMap((segment, index) => (index % 3 === 0 ? [segment.a, segment.b] : [])),
     ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
   ]);
+  const unitVertices = dedupeVisibilityVertices([
+    ...edgeModel.bounds,
+    ...edgeModel.footprintSegments.flatMap((segment, index) => (index % 5 === 0 ? [segment.a, segment.b] : [])),
+    ...criticalVisibilityVertices(edgeModel.footprintSegments),
+    ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
+  ]);
+  const previewVertices = dedupeVisibilityVertices([
+    ...edgeModel.bounds,
+    ...edgeModel.footprintSegments.flatMap((segment, index) => (index % 8 === 0 ? [segment.a, segment.b] : [])),
+    ...edgeModel.wallSegments.flatMap((segment) => [segment.a, segment.b]),
+  ]);
+  const dragVertices = dedupeVisibilityVertices([
+    ...edgeModel.bounds,
+    ...edgeModel.footprintSegments.flatMap((segment, index) => (index % 24 === 0 ? [segment.a, segment.b] : [])),
+    ...criticalVisibilityVertices(edgeModel.footprintSegments),
+    ...edgeModel.wallSegments.flatMap((segment, index) => (index % 4 === 0 ? [segment.a, segment.b] : [])),
+  ]);
   const preparedSegments = edgeModel.segments.map((segment) => ({
     ...segment,
     bounds: segmentBounds(segment.a, segment.b),
@@ -673,7 +906,7 @@ function getPreparedVisibilityGeometry(blockers, walls, W, H) {
     preparedSegments,
     Math.max(48, Math.min(160, Math.max(W, H) / 8)),
   );
-  const geometry = { ...edgeModel, vertices, coarseVertices, segments: preparedSegments, spatialIndex };
+  const geometry = { ...edgeModel, vertices, coarseVertices, unitVertices, previewVertices, dragVertices, segments: preparedSegments, spatialIndex };
   visibilityGeometryCache.set(key, geometry);
   if (visibilityGeometryCache.size > 6) visibilityGeometryCache.delete(visibilityGeometryCache.keys().next().value);
   return geometry;
@@ -703,40 +936,123 @@ function adaptiveVisibilityEdgeVertices(segments) {
   return vertices;
 }
 
-function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null, angleMode = "full") {
+function criticalVisibilityVertices(segments) {
+  const junctions = new Map();
+  const addJunction = (point, other, surfaceKey) => {
+    const key = `${Math.round(point.x * 1000)}:${Math.round(point.y * 1000)}:${surfaceKey}`;
+    if (!junctions.has(key)) junctions.set(key, { point, vectors: [] });
+    junctions.get(key).vectors.push({ x: other.x - point.x, y: other.y - point.y });
+  };
+  segments.forEach((segment) => {
+    if (segment.meta?.type !== "footprint") return;
+    const surfaceKey = segment.meta.groupKey || `footprint:${segment.meta.index}`;
+    addJunction(segment.a, segment.b, surfaceKey);
+    addJunction(segment.b, segment.a, surfaceKey);
+  });
+  const critical = [];
+  junctions.forEach(({ point, vectors }) => {
+    if (vectors.length !== 2) {
+      critical.push(point);
+      return;
+    }
+    const firstLength = Math.hypot(vectors[0].x, vectors[0].y) || 1;
+    const secondLength = Math.hypot(vectors[1].x, vectors[1].y) || 1;
+    const cosine = Math.max(-1, Math.min(1, (
+      vectors[0].x * vectors[1].x + vectors[0].y * vectors[1].y
+    ) / (firstLength * secondLength)));
+    const turnFromStraight = Math.abs(Math.PI - Math.acos(cosine));
+    if (turnFromStraight >= 0.12) critical.push(point);
+  });
+  return critical;
+}
+
+function dragVisibilityVertices(source, geometry, sectorCount = 48) {
+  const candidates = geometry.dragVertices || geometry.previewVertices || geometry.coarseVertices || geometry.vertices;
+  const sectors = Array.from({ length: sectorCount }, () => ({ nearest: null, farthest: null }));
+  candidates.forEach((vertex) => {
+    const dx = vertex.x - source.x;
+    const dy = vertex.y - source.y;
+    const distanceSquared = dx * dx + dy * dy;
+    const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2);
+    const index = Math.min(sectorCount - 1, Math.floor(angle / (Math.PI * 2) * sectorCount));
+    const sector = sectors[index];
+    if (!sector.nearest || distanceSquared < sector.nearest.distanceSquared) sector.nearest = { vertex, distanceSquared };
+    if (!sector.farthest || distanceSquared > sector.farthest.distanceSquared) sector.farthest = { vertex, distanceSquared };
+  });
+  return dedupeVisibilityVertices([
+    ...(geometry.bounds || []),
+    ...sectors.flatMap((sector) => [sector.nearest?.vertex, sector.farthest?.vertex].filter(Boolean)),
+  ]);
+}
+
+function rayExitPointFromOutline(source, ray, outline) {
+  if (!outline?.length) return source;
+  let furthest = null;
+  for (let index = 0; index < outline.length; index += 1) {
+    const hit = raySegmentIntersection(source, ray, outline[index], outline[(index + 1) % outline.length]);
+    if (hit && hit.t >= -0.0001 && (!furthest || hit.t > furthest.t)) furthest = hit;
+  }
+  if (!furthest) return source;
+  return { x: furthest.x + ray.x * 0.05, y: furthest.y + ray.y * 0.05 };
+}
+
+async function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, allowedFootprintWalls, preparedGeometry = null, angleMode = "full", sourceOutline = null, sourceSurfaceKeys = [], isStale = () => false, deadline = Infinity, rayIntersectionCache = null) {
   if (!source || !W || !H) return [];
   const eps = 0.0001;
   const geometry = preparedGeometry || getPreparedVisibilityGeometry(blockers, walls, W, H);
-  const vertices = angleMode === "coarse" ? (geometry.coarseVertices || geometry.vertices) : geometry.vertices;
+  const vertices = angleMode === "preview"
+    ? (geometry.previewVertices || geometry.coarseVertices || geometry.vertices)
+    : angleMode === "drag" ? dragVisibilityVertices(source, geometry)
+    : angleMode === "unit" ? (geometry.unitVertices || geometry.coarseVertices || geometry.vertices)
+    : angleMode === "coarse" ? (geometry.coarseVertices || geometry.vertices) : geometry.vertices;
   const angles = [];
-  vertices.forEach((v) => {
+  const addVisibilityAngle = (angle) => {
+    if (angleMode === "drag") angles.push(angle);
+    else angles.push(angle - eps, angle, angle + eps);
+  };
+  for (const v of vertices) {
+    if (isStale()) return null;
     const a = Math.atan2(v.y - source.y, v.x - source.x);
-    angles.push(a - eps, a, a + eps);
-  });
+    addVisibilityAngle(a);
+  }
+  const outlineStep = angleMode === "drag" ? 3 : 1;
+  for (let index = 0; index < (sourceOutline?.length || 0); index += outlineStep) {
+    const point = sourceOutline[index];
+    const angle = Math.atan2(point.y - source.y, point.x - source.x);
+    addVisibilityAngle(angle);
+  }
 
   const containingBlockers = new Set();
+  const exemptSourceSurfaces = new Set(sourceSurfaceKeys || []);
   blockers.forEach((poly, index) => {
     if (pointInPoly(source, poly)) containingBlockers.add(footprintSurfaceKey(blockers, index));
   });
 
-  const hits = [];
-  snapVisibilityAngles(angles).forEach((a) => {
+  const castVisibilityRay = (a) => {
     const ray = { x: Math.cos(a), y: Math.sin(a) };
-    const intersections = [];
-    candidateSegmentsForRay(source, ray, geometry, W, H).forEach((s) => {
-      const hit = raySegmentIntersection(source, ray, s.a, s.b);
-      if (hit && hit.t > 0.0001) intersections.push({ ...hit, meta: s.meta });
-    });
+    const raySource = sourceOutline ? rayExitPointFromOutline(source, ray, sourceOutline) : source;
+    const rayCacheKey = rayIntersectionCache
+      ? `${Math.round(raySource.x * 1000)}:${Math.round(raySource.y * 1000)}:${Math.round(normalizeAngle(a) * 1000000)}`
+      : null;
+    let uniqueIntersections = rayCacheKey ? rayIntersectionCache.get(rayCacheKey) : null;
+    if (!uniqueIntersections) {
+      const intersections = [];
+      candidateSegmentsForRay(raySource, ray, geometry, W, H).forEach((s) => {
+        const hit = raySegmentIntersection(raySource, ray, s.a, s.b);
+        if (hit && hit.t > 0.0001) intersections.push({ ...hit, meta: s.meta });
+      });
 
-    intersections.sort((p, q) => p.t - q.t);
-    const uniqueIntersections = [];
-    intersections.forEach((hit) => {
-      const previous = uniqueIntersections[uniqueIntersections.length - 1];
-      const sameDistance = previous && Math.abs(previous.t - hit.t) < 0.001;
-      const sameSurface = previous && previous.meta.type === hit.meta.type
-        && (previous.meta.groupKey || previous.meta.index) === (hit.meta.groupKey || hit.meta.index);
-      if (!sameDistance || !sameSurface) uniqueIntersections.push(hit);
-    });
+      intersections.sort((p, q) => p.t - q.t);
+      uniqueIntersections = [];
+      intersections.forEach((hit) => {
+        const previous = uniqueIntersections[uniqueIntersections.length - 1];
+        const sameDistance = previous && Math.abs(previous.t - hit.t) < 0.001;
+        const sameSurface = previous && previous.meta.type === hit.meta.type
+          && (previous.meta.groupKey || previous.meta.index) === (hit.meta.groupKey || hit.meta.index);
+        if (!sameDistance || !sameSurface) uniqueIntersections.push(hit);
+      });
+      if (rayCacheKey) rayIntersectionCache.set(rayCacheKey, uniqueIntersections);
+    }
 
     let footprintWallsCrossed = 0;
     let chosen = uniqueIntersections[uniqueIntersections.length - 1] || null;
@@ -752,6 +1068,7 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
       }
       if (hit.meta.type === "footprint") {
         const surfaceKey = hit.meta.groupKey || footprintSurfaceKey(blockers, hit.meta.index);
+        if (exemptSourceSurfaces.has(surfaceKey)) continue;
         const sampleDistance = 0.25;
         const before = { x: hit.x - ray.x * sampleDistance, y: hit.y - ray.y * sampleDistance };
         const after = { x: hit.x + ray.x * sampleDistance, y: hit.y + ray.y * sampleDistance };
@@ -767,11 +1084,74 @@ function computeVisibilityByFootprintWallLimit(source, blockers, walls, W, H, al
       }
     }
 
-    if (chosen) hits.push({ x: chosen.x, y: chosen.y, angle: a });
-  });
+    return chosen ? { x: chosen.x, y: chosen.y, angle: a } : null;
+  };
 
+  const snappedAngles = snapVisibilityAngles(angles);
+  const hits = [];
+  for (let index = 0; index < snappedAngles.length; index += 1) {
+    if (isStale()) return null;
+    if (workerNow() > deadline) return null;
+    const hit = castVisibilityRay(snappedAngles[index]);
+    if (hit) hits.push(hit);
+    if (index > 0 && index % VISIBILITY_RAY_YIELD_INTERVAL === 0) {
+      await yieldToWorkerEventLoop();
+    }
+  }
+  if (isStale()) return null;
   hits.sort((p, q) => p.angle - q.angle);
-  return sanitizeVisibilityPolygon(source, hits, W, H);
+  if (angleMode === "drag") return sanitizeVisibilityPolygon(source, hits, W, H);
+  const refinedHits = refineVisibilityTransitions(source, hits, castVisibilityRay);
+  return sanitizeVisibilityPolygon(source, refinedHits, W, H);
+}
+
+function refineVisibilityTransitions(source, sortedHits, castVisibilityRay) {
+  if (sortedHits.length < 2) return sortedHits;
+  const refined = [];
+  const maximumDepth = 2;
+  const maximumInsertedRays = 32;
+  const minimumAngle = 0.00035;
+  let insertedRays = 0;
+  const refinePair = (left, right, depth) => {
+    let rightAngle = right.angle;
+    while (rightAngle <= left.angle) rightAngle += Math.PI * 2;
+    const angularGap = rightAngle - left.angle;
+    const leftRadius = dist(source, left);
+    const rightRadius = dist(source, right);
+    const minimumRadius = Math.max(1, Math.min(leftRadius, rightRadius));
+    const radiusRatio = Math.max(leftRadius, rightRadius) / minimumRadius;
+    const expectedArc = minimumRadius * angularGap;
+    const chordExcess = dist(left, right) > Math.max(8, expectedArc * 2.5);
+    const meaningfulTransition = radiusRatio >= 1.35 || (radiusRatio >= 1.12 && chordExcess);
+    if (
+      insertedRays >= maximumInsertedRays
+      || depth >= maximumDepth
+      || angularGap <= minimumAngle
+      || !meaningfulTransition
+    ) {
+      refined.push(left);
+      return;
+    }
+    const midpointAngle = left.angle + angularGap / 2;
+    const normalizedMidpoint = normalizeAngle(midpointAngle);
+    const midpoint = castVisibilityRay(normalizedMidpoint);
+    if (!midpoint) {
+      refined.push(left);
+      return;
+    }
+    insertedRays += 1;
+    const adjustedMidpoint = { ...midpoint, angle: midpointAngle };
+    refinePair(left, adjustedMidpoint, depth + 1);
+    refinePair(adjustedMidpoint, { ...right, angle: rightAngle }, depth + 1);
+  };
+  for (let index = 0; index < sortedHits.length; index += 1) {
+    const left = sortedHits[index];
+    const right = sortedHits[(index + 1) % sortedHits.length];
+    refinePair(left, right, 0);
+  }
+  refined.sort((left, right) => left.angle - right.angle);
+  return refined.map((hit) => ({ ...hit, angle: normalizeAngle(hit.angle) }))
+    .sort((left, right) => left.angle - right.angle);
 }
 
 function sanitizeVisibilityPolygon(source, hits, W, H) {
@@ -834,56 +1214,128 @@ function footprintSurfaceKey(blockers, index) {
   return groupId.startsWith("layout-group:") ? groupId : `footprint:${index}`;
 }
 
-function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false, preparedGeometry = null, diagnostics = null) {
+function footprintSurfaceKeys(blockers) {
+  return [...new Set(blockers.map((_, index) => footprintSurfaceKey(blockers, index)))];
+}
+
+function markerTouchedFootprintSurfaceKeys(marker, pixelsPerInch, blockers) {
+  const samples = [
+    ...getLOSOriginsForMarker(marker, pixelsPerInch, "full"),
+    ...(Array.isArray(marker?.previewOutline) ? marker.previewOutline : []),
+  ];
+  return footprintSurfaceKeys(blockers).filter((surfaceKey) => (
+    samples.some((sample) => pointInFootprintSurface(sample, blockers, surfaceKey))
+  ));
+}
+
+function enemyTouchedFootprintSurfaceKeys(enemy, enemyRadius, blockers) {
+  const boundarySegments = getFootprintBoundarySegments(blockers);
+  return footprintSurfaceKeys(blockers).filter((surfaceKey) => {
+    if (pointInFootprintSurface(enemy, blockers, surfaceKey)) return true;
+    return boundarySegments.some((segment) => {
+      if (segment.groupKey !== surfaceKey) return false;
+      return dist(enemy, closestPointOnSegment(enemy, segment.a, segment.b)) <= enemyRadius + 0.01;
+    });
+  });
+}
+
+async function directEnemyLOSState(enemy, enemyRadius, origins, blockers, walls, interactive = false, preparedGeometry = null, diagnostics = null, isStale = () => false) {
   if (!origins.length) return "blocked";
-  let hasCenterOneWallPath = false;
-  let hasEdgeOneWallPath = false;
-  let hasClearPath = false;
-  const enemyTouchesFootprint = enemyBaseTouchesFootprint(enemy, enemyRadius, blockers);
+  let hasCoveredClearPath = false;
+  let callsSinceYield = 0;
+  const enemyFootprintSurfaces = enemyTouchedFootprintSurfaceKeys(enemy, enemyRadius, blockers);
+  const clearStateForOrigin = (origin) => {
+    if (!enemyFootprintSurfaces.length) return "clear";
+    return "oneWall";
+  };
+  const orderedOrigins = [...origins].sort((left, right) => (
+    ((left.x - enemy.x) ** 2 + (left.y - enemy.y) ** 2)
+    - ((right.x - enemy.x) ** 2 + (right.y - enemy.y) ** 2)
+  ));
+  const classifyWithCheckpoint = async (origin, target, phase) => {
+    const startedAt = workerNow();
+    const state = classifySightSegment(origin, target, blockers, walls, preparedGeometry);
+    if (diagnostics) {
+      if (phase === "center") {
+        diagnostics.centerCalls += 1;
+        diagnostics.centerMs += workerNow() - startedAt;
+      } else {
+        diagnostics.edgeCalls += 1;
+        diagnostics.edgeMs += workerNow() - startedAt;
+      }
+    }
+    callsSinceYield += 1;
+    if (callsSinceYield >= ENEMY_CLASSIFY_YIELD_INTERVAL) {
+      callsSinceYield = 0;
+      await yieldToWorkerEventLoop();
+    }
+    return isStale() ? null : state;
+  };
   const centerStartedAt = workerNow();
-  for (const origin of origins) {
-    const state = classifySightSegment(origin, enemy, blockers, walls, preparedGeometry);
-    if (diagnostics) diagnostics.centerCalls += 1;
-    if (state === "clear") hasClearPath = true;
-    if (state === "oneWall") hasCenterOneWallPath = true;
+  for (const origin of orderedOrigins) {
+    if (isStale()) return hasCoveredClearPath ? "oneWall" : "blocked";
+    const state = await classifyWithCheckpoint(origin, enemy, "center");
+    if (state === null) return hasCoveredClearPath ? "oneWall" : "blocked";
+    if (state !== "clear") continue;
+    const clearState = clearStateForOrigin(origin);
+    if (clearState === "clear") return "clear";
+    hasCoveredClearPath = true;
   }
-  if (diagnostics) diagnostics.centerMs += workerNow() - centerStartedAt;
-  if (hasCenterOneWallPath) return "oneWall";
-  if (hasClearPath && enemyTouchesFootprint) return "oneWall";
+  if (diagnostics && diagnostics.centerCalls === 0) diagnostics.centerMs += workerNow() - centerStartedAt;
 
   const targetSamples = interactive ? 8 : 16;
-  const edgeStartedAt = workerNow();
-  for (const origin of origins) {
-    const edgeStates = [];
-    for (let index = 0; index < targetSamples; index += 1) {
+  const strategicIndexes = targetSamples === 16
+    ? [0, 2, 4, 6, 8, 10, 12, 14]
+    : [0, 1, 2, 3, 4, 5, 6, 7];
+  const refinementIndexes = targetSamples === 16
+    ? [1, 3, 5, 7, 9, 11, 13, 15]
+    : [];
+  for (const origin of orderedOrigins) {
+    if (isStale()) return hasCoveredClearPath ? "oneWall" : "blocked";
+    const edgeStates = new Array(targetSamples);
+    for (const index of strategicIndexes) {
       const angle = index / targetSamples * Math.PI * 2;
       const target = {
         x: enemy.x + Math.cos(angle) * enemyRadius,
         y: enemy.y + Math.sin(angle) * enemyRadius,
       };
-      if (diagnostics) diagnostics.edgeCalls += 1;
-      edgeStates.push(classifySightSegment(origin, target, blockers, walls, preparedGeometry));
+      const state = await classifyWithCheckpoint(origin, target, "edge");
+      if (state === null) return hasCoveredClearPath ? "oneWall" : "blocked";
+      edgeStates[index] = state;
     }
-    if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) hasClearPath = true;
-    if (hasAdjacentEnemyEdgeSamples(edgeStates, "oneWall")) hasEdgeOneWallPath = true;
+    const bridgeIndexes = targetSamples === 16
+      ? strategicIndexes.flatMap((index, strategicIndex) => {
+          const nextIndex = strategicIndexes[(strategicIndex + 1) % strategicIndexes.length];
+          return edgeStates[index] === "clear" && edgeStates[nextIndex] === "clear"
+            ? [(index + 1) % targetSamples]
+            : [];
+        })
+      : [];
+    const orderedRefinementIndexes = [
+      ...new Set([...bridgeIndexes, ...refinementIndexes]),
+    ];
+    for (const index of orderedRefinementIndexes) {
+      const angle = index / targetSamples * Math.PI * 2;
+      const target = {
+        x: enemy.x + Math.cos(angle) * enemyRadius,
+        y: enemy.y + Math.sin(angle) * enemyRadius,
+      };
+      const state = await classifyWithCheckpoint(origin, target, "edge");
+      if (state === null) return hasCoveredClearPath ? "oneWall" : "blocked";
+      edgeStates[index] = state;
+      if (hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) {
+        const clearState = clearStateForOrigin(origin);
+        if (clearState === "clear") return "clear";
+        hasCoveredClearPath = true;
+        break;
+      }
+    }
+    if (!hasAdjacentEnemyEdgeSamples(edgeStates, "clear")) continue;
+    const clearState = clearStateForOrigin(origin);
+    if (clearState === "clear") return "clear";
+    hasCoveredClearPath = true;
   }
-  if (diagnostics) diagnostics.edgeMs += workerNow() - edgeStartedAt;
-  if (hasCenterOneWallPath || hasEdgeOneWallPath) return "oneWall";
-  if (hasClearPath) return enemyTouchesFootprint ? "oneWall" : "clear";
-  return "blocked";
-}
-
-function enemyBaseTouchesFootprint(enemy, enemyRadius, blockers) {
-  const samples = [{ x: enemy.x, y: enemy.y }];
-  const sampleCount = 12;
-  for (let index = 0; index < sampleCount; index += 1) {
-    const angle = index / sampleCount * Math.PI * 2;
-    samples.push({
-      x: enemy.x + Math.cos(angle) * enemyRadius,
-      y: enemy.y + Math.sin(angle) * enemyRadius,
-    });
-  }
-  return samples.some((sample) => blockers.some((poly) => pointInPoly(sample, poly)));
+  return hasCoveredClearPath ? "oneWall" : "blocked";
 }
 
 function hasAdjacentEnemyEdgeSamples(states, targetState) {
@@ -926,6 +1378,7 @@ function classifySightSegment(origin, target, blockers, walls, preparedGeometry 
   });
 
   let footprintCrossings = 0;
+  const sourceSurfaceKeys = new Set(origin.sourceSurfaceKeys || []);
   for (const [surfaceKey, intersections] of intersectionsBySurface) {
     const occupiedIntervals = sightSegmentTerrainIntervals(
       origin,
@@ -937,12 +1390,13 @@ function classifySightSegment(origin, target, blockers, walls, preparedGeometry 
     occupiedIntervals.forEach((interval) => {
       const touchesOrigin = interval.start <= 0.0001;
       const touchesTarget = interval.end >= 0.9999;
+      if (sourceSurfaceKeys.has(surfaceKey) || touchesTarget) return;
       if (touchesOrigin && touchesTarget) return;
       footprintCrossings += touchesOrigin || touchesTarget ? 1 : 2;
     });
-    if (footprintCrossings > 1) return "blocked";
+    if (footprintCrossings > 0) return "blocked";
   }
-  return footprintCrossings === 1 ? "oneWall" : "clear";
+  return "clear";
 }
 
 function sightSegmentTerrainIntervals(origin, target, blockers, surfaceKey, intersections) {
@@ -1067,8 +1521,8 @@ function getFootprintBoundarySegments(blockers) {
 
 function createTouchingFootprintCaps(segments) {
   const caps = [];
-  const tolerance = 0.12;
-  const capRadius = 0.18;
+  const tolerance = 0.85;
+  const capRadius = 0.7;
   const endpoints = [];
   segments.forEach((segment) => {
     endpoints.push({ point: segment.a, segment });
