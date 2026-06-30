@@ -10,6 +10,73 @@ const FORCE_DISPOSITIONS = [
   "Reconnaissance",
   "Priority Assets",
 ];
+
+const SIDEBAR_HELP = {
+  game: {
+    title: "Save Game",
+    items: [
+      "Choose a game, then click Load game to load it.",
+      "Selecting New game save creates a new game slot.",
+      "Edit the game name by double-clicking its name or clicking Edit name.",
+      "Use Save game to store the current game, or Delete game to remove it.",
+    ],
+  },
+  layout: {
+    title: "Layout",
+    items: [
+      "Choose your force disposition, your opponent's force disposition, and Layout A, B, or C. Click Apply Layout to display it.",
+      "Use Display or Hide beside either primary mission to show or conceal its mission card.",
+    ],
+  },
+  importGame: {
+    title: "Import Game/Layout",
+    intro: "Import a game or layout previously exported from this app in JSON format.",
+    items: [],
+  },
+  army: {
+    title: "Army List",
+    items: [
+      "Select New army to create a new army-list slot.",
+      "Edit the army name by double-clicking it or clicking Edit name.",
+      "Paste an army exported from the Warhammer 40,000 app into the large box, then click Match models. Matching entries automatically create models with the correct names, base shapes, and sizes.",
+      "Unmatched entries appear below Remove generated LOS marker(s). You can correct their names, rematch them, or choose a base shape and size before adding them.",
+    ],
+  },
+  markers: {
+    title: "Your Model(s)/LOS Marker(s)",
+    intro: "Generated models are listed in this section.",
+    items: [
+      "Add a known model by searching below Add LOS, then click its name or press Enter.",
+      "Add LOS creates a new 25 mm circular LOS marker.",
+      "You can edit each model's name, base shape, and base size.",
+      "The open eye enables LOS from a model; the crossed-out eye disables it.",
+      "Enter a range in inches for a weapon or aura. Leave the box blank or enter 0 for unlimited range.",
+      "Select Unit to generate several models of the same type and assign them to a numbered unit. Units can move together and are checked for coherency: selected or coherent units use blue/green outlines, while incoherent units turn red.",
+    ],
+  },
+  units: {
+    title: "Units",
+    items: [
+      "Select a whole unit here. Use the eye controls to enable or disable LOS for all its models, and edit the unit name in its name box.",
+      "Enter a weapon or aura range in inches. Leave the box blank or enter 0 for unlimited range.",
+    ],
+  },
+  scale: {
+    title: "Rulers & Deepstrike",
+    items: [
+      "Select Ruler to measure between two points and leave the ruler on the map. Clear rulers removes every standard ruler.",
+      "Sticky ruler continuously measures from a model or unit to another model, enemy, or terrain footprint. Clear sticky rulers removes them all.",
+      "To check deepstrike screening, enter a distance and enable the overlay with the open eye. The default distance is 8 inches, but you can enter any value.",
+    ],
+  },
+  draw: {
+    title: "Deploy & Enemies",
+    items: [
+      "Select Add Enemy (E), then click the layout to add enemy markers. Choose another tool, such as Pan map (P), when you have finished. Clear enemies removes every enemy marker.",
+      "Draw Home Deploy LOS (D) and Draw Enemy Deploy LOS (Q) show LOS from the blue home and red enemy deployment lines. Enter a range to plan where units such as infiltrators can be placed.",
+    ],
+  },
+};
 const FORCE_DISPOSITION_MISSIONS = {
   "Take and Hold": {
     "Take and Hold": "Battlefield Dominance",
@@ -388,6 +455,19 @@ export default function InteractiveLOSTool() {
     units: true,
     draw: true,
   });
+  const [activeSidebarHelp, setActiveSidebarHelp] = useState(null);
+  const sidebarHelpRef = useRef(null);
+
+  useEffect(() => {
+    if (!activeSidebarHelp) return undefined;
+    const closeHelp = (event) => {
+      if (sidebarHelpRef.current?.contains(event.target)) return;
+      if (event.target.closest?.("[data-sidebar-help-button]")) return;
+      setActiveSidebarHelp(null);
+    };
+    document.addEventListener("pointerdown", closeHelp);
+    return () => document.removeEventListener("pointerdown", closeHelp);
+  }, [activeSidebarHelp]);
 
   const state = useRef({
     W: 900,
@@ -1912,6 +1992,16 @@ export default function InteractiveLOSTool() {
 
   function toggleSidebarSection(key) {
     setSectionOpen((current) => ({ ...current, [key]: !current[key] }));
+    setActiveSidebarHelp((current) => current?.key === key ? null : current);
+  }
+
+  function toggleSidebarHelp(key, event) {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setActiveSidebarHelp((current) => current?.key === key ? null : {
+      key,
+      top: Math.max(12, Math.min(rect.top - 6, window.innerHeight - 260)),
+    });
   }
 
   function toggleMapSection(key) {
@@ -2840,7 +2930,8 @@ export default function InteractiveLOSTool() {
       state.current.light = { x: state.current.W / 2, y: state.current.H / 2 };
     }
     setLosVersion((v) => v + 1);
-    setArmyResults((current) => current.map((result) => result.markerId ? { ...result, markerId: null } : result));
+    setArmyResults([]);
+    setArmyListText("");
     updateVisibility();
     draw();
     scheduleBrowserSave();
@@ -7022,10 +7113,7 @@ export default function InteractiveLOSTool() {
           <input ref={importJsonRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={importGameOrLayoutJson} />
 
           <div style={{ ...styles.sidebarSection, order: 1 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("game")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.game ? "▾" : "▸"}</span>
-              <span>Save Game</span>
-            </button>
+            <SidebarSectionHeader title="Save Game" open={sectionOpen.game} onToggle={() => toggleSidebarSection("game")} onHelp={(event) => toggleSidebarHelp("game", event)} helpOpen={activeSidebarHelp?.key === "game"} />
             {sectionOpen.game && (
               <div style={styles.sectionContent}>
                 <div style={styles.sidebarRow}>
@@ -7089,18 +7177,15 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 2 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("layout")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.layout ? "▾" : "▸"}</span>
-              <span>Layout</span>
-            </button>
+            <SidebarSectionHeader title="Layout" open={sectionOpen.layout} onToggle={() => toggleSidebarSection("layout")} onHelp={(event) => toggleSidebarHelp("layout", event)} helpOpen={activeSidebarHelp?.key === "layout"} />
             {sectionOpen.layout && (
               <div style={styles.sectionContent}>
                 <div style={styles.layoutField}>
-                  <span style={styles.markerDetailLabel}>Defender&apos;s Force Disposition</span>
+                  <span style={styles.markerDetailLabel}>My Force Disposition</span>
                   <ForceDispositionSelect value={defenderForceDisposition} onChange={setDefenderForceDisposition} label="Your Force Disposition" />
                 </div>
                 <div style={styles.layoutField}>
-                  <span style={styles.markerDetailLabel}>Attacker&apos;s Force Disposition</span>
+                  <span style={styles.markerDetailLabel}>Opponent&apos;s Force Disposition</span>
                   <ForceDispositionSelect value={attackerForceDisposition} onChange={setAttackerForceDisposition} label="Opponent's Force Disposition" />
                 </div>
                 <label style={styles.layoutField}>
@@ -7177,10 +7262,7 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 3 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("importGame")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.importGame ? "▾" : "▸"}</span>
-              <span>Import Game/Layout</span>
-            </button>
+            <SidebarSectionHeader title="Import Game/Layout" open={sectionOpen.importGame} onToggle={() => toggleSidebarSection("importGame")} onHelp={(event) => toggleSidebarHelp("importGame", event)} helpOpen={activeSidebarHelp?.key === "importGame"} />
             {sectionOpen.importGame && (
               <div style={styles.sectionContent}>
                 <div style={styles.storageNote}>
@@ -7379,10 +7461,7 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 7 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("scale")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.scale ? "▾" : "▸"}</span>
-              <span>Rulers &amp; Deepstrike</span>
-            </button>
+            <SidebarSectionHeader title="Rulers & Deepstrike" open={sectionOpen.scale} onToggle={() => toggleSidebarSection("scale")} onHelp={(event) => toggleSidebarHelp("scale", event)} helpOpen={activeSidebarHelp?.key === "scale"} />
             {sectionOpen.scale && (
               <div style={styles.sectionContent}>
                 <div style={styles.sidebarRow}>
@@ -7433,10 +7512,7 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 4 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("army")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.army ? "▾" : "▸"}</span>
-              <span>Army List</span>
-            </button>
+            <SidebarSectionHeader title="Army List" open={sectionOpen.army} onToggle={() => toggleSidebarSection("army")} onHelp={(event) => toggleSidebarHelp("army", event)} helpOpen={activeSidebarHelp?.key === "army"} />
             {sectionOpen.army && (
               <div style={styles.sectionContent}>
                 <div style={styles.sidebarRow}>
@@ -7467,7 +7543,12 @@ export default function InteractiveLOSTool() {
                       title="Name used when saving this army preset"
                     />
                   ) : (
-                    <div style={styles.armyNameDisplay}>{armyPresetName || "New army"}</div>
+                    <button
+                      type="button"
+                      onDoubleClick={() => setEditingArmyPresetName(true)}
+                      style={styles.armyNameDisplay}
+                      title="Double-click or use Edit name to rename this army"
+                    >{armyPresetName || "New army"}</button>
                   )}
                   <ToolButton onClick={() => editingArmyPresetName ? saveArmyPresetName() : setEditingArmyPresetName(true)}>
                     {editingArmyPresetName ? "Save name" : "Edit name"}
@@ -7483,10 +7564,7 @@ export default function InteractiveLOSTool() {
                   placeholder={"Paste Warhammer app army list here...\n\nUnit lines should look like:\nTyrannofex (200 Points)\n  • 1x Rupture cannon"}
                   style={styles.armyTextArea}
                 />
-                <div style={styles.sidebarRow}>
-                  <ToolButton onClick={parseArmyList}>Match units</ToolButton>
-                  <ToolButton onClick={createLosMarkersFromArmy}>Create LOS markers</ToolButton>
-                </div>
+                <ToolButton onClick={parseArmyList}>Match models</ToolButton>
                 <ToolButton onClick={clearArmyGeneratedLosMarkers}>Remove generated LOS marker(s)</ToolButton>
 
                 {unresolvedArmyResults.length > 0 && (
@@ -7573,10 +7651,7 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 5 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("markers")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.markers ? "▾" : "▸"}</span>
-              <span>Your Model(s)/LOS Marker(s)</span>
-            </button>
+            <SidebarSectionHeader title="Your Model(s)/LOS Marker(s)" open={sectionOpen.markers} onToggle={() => toggleSidebarSection("markers")} onHelp={(event) => toggleSidebarHelp("markers", event)} helpOpen={activeSidebarHelp?.key === "markers"} />
             {sectionOpen.markers && (
               <div style={styles.sectionContent}>
                 <ToolButton onClick={addLosMarker}>Add LOS</ToolButton>
@@ -7692,10 +7767,7 @@ export default function InteractiveLOSTool() {
             )}
           </div>
           <div style={{ ...styles.sidebarSection, order: 6 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("units")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.units ? "▾" : "▸"}</span>
-              <span>Units</span>
-            </button>
+            <SidebarSectionHeader title="Units" open={sectionOpen.units} onToggle={() => toggleSidebarSection("units")} onHelp={(event) => toggleSidebarHelp("units", event)} helpOpen={activeSidebarHelp?.key === "units"} />
             {sectionOpen.units && (
               <div style={styles.sectionContent}>
                 {!sortedUnits.length && <div style={styles.emptyMarkerNote}>No units created yet.</div>}
@@ -7762,10 +7834,7 @@ export default function InteractiveLOSTool() {
           </div>
 
           <div style={{ ...styles.sidebarSection, order: 8 }}>
-            <button type="button" style={styles.sectionHeader} onClick={() => toggleSidebarSection("draw")}>
-              <span style={styles.sectionTriangle}>{sectionOpen.draw ? "▾" : "▸"}</span>
-              <span>Deploy &amp; Enemies</span>
-            </button>
+            <SidebarSectionHeader title="Deploy & Enemies" open={sectionOpen.draw} onToggle={() => toggleSidebarSection("draw")} onHelp={(event) => toggleSidebarHelp("draw", event)} helpOpen={activeSidebarHelp?.key === "draw"} />
             {sectionOpen.draw && (
               <div style={styles.sectionContent}>
                 <div style={styles.actionPairRow}>
@@ -7779,7 +7848,6 @@ export default function InteractiveLOSTool() {
                   hasLine={Boolean(state.current.deploymentLine)}
                   onDraw={() => setMode("deployHome")}
                   onVisibility={(visible) => setDeploymentVisibility("home", visible)}
-                  onClear={() => clearDeploymentLOS("home")}
                   rangeInches={homeDeploymentRangeInches}
                   onRangeChange={(value) => setHomeDeploymentRangeInches(value || "unlimited")}
                 />
@@ -7790,7 +7858,6 @@ export default function InteractiveLOSTool() {
                   hasLine={Boolean(state.current.enemyDeploymentLine)}
                   onDraw={() => setMode("deployEnemy")}
                   onVisibility={(visible) => setDeploymentVisibility("enemy", visible)}
-                  onClear={() => clearDeploymentLOS("enemy")}
                   rangeInches={enemyDeploymentRangeInches}
                   onRangeChange={(value) => setEnemyDeploymentRangeInches(value || "unlimited")}
                 />
@@ -7802,10 +7869,37 @@ export default function InteractiveLOSTool() {
             type="button"
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            onClick={() => {
+              setActiveSidebarHelp(null);
+              setSidebarCollapsed((collapsed) => !collapsed);
+            }}
             style={{ ...styles.sidebarToggle, right: sidebarCollapsed ? -32 : -31 }}
           >{sidebarCollapsed ? "›" : "‹"}</button>
         </div>
+
+        {activeSidebarHelp && SIDEBAR_HELP[activeSidebarHelp.key] && !sidebarCollapsed && (
+          <aside
+            ref={sidebarHelpRef}
+            role="dialog"
+            aria-label={`How to use ${SIDEBAR_HELP[activeSidebarHelp.key].title}`}
+            style={{
+              ...styles.sidebarHelpCallout,
+              top: activeSidebarHelp.top,
+              maxHeight: `calc(100vh - ${activeSidebarHelp.top + 12}px)`,
+            }}
+          >
+            <span style={styles.sidebarHelpPointer} aria-hidden="true" />
+            <div style={styles.sidebarHelpTitle}>How to use: {SIDEBAR_HELP[activeSidebarHelp.key].title}</div>
+            {SIDEBAR_HELP[activeSidebarHelp.key].intro && (
+              <p style={styles.sidebarHelpIntro}>{SIDEBAR_HELP[activeSidebarHelp.key].intro}</p>
+            )}
+            {SIDEBAR_HELP[activeSidebarHelp.key].items.length > 0 && (
+              <ol style={styles.sidebarHelpList}>
+                {SIDEBAR_HELP[activeSidebarHelp.key].items.map((item) => <li key={item}>{item}</li>)}
+              </ol>
+            )}
+          </aside>
+        )}
 
         <main style={styles.mainArea}>
           <div style={styles.toolbar}>
@@ -7967,7 +8061,8 @@ const styles = {
     borderTop: "1px solid rgba(255,255,255,.10)",
   },
   sectionHeader: {
-    width: "100%",
+    flex: 1,
+    minWidth: 0,
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -7981,6 +8076,72 @@ const styles = {
     letterSpacing: ".04em",
     cursor: "pointer",
     textAlign: "left",
+  },
+  sectionHeaderRow: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  howToUseButton: {
+    flexShrink: 0,
+    padding: "5px 9px",
+    borderRadius: 7,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#111827",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  sidebarHelpCallout: {
+    position: "fixed",
+    left: 370,
+    zIndex: 1200,
+    width: "min(390px, calc(100vw - 386px))",
+    maxHeight: "calc(100vh - 24px)",
+    boxSizing: "border-box",
+    overflowY: "auto",
+    padding: "16px 18px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,.28)",
+    background: "rgba(15,23,42,.98)",
+    color: "#f8fafc",
+    boxShadow: "0 18px 44px rgba(0,0,0,.5)",
+  },
+  sidebarHelpPointer: {
+    position: "absolute",
+    left: -8,
+    top: 16,
+    width: 14,
+    height: 14,
+    transform: "rotate(45deg)",
+    borderLeft: "1px solid rgba(255,255,255,.28)",
+    borderBottom: "1px solid rgba(255,255,255,.28)",
+    background: "#0f172a",
+  },
+  sidebarHelpTitle: {
+    position: "relative",
+    marginBottom: 10,
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: 900,
+  },
+  sidebarHelpIntro: {
+    margin: 0,
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  sidebarHelpList: {
+    margin: 0,
+    paddingLeft: 22,
+    display: "grid",
+    gap: 10,
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.45,
   },
   sectionTriangle: {
     width: 18,
@@ -8979,7 +9140,29 @@ function MarkerVisibilityButton({ active, kind, label, onClick }) {
   );
 }
 
-function DeploymentControlRow({ label, active, visible, hasLine, onDraw, onVisibility, onClear, rangeInches, onRangeChange }) {
+function SidebarSectionHeader({ title, open, onToggle, onHelp, helpOpen }) {
+  return (
+    <div style={{ ...styles.sectionHeaderRow, marginBottom: open ? 8 : 0 }}>
+      <button type="button" style={styles.sectionHeader} onClick={onToggle}>
+        <span style={styles.sectionTriangle}>{open ? "▾" : "▸"}</span>
+        <span>{title}</span>
+      </button>
+      <button
+        type="button"
+        data-sidebar-help-button
+        aria-expanded={helpOpen}
+        onClick={onHelp}
+        style={{
+          ...styles.howToUseButton,
+          background: helpOpen ? "#dbeafe" : "#f8fafc",
+          borderColor: helpOpen ? "#60a5fa" : "#cbd5e1",
+        }}
+      >How to use</button>
+    </div>
+  );
+}
+
+function DeploymentControlRow({ label, active, visible, hasLine, onDraw, onVisibility, rangeInches, onRangeChange }) {
   return (
     <div style={styles.deploymentControlGroup}>
       <div style={styles.deploymentRow}>
@@ -9004,7 +9187,6 @@ function DeploymentControlRow({ label, active, visible, hasLine, onDraw, onVisib
           label={`Disable ${label.replace("Draw ", "")}`}
           onClick={() => onVisibility(false)}
         />
-        <button type="button" onClick={onClear} style={styles.compactClearButton}>Clear</button>
       </div>
       <input
         type="number"
