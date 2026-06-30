@@ -76,6 +76,53 @@ const SIDEBAR_HELP = {
       "Draw Home Deploy LOS (D) and Draw Enemy Deploy LOS (Q) show LOS from the blue home and red enemy deployment lines. Enter a range to plan where units such as infiltrators can be placed.",
     ],
   },
+  mapModify: {
+    title: "Modify Layout",
+    items: [
+      "Pick your force disposition, your opponent's force disposition, and Layout A, B, or C.",
+      "Click Display layout to modify to load the selected preset.",
+      "Click Modify Layout to unlock that layout, or go directly to Edit Layout and select Start editing.",
+    ],
+  },
+  mapUpload: {
+    title: "Upload Map",
+    items: [
+      "Upload a picture of the map.",
+      "Use Edit Layout to set its scale and add or edit map objects.",
+    ],
+  },
+  mapCreate: {
+    title: "Create Map",
+    intro: "Choose the width and length to determine the map's grid size. Every grid square represents 1 inch.",
+    items: [],
+  },
+  mapEdit: {
+    title: "Edit Layout",
+    items: [
+      "Select Start editing to unlock the map and use the remaining Edit Layout controls.",
+      "Set Scale lets you identify a known distance on an uploaded map, such as a grid square or known base length. The app can then measure distances and ranges correctly.",
+      "Add preset GW terrain footprints with the quantity controls, or use Selectively remove terrain footprint(s) to remove individual pieces.",
+      "Add preset light and dense terrain features.",
+      "Add preset walls representing GW dense-terrain ruin features.",
+      "Free Draw lets you outline a wall or footprint. Double-click to finish a wall; connect the last footprint point to the first to close a footprint.",
+      {
+        text: "Manipulation lets you move, mirror, link, and rotate terrain footprints and terrain features, including light terrain, dense terrain, and dense ruins.",
+        subitems: [
+          "To link positions, select Link, click one piece, then click an identical piece with the same mirror setting. Moving either piece then positions the other as its exact battlefield mirror.",
+          "Rotate a grabbed piece with the mouse wheel, or use the rotation buttons.",
+        ],
+      },
+      "Draw your own home and opponent deployment lines.",
+      "Add objective markers. Dragging an objective onto terrain automatically centres it on that footprint.",
+      {
+        text: "Export layouts and games you create.",
+        subitems: [
+          "Export Layout saves the grid, deployment lines, terrain footprints, walls, and terrain features. This is useful for non-GW game or tournament maps.",
+          "Export Game saves the complete plan, including models, units, enemies, and Deployment & Turn-by-Turn Planner positions.",
+        ],
+      },
+    ],
+  },
 };
 const FORCE_DISPOSITION_MISSIONS = {
   "Take and Hold": {
@@ -239,13 +286,6 @@ const RI_FEATURE_POINTS = {
 };
 
 const LAYOUT_FEATURE_TYPES = {
-  largeLightL: { label: "Light", button: "Add large L", kind: "light", shape: "l", width: 3, height: 2, thickness: 0.5 },
-  smallLightL: { label: "Light", button: "Add small L", kind: "light", shape: "l", width: 2, height: 2, thickness: 0.5 },
-  largeLightBarricade: { label: "Light", button: "Add L barricade", kind: "light", shape: "bar", width: 4.75, height: 1 },
-  smallLightBarricade: { label: "Light", button: "Add S barricade", kind: "light", shape: "u", width: 4, height: 1, thickness: 0.25 },
-  smallDenseRectangle: { label: "Dense", button: "Add S green rectangle", kind: "dense", shape: "rect", width: 2.5, height: 3 },
-  denseBarricade: { label: "Dense", button: "Add green barricade", kind: "dense", shape: "rect", width: 8, height: 2 },
-  largeDenseRectangle: { label: "Dense", button: "Add L green rectangle", kind: "dense", shape: "rect", width: 2.75, height: 4 },
   rapidLight1: { label: "Light RI 1", button: "Light 1", kind: "light", shape: "custom", width: 1.24, height: 3.76, points: RI_FEATURE_POINTS.rapidLight1, source: "Rapid Ingress TH-TH-A light" },
   rapidLight2: { label: "Light RI 2", button: "Light 2", kind: "light", shape: "custom", width: 1.83, height: 1.63, points: RI_FEATURE_POINTS.rapidLight2, source: "Rapid Ingress TH-TH-A light" },
   rapidLight3: { label: "Light RI 3", button: "Light 3", kind: "light", shape: "custom", width: 1.82, height: 2.93, points: RI_FEATURE_POINTS.rapidLight3, source: "Rapid Ingress TH-TH-A light" },
@@ -428,6 +468,10 @@ export default function InteractiveLOSTool() {
   const [showObjectives, setShowObjectives] = useState(true);
   const [movementPlanningEnabled, setMovementPlanningEnabled] = useState(false);
   const [activeMovementPhase, setActiveMovementPhase] = useState("deployment");
+  const [plannerHelpOpen, setPlannerHelpOpen] = useState(false);
+  const plannerHelpRef = useRef(null);
+  const [generalHelpPosition, setGeneralHelpPosition] = useState(null);
+  const generalHelpRef = useRef(null);
   const [mapSectionOpen, setMapSectionOpen] = useState({
     modify: false,
     upload: false,
@@ -468,6 +512,26 @@ export default function InteractiveLOSTool() {
     document.addEventListener("pointerdown", closeHelp);
     return () => document.removeEventListener("pointerdown", closeHelp);
   }, [activeSidebarHelp]);
+
+  useEffect(() => {
+    if (!plannerHelpOpen) return undefined;
+    const closePlannerHelp = (event) => {
+      if (plannerHelpRef.current?.contains(event.target)) return;
+      setPlannerHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", closePlannerHelp);
+    return () => document.removeEventListener("pointerdown", closePlannerHelp);
+  }, [plannerHelpOpen]);
+
+  useEffect(() => {
+    if (!generalHelpPosition) return undefined;
+    const closeGeneralHelp = (event) => {
+      if (generalHelpRef.current?.contains(event.target)) return;
+      setGeneralHelpPosition(null);
+    };
+    document.addEventListener("pointerdown", closeGeneralHelp);
+    return () => document.removeEventListener("pointerdown", closeGeneralHelp);
+  }, [generalHelpPosition]);
 
   const state = useRef({
     W: 900,
@@ -5944,7 +6008,7 @@ export default function InteractiveLOSTool() {
   }
 
   function layoutFeatureLocalPolygon(feature) {
-    const definition = LAYOUT_FEATURE_TYPES[feature.type] || LAYOUT_FEATURE_TYPES.largeLightL;
+    const definition = LAYOUT_FEATURE_TYPES[feature.type] || LAYOUT_FEATURE_TYPES.rapidLight1;
     if (Array.isArray(definition.points) && definition.points.length >= 3) {
       return definition.points;
     }
@@ -7285,6 +7349,8 @@ export default function InteractiveLOSTool() {
                   summary="Load a preset, then unlock it if you want to change it."
                   open={mapSectionOpen.modify}
                   onToggle={() => toggleMapSection("modify")}
+                  onHelp={(event) => toggleSidebarHelp("mapModify", event)}
+                  helpOpen={activeSidebarHelp?.key === "mapModify"}
                 >
                   <div style={styles.layoutField}>
                     <span style={styles.markerDetailLabel}>Defender&apos;s Force Disposition</span>
@@ -7318,6 +7384,8 @@ export default function InteractiveLOSTool() {
                   summary="Use a custom image as the map background."
                   open={mapSectionOpen.upload}
                   onToggle={() => toggleMapSection("upload")}
+                  onHelp={(event) => toggleSidebarHelp("mapUpload", event)}
+                  helpOpen={activeSidebarHelp?.key === "mapUpload"}
                 >
                   <ToolButton onClick={() => fileRef.current?.click()}>Upload map</ToolButton>
                 </MapSubsection>
@@ -7327,6 +7395,8 @@ export default function InteractiveLOSTool() {
                   summary="Build a blank grid where every square is 1 inch."
                   open={mapSectionOpen.create}
                   onToggle={() => toggleMapSection("create")}
+                  onHelp={(event) => toggleSidebarHelp("mapCreate", event)}
+                  helpOpen={activeSidebarHelp?.key === "mapCreate"}
                 >
                   <div style={styles.sidebarRow}>
                     <label style={styles.inlineNumberLabel}>
@@ -7346,6 +7416,8 @@ export default function InteractiveLOSTool() {
                   summary="Move, add, rotate, mirror, link, and save layout objects."
                   open={mapSectionOpen.edit}
                   onToggle={() => toggleMapSection("edit")}
+                  onHelp={(event) => toggleSidebarHelp("mapEdit", event)}
+                  helpOpen={activeSidebarHelp?.key === "mapEdit"}
                 >
                   <div style={styles.layoutEditorControls}>
                     <ToolButton active={layoutEditMode} onClick={toggleLayoutEditing}>{layoutEditMode ? "Finish editing" : "Start editing"}</ToolButton>
@@ -7895,7 +7967,19 @@ export default function InteractiveLOSTool() {
             )}
             {SIDEBAR_HELP[activeSidebarHelp.key].items.length > 0 && (
               <ol style={styles.sidebarHelpList}>
-                {SIDEBAR_HELP[activeSidebarHelp.key].items.map((item) => <li key={item}>{item}</li>)}
+                {SIDEBAR_HELP[activeSidebarHelp.key].items.map((item, index) => {
+                  const entry = typeof item === "string" ? { text: item } : item;
+                  return (
+                    <li key={`${activeSidebarHelp.key}-${index}`}>
+                      {entry.text}
+                      {entry.subitems?.length > 0 && (
+                        <ul style={styles.sidebarHelpSublist}>
+                          {entry.subitems.map((subitem) => <li key={subitem}>{subitem}</li>)}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </aside>
@@ -7921,6 +8005,54 @@ export default function InteractiveLOSTool() {
             </ToolButton>
             <ToolButton active={mode === "erase"} onClick={() => setMode("erase")}>Erase (X)</ToolButton>
             <ToolButton onClick={undo}>Undo (Z)</ToolButton>
+            <div ref={generalHelpRef} style={styles.generalHelpWrap}>
+              <button
+                type="button"
+                onClick={(event) => {
+                  if (generalHelpPosition) {
+                    setGeneralHelpPosition(null);
+                    return;
+                  }
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setPlannerHelpOpen(false);
+                  setActiveSidebarHelp(null);
+                  setGeneralHelpPosition({
+                    top: rect.bottom + 8,
+                    right: Math.max(12, window.innerWidth - rect.right),
+                  });
+                }}
+                style={{
+                  ...styles.generalHelpButton,
+                  borderColor: generalHelpPosition ? "#60a5fa" : "#cbd5e1",
+                }}
+              >General info and how to use</button>
+              {generalHelpPosition && (
+                <div
+                  role="dialog"
+                  aria-label="General information and how to use"
+                  style={{
+                    ...styles.generalHelpCallout,
+                    top: generalHelpPosition.top,
+                    right: generalHelpPosition.right,
+                    maxHeight: `calc(100vh - ${generalHelpPosition.top + 12}px)`,
+                  }}
+                >
+                  <div style={styles.sidebarHelpTitle}>General info and how to use</div>
+                  <ol style={styles.generalHelpList}>
+                    <li>This app is primarily for planning movement and Line of Sight (LOS), although it can also help with deepstrike planning and creating new maps.</li>
+                    <li>The app is intended to save time when planning what to do on different layouts.</li>
+                    <li>Move around the map by clicking and dragging the grid.</li>
+                    <li>Zoom in and out of the grid with the mouse wheel.</li>
+                    <li>To simulate models on the first floor or higher, click a purple ruin wall and select 1st Floor. This stops that wall from blocking LOS until Ground is selected again.</li>
+                    <li>Rotate models, units, or LOS markers by using the mouse wheel while clicking and dragging them.</li>
+                    <li>Use the buttons at the top to hide or show light terrain features, dense terrain features, and objectives.</li>
+                    <li>Erase (X) can erase map objects except terrain features, terrain footprints, and deployment lines belonging to a loaded preset that is not being edited.</li>
+                    <li>Pan map (P) cancels an active function, such as Add Enemy (E), and returns the grid to normal movement.</li>
+                    <li>Use the other How to use buttons for guidance about each specific section.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
           </div>
           <div style={styles.status}>{status}</div>
           <div style={styles.legend}>White = model LOS · Blue = home deployment LOS · Red = enemy deployment LOS · Orange = valid deepstrike area · Green = visible within selected range · Yellow = crossed one footprint wall · Dark = blocked</div>
@@ -7936,9 +8068,32 @@ export default function InteractiveLOSTool() {
                   ))}
                 </div>
               )}
-              <button type="button" style={{ ...styles.planningMainButton, ...(movementPlanningEnabled ? styles.planningButtonActive : {}) }} onClick={toggleMovementPlanning}>
-                Deployment & Turn-by-Turn Planner
-              </button>
+              <div style={styles.planningMainRow}>
+                <button type="button" style={{ ...styles.planningMainButton, ...(movementPlanningEnabled ? styles.planningButtonActive : {}) }} onClick={toggleMovementPlanning}>
+                  Deployment & Turn-by-Turn Planner
+                </button>
+                <div ref={plannerHelpRef} style={styles.plannerHelpWrap}>
+                  <button
+                    type="button"
+                    aria-expanded={plannerHelpOpen}
+                    onClick={() => setPlannerHelpOpen((open) => !open)}
+                    style={{ ...styles.planningHelpButton, ...(plannerHelpOpen ? styles.planningButtonActive : {}) }}
+                  >How to use</button>
+                  {plannerHelpOpen && (
+                    <div role="dialog" aria-label="How to use Deployment and Turn-by-Turn Planner" style={styles.plannerHelpCallout}>
+                      <div style={styles.sidebarHelpTitle}>How to use: Deployment &amp; Turn-by-Turn Planner</div>
+                      <p style={styles.sidebarHelpIntro}>Allows for planning deployment and turn-by-turn movement.</p>
+                      <ol style={styles.plannerHelpList}>
+                        <li>Add models, units, or LOS markers during Deployment.</li>
+                        <li>Click Turn 1 and move your models, units, or LOS markers. The app displays how far they moved, while LOS, range, coherency, deepstrike, and other tools continue to work normally.</li>
+                        <li>Repeat the process for Turn 2 and, if useful, Turns 3, 4, and 5.</li>
+                        <li>Saving the game also saves every Deployment and turn position.</li>
+                        <li>Export Game, inside Export/Download under Edit Layout, exports this complete plan. Other players can import the JSON file on their device to discuss movement, LOS, deepstrike, and other ideas.</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} />
           </div>
@@ -8143,6 +8298,13 @@ const styles = {
     fontSize: 13,
     lineHeight: 1.45,
   },
+  sidebarHelpSublist: {
+    margin: "7px 0 0",
+    paddingLeft: 18,
+    display: "grid",
+    gap: 7,
+    color: "#bfdbfe",
+  },
   sectionTriangle: {
     width: 18,
     display: "inline-block",
@@ -8164,7 +8326,8 @@ const styles = {
     marginBottom: 8,
   },
   mapSubsectionHeader: {
-    width: "100%",
+    flex: 1,
+    minWidth: 0,
     display: "flex",
     alignItems: "center",
     gap: 6,
@@ -8179,12 +8342,18 @@ const styles = {
     textAlign: "left",
     cursor: "pointer",
   },
+  mapSubsectionHeaderRow: {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+  },
   mapSubsectionSummary: {
     color: "#cbd5e1",
     fontSize: 11,
     fontWeight: 800,
     lineHeight: 1.25,
-    margin: "0 0 6px 22px",
+    margin: "7px 0 8px 22px",
   },
   mapSubsectionBody: {
     display: "grid",
@@ -8851,6 +9020,44 @@ const styles = {
     whiteSpace: "nowrap",
     flexShrink: 0,
   },
+  generalHelpWrap: {
+    position: "relative",
+    flexShrink: 0,
+  },
+  generalHelpButton: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    background: "#fff",
+    color: "#111",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    fontWeight: 800,
+  },
+  generalHelpCallout: {
+    position: "fixed",
+    zIndex: 1400,
+    width: "min(460px, calc(100vw - 24px))",
+    boxSizing: "border-box",
+    overflowY: "auto",
+    padding: "16px 18px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,.28)",
+    background: "rgba(15,23,42,.98)",
+    color: "#f8fafc",
+    textAlign: "left",
+    whiteSpace: "normal",
+    boxShadow: "0 18px 44px rgba(0,0,0,.55)",
+  },
+  generalHelpList: {
+    margin: 0,
+    paddingLeft: 22,
+    display: "grid",
+    gap: 10,
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
   uploadButton: {
     padding: "8px 10px",
     borderRadius: 10,
@@ -8938,6 +9145,13 @@ const styles = {
     flexWrap: "wrap",
     pointerEvents: "auto",
   },
+  planningMainRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    pointerEvents: "auto",
+  },
   planningButton: {
     minWidth: 112,
     padding: "8px 14px",
@@ -8960,6 +9174,47 @@ const styles = {
     cursor: "pointer",
     boxShadow: "0 2px 8px rgba(0,0,0,.28)",
     pointerEvents: "auto",
+  },
+  planningHelpButton: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(0,0,0,.25)",
+    background: "#f8fafc",
+    color: "#111827",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,0,0,.28)",
+    whiteSpace: "nowrap",
+  },
+  plannerHelpWrap: {
+    position: "relative",
+  },
+  plannerHelpCallout: {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    right: 0,
+    zIndex: 10,
+    width: "min(410px, calc(100vw - 32px))",
+    maxHeight: "min(480px, calc(100vh - 150px))",
+    boxSizing: "border-box",
+    overflowY: "auto",
+    padding: "16px 18px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,.28)",
+    background: "rgba(15,23,42,.98)",
+    color: "#f8fafc",
+    textAlign: "left",
+    boxShadow: "0 18px 44px rgba(0,0,0,.5)",
+    pointerEvents: "auto",
+  },
+  plannerHelpList: {
+    margin: "10px 0 0",
+    paddingLeft: 22,
+    display: "grid",
+    gap: 10,
+    color: "#dbeafe",
+    fontSize: 13,
+    lineHeight: 1.45,
   },
   planningButtonActive: {
     background: "#dbeafe",
@@ -9004,13 +9259,26 @@ function ToolButton({ active, disabled, onClick, children }) {
   );
 }
 
-function MapSubsection({ title, summary, open, onToggle, children }) {
+function MapSubsection({ title, summary, open, onToggle, onHelp, helpOpen, children }) {
   return (
     <div style={styles.mapSubsection}>
-      <button type="button" onClick={onToggle} style={styles.mapSubsectionHeader}>
-        <span style={styles.sectionTriangle}>{open ? "▾" : "▸"}</span>
-        <span>{title}</span>
-      </button>
+      <div style={styles.mapSubsectionHeaderRow}>
+        <button type="button" onClick={onToggle} style={styles.mapSubsectionHeader}>
+          <span style={styles.sectionTriangle}>{open ? "▾" : "▸"}</span>
+          <span>{title}</span>
+        </button>
+        <button
+          type="button"
+          data-sidebar-help-button
+          aria-expanded={helpOpen}
+          onClick={onHelp}
+          style={{
+            ...styles.howToUseButton,
+            background: helpOpen ? "#dbeafe" : "#f8fafc",
+            borderColor: helpOpen ? "#60a5fa" : "#cbd5e1",
+          }}
+        >How to use</button>
+      </div>
       <div style={styles.mapSubsectionSummary}>{summary}</div>
       {open && <div style={styles.mapSubsectionBody}>{children}</div>}
     </div>
