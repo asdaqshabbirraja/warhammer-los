@@ -8437,12 +8437,14 @@ export default function InteractiveLOSTool() {
                 >
                   <div style={styles.sidebarHelpTitle}>General info and how to use</div>
                   <ol style={styles.generalHelpList}>
-                    <li>This app is primarily for planning movement and Line of Sight (LOS), although it can also help with deepstrike planning and creating new maps.</li>
-                    <li>The app is intended to save time when planning what to do on different layouts.</li>
-                    <li>Move around the map by clicking and dragging the grid.</li>
+                    <li>This app is primarily for planning movement and Line of Sight (LOS). It can also help with screening out deepstrike and creating new maps.</li>
+                    <li>The app is intended to save time when planning what to do on multiple different layouts at the same time.</li>
+                    <li>Move around the map by clicking and dragging the grid. You can also use WASD.</li>
                     <li>Zoom in and out of the grid with the mouse wheel.</li>
                     <li>To simulate models on the first floor or higher, click a purple ruin wall and select 1st Floor. This stops that wall from blocking LOS until Ground is selected again.</li>
                     <li>Rotate models, units, or LOS markers by using the mouse wheel while clicking and dragging them.</li>
+                    <li>You can select multiple model(s) and unit(s) by holding the right mouse click button and dragging over the marker(s) and unit(s).</li>
+                    <li>You can select units quickly by using keyboard numbers (e.g. 1 will select unit 1, 5 will select unit 5, 0 will select unit 10).</li>
                     <li>Use the buttons at the top to hide or show light terrain features, dense terrain features, and objectives.</li>
                     <li>Erase (X) can erase map objects except terrain features, terrain footprints, and deployment lines belonging to a loaded preset that is not being edited.</li>
                     <li>Pan map (P) cancels an active function, such as Add Enemy (E), and returns the grid to normal movement.</li>
