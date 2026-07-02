@@ -73,7 +73,7 @@ const SIDEBAR_HELP = {
     title: "Deploy & Enemies",
     items: [
       "Select Add Enemy (E), then click the layout to add enemy markers. Choose another tool, such as Pan map (P), when you have finished. Clear enemies removes every enemy marker.",
-      "Draw Home Deploy LOS (D) and Draw Enemy Deploy LOS (Q) show LOS from the blue home and red enemy deployment lines. Enter a range to plan where units such as infiltrators can be placed.",
+      "Home deployment line and Enemy deployment line show LOS from the blue home and red enemy deployment lines. Enter a range to plan where units such as infiltrators can be placed.",
     ],
   },
   mapModify: {
@@ -395,9 +395,14 @@ export default function InteractiveLOSTool() {
   const draggingRef = useRef(false);
   const panningRef = useRef(false);
   const panLastRef = useRef(null);
+  const panKeysRef = useRef(new Set());
+  const keyboardPanFrameRef = useRef(null);
+  const keyboardPanLastTimeRef = useRef(null);
   const objectDragRef = useRef(null);
   const dragFrameRef = useRef(null);
   const pendingDragPointRef = useRef(null);
+  const marqueeSelectionRef = useRef(null);
+  const multiSelectedMarkerIdsRef = useRef(new Set());
   const perfStatsRef = useRef({
     draw: { total: 0, count: 0, max: 0 },
     visibility: { total: 0, count: 0, max: 0 },
@@ -689,20 +694,25 @@ export default function InteractiveLOSTool() {
     resize();
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("pointerup", pointerUp);
     window.addEventListener("pointercancel", pointerUp);
     window.addEventListener("blur", cancelActiveDrag);
+    window.addEventListener("blur", stopKeyboardPan);
     return () => {
       if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
+      stopKeyboardPan();
       if (pendingEnemyLosTimerRef.current) window.clearTimeout(pendingEnemyLosTimerRef.current);
       if (losWorkerRef.current) losWorkerRef.current.terminate();
       if (losPreviewWorkerRef.current) losPreviewWorkerRef.current.terminate();
       if (enemyLosWorkerRef.current) enemyLosWorkerRef.current.terminate();
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("pointerup", pointerUp);
       window.removeEventListener("pointercancel", pointerUp);
       window.removeEventListener("blur", cancelActiveDrag);
+      window.removeEventListener("blur", stopKeyboardPan);
     };
   }, []);
 
@@ -2383,6 +2393,7 @@ export default function InteractiveLOSTool() {
   function selectUnit(slot) {
     const members = getUnitMembers(slot);
     if (!members.length) return;
+    multiSelectedMarkerIdsRef.current.clear();
     const first = members[0];
     setActiveUnitSlot(slot);
     setActiveLosId(first.id);
@@ -2507,7 +2518,8 @@ export default function InteractiveLOSTool() {
 
   function layoutUnitGrid(members, startX, startY) {
     if (!members.length) return;
-    const gap = 0.25 * pixelsPerInch;
+    const effectivePixelsPerInch = pixelsPerInch || state.current.fit.w / boardWidthInches() || 10;
+    const gap = 0.25 * effectivePixelsPerInch;
     const columns = 5;
     const rows = Math.ceil(members.length / columns);
     const columnWidths = Array(columns).fill(0);
@@ -2553,10 +2565,79 @@ export default function InteractiveLOSTool() {
 
   function nextLosMarkerStagingPoint(index = state.current.losMarkers.length) {
     const yStep = Math.max(34, (pixelsPerInch || state.current.fit.w / boardWidthInches()) * 1.2);
+    const rowsPerColumn = 12;
+    const column = Math.floor(index / rowsPerColumn);
+    const columnStep = Math.max(70, yStep * 2);
     return {
-      x: state.current.fit.x - 48 / state.current.camera.scale,
-      y: state.current.fit.y + 45 / state.current.camera.scale + (index % 12) * yStep,
+      x: state.current.fit.x - 48 / state.current.camera.scale - column * columnStep,
+      y: state.current.fit.y + 45 / state.current.camera.scale + (index % rowsPerColumn) * yStep,
     };
+  }
+
+  function markerCollectionBounds(markers) {
+    return markers.reduce((bounds, marker) => {
+      const base = getBaseRadii(1, marker);
+      return {
+        minX: Math.min(bounds.minX, marker.x - base.rx),
+        maxX: Math.max(bounds.maxX, marker.x + base.rx),
+        minY: Math.min(bounds.minY, marker.y - base.ry),
+        maxY: Math.max(bounds.maxY, marker.y + base.ry),
+      };
+    }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  }
+
+  function layoutArmyGeneratedStaging() {
+    const generated = state.current.losMarkers.filter((marker) => String(marker.id || "").startsWith("army-los-"));
+    if (!generated.length) return;
+
+    const groups = [];
+    const seenUnits = new Set();
+    generated.forEach((marker) => {
+      if (marker.groupingMode === "unit" && marker.unitSlot) {
+        if (seenUnits.has(marker.unitSlot)) return;
+        seenUnits.add(marker.unitSlot);
+        groups.push(getUnitMembers(marker.unitSlot).filter((member) => String(member.id || "").startsWith("army-los-")));
+      } else {
+        groups.push([marker]);
+      }
+    });
+
+    const effectivePixelsPerInch = pixelsPerInch || state.current.fit.w / boardWidthInches() || 10;
+    const groupGap = Math.max(24, effectivePixelsPerInch * 0.75);
+    const top = state.current.fit.y + groupGap;
+    const stagingHeight = state.current.fit.h || Math.max(groupGap * 2, state.current.H - top);
+    const bottom = top + stagingHeight - groupGap;
+    let cursorY = top;
+    let columnOffset = 0;
+    let columnWidth = 0;
+
+    groups.forEach((markers) => {
+      if (!markers.length) return;
+      if (markers.length > 1) layoutUnitGrid(markers, 0, 0);
+      else {
+        markers[0].x = 0;
+        markers[0].y = 0;
+      }
+      let bounds = markerCollectionBounds(markers);
+      const width = bounds.maxX - bounds.minX;
+      const height = bounds.maxY - bounds.minY;
+      if (cursorY > top && cursorY + height > bottom) {
+        columnOffset += columnWidth + groupGap;
+        columnWidth = 0;
+        cursorY = top;
+      }
+      const targetRight = state.current.fit.x - groupGap - columnOffset;
+      const dx = targetRight - bounds.maxX;
+      const dy = cursorY - bounds.minY;
+      markers.forEach((marker) => {
+        marker.x += dx;
+        marker.y += dy;
+        if (marker.id === activeLosId) state.current.light = { x: marker.x, y: marker.y };
+      });
+      bounds = markerCollectionBounds(markers);
+      cursorY = bounds.maxY + groupGap;
+      columnWidth = Math.max(columnWidth, width);
+    });
   }
 
   function addLosMarker() {
@@ -2685,6 +2766,88 @@ export default function InteractiveLOSTool() {
       .filter(Boolean);
   }
 
+  function parseWarhammerArmyEntries(text) {
+    const entries = [];
+    let section = "";
+    let attachedSlot = null;
+    let currentEntry = null;
+    const isBullet = (line) => /^\s*[\u2022\u25e6\-*]/.test(line);
+
+    String(text || "").split(/\r?\n/).forEach((rawLine) => {
+      const trimmed = rawLine.trim();
+      if (!trimmed) return;
+
+      const attachedMatch = trimmed.match(/^Attached\s+unit\s+(\d+)\s*$/i);
+      if (attachedMatch) {
+        section = "ATTACHED UNITS";
+        attachedSlot = Math.max(1, Math.min(20, Number(attachedMatch[1]) || 1));
+        currentEntry = null;
+        return;
+      }
+
+      const heading = trimmed.toUpperCase();
+      if (/^[A-Z][A-Z\s/&-]+$/.test(trimmed) && !/\bPOINTS?\b/i.test(trimmed)) {
+        section = heading;
+        if (heading !== "ATTACHED UNITS") attachedSlot = null;
+        currentEntry = null;
+        return;
+      }
+
+      const datasheetMatch = trimmed.match(/^(.+?)\s*\(([\d,]+)\s*Points?\)\s*$/i);
+      if (datasheetMatch && section) {
+        currentEntry = {
+          name: datasheetMatch[1].trim(),
+          original: trimmed,
+          section,
+          attachedSlot,
+          bullets: [],
+        };
+        entries.push(currentEntry);
+        return;
+      }
+
+      if (!currentEntry || !isBullet(rawLine)) return;
+      const prefix = rawLine.match(/^(\s*)[\u2022\u25e6\-*]\s*/);
+      const indent = (prefix?.[1] || "").replace(/\t/g, "    ").length;
+      const content = rawLine.replace(/^\s*[\u2022\u25e6\-*]\s*/, "").trim();
+      currentEntry.bullets.push({ indent, content });
+    });
+
+    const usedSlots = new Set(entries.map((entry) => entry.attachedSlot).filter(Boolean));
+    let nextUnitSlot = 1;
+    const allocateUnitSlot = () => {
+      while (usedSlots.has(nextUnitSlot) && nextUnitSlot <= 20) nextUnitSlot += 1;
+      const slot = Math.min(20, nextUnitSlot);
+      usedSlots.add(slot);
+      nextUnitSlot += 1;
+      return slot;
+    };
+
+    return entries.map((entry) => {
+      const roleLine = entry.bullets.find((bullet) => /^Attached\s+as:/i.test(bullet.content));
+      const attachmentRole = /\bLeader\b/i.test(roleLine?.content || "")
+        ? "leader"
+        : /\bBodyguard\b/i.test(roleLine?.content || "") ? "bodyguard" : null;
+      const bulletIndents = entry.bullets.map((bullet) => bullet.indent);
+      const topIndent = bulletIndents.length ? Math.min(...bulletIndents) : 0;
+      const hasNestedBullets = bulletIndents.some((indent) => indent > topIndent);
+      const topLevelCounts = entry.bullets
+        .filter((bullet) => bullet.indent === topIndent)
+        .map((bullet) => bullet.content.match(/^(\d+)\s*x\s+(.+)$/i))
+        .filter(Boolean)
+        .map((match) => Number(match[1]) || 0);
+      const countedModels = Math.min(100, topLevelCounts.reduce((sum, count) => sum + count, 0));
+      const isCharacter = entry.section === "CHARACTERS" || attachmentRole === "leader";
+      const modelCount = isCharacter
+        ? 1
+        : attachmentRole === "bodyguard"
+          ? Math.max(1, countedModels)
+          : hasNestedBullets && countedModels > 0 ? countedModels : 1;
+      const unitSlot = entry.attachedSlot || (modelCount > 1 ? allocateUnitSlot() : null);
+      return { ...entry, attachmentRole, modelCount, unitSlot };
+    });
+  }
+
   function normaliseName(value) {
     return String(value || "")
       .toLowerCase()
@@ -2795,62 +2958,100 @@ export default function InteractiveLOSTool() {
     return true;
   }
 
-  function createLosMarkerForArmyResult(result, index = 0) {
-    if (!result?.accepted) return null;
-    if (result.markerId && state.current.losMarkers.some((marker) => marker.id === result.markerId)) return result.markerId;
-    const id = `army-los-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
-    const spawn = nextLosMarkerStagingPoint(state.current.losMarkers.length + index);
-    const marker = {
-      ...createLosMarker(id, result.unit || result.original || `Unit ${index + 1}`, spawn.x, spawn.y),
-      baseShape: result.baseShape || "circle",
-      baseLengthMm: Number(result.baseLengthMm) || 40,
-      baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
-      visible: false,
-      armyResultId: result.id,
-      unitTypeId: id,
-    };
-    state.current.losMarkers.push(marker);
-    return id;
+  function armyResultMarkerIds(result) {
+    return [...new Set([...(result?.markerIds || []), result?.markerId].filter(Boolean))];
+  }
+
+  function removeArmyGeneratedMarkersForResult(result) {
+    return armyResultMarkerIds(result).reduce((removed, markerId) => removeArmyGeneratedMarker(markerId) || removed, false);
+  }
+
+  function createLosMarkersForArmyResult(result, index = 0) {
+    if (!result?.accepted) return [];
+    const existingIds = armyResultMarkerIds(result).filter((markerId) => state.current.losMarkers.some((marker) => marker.id === markerId));
+    if (existingIds.length) return existingIds;
+
+    const count = Math.max(1, Math.min(100, Number(result.modelCount) || 1));
+    const markerIds = [];
+    for (let modelIndex = 0; modelIndex < count; modelIndex += 1) {
+      const id = `army-los-${Date.now()}-${index}-${modelIndex}-${Math.random().toString(36).slice(2, 7)}`;
+      const spawn = nextLosMarkerStagingPoint(state.current.losMarkers.length + modelIndex);
+      const marker = {
+        ...createLosMarker(id, result.unit || result.original || `Unit ${index + 1}`, spawn.x, spawn.y),
+        baseShape: result.baseShape || "circle",
+        baseLengthMm: Number(result.baseLengthMm) || 40,
+        baseWidthMm: result.baseShape === "circle" ? Number(result.baseLengthMm) || 40 : Number(result.baseWidthMm) || Number(result.baseLengthMm) || 40,
+        visible: false,
+        armyResultId: result.id,
+        groupingMode: result.unitSlot ? "unit" : "model",
+        unitSlot: result.unitSlot || null,
+        unitTypeId: `army-type-${result.id}`,
+      };
+      state.current.losMarkers.push(marker);
+      markerIds.push(id);
+    }
+
+    if (result.unitSlot) {
+      const members = getUnitMembers(result.unitSlot);
+      const anchor = members[0];
+      if (anchor) layoutUnitGrid(members, anchor.x, anchor.y);
+    }
+    return markerIds;
   }
 
   function parseArmyList() {
-    const seen = new Set();
-
-    const warhammerAppUnits = extractWarhammerAppUnits(armyListText);
-    const lines = (warhammerAppUnits.length ? warhammerAppUnits : armyListText.split(/\n|\r|;/))
+    state.current.losMarkers = state.current.losMarkers.filter((marker) => !String(marker.id || "").startsWith("army-los-"));
+    const retainedMarkerIds = new Set(state.current.losMarkers.map((marker) => marker.id));
+    state.current.stickyRulers = state.current.stickyRulers.filter((ruler) => (
+      (ruler.from.type !== "los" || retainedMarkerIds.has(ruler.from.id))
+      && (ruler.to.type !== "los" || retainedMarkerIds.has(ruler.to.id))
+    ));
+    const structuredEntries = parseWarhammerArmyEntries(armyListText);
+    const fallbackLines = armyListText.split(/\n|\r|;/)
       .map(cleanArmyLine)
       .filter((line) => line.length >= 3)
       .filter((line) => !/^\d+$/.test(line));
+    const sourceEntries = structuredEntries.length
+      ? structuredEntries
+      : [...new Set(fallbackLines.map((line) => normaliseName(line)))].map((normalized) => ({
+        name: fallbackLines.find((line) => normaliseName(line) === normalized),
+        original: fallbackLines.find((line) => normaliseName(line) === normalized),
+        modelCount: 1,
+        unitSlot: null,
+      }));
 
-    const results = [];
-    lines.forEach((line, index) => {
-      const match = findBestBaseMatch(line);
-      const key = normaliseName(match?.name || line);
-      if (seen.has(key)) return;
-      seen.add(key);
-
-      const baseResult = resultBaseFromMatch(match, line);
-      results.push({
+    const results = sourceEntries.map((entry, index) => {
+      const match = findBestBaseMatch(entry.name);
+      return {
         id: `army-result-${Date.now()}-${index}`,
-        original: line,
-        ...baseResult,
-      });
+        original: entry.original || entry.name,
+        modelCount: entry.modelCount || 1,
+        unitSlot: entry.unitSlot || null,
+        attachmentRole: entry.attachmentRole || null,
+        section: entry.section || "",
+        ...resultBaseFromMatch(match, entry.name),
+      };
     });
 
-    const hydratedResults = results.map((result, index) => ({
-      ...result,
-      markerId: result.accepted ? createLosMarkerForArmyResult(result, index) : null,
-    }));
+    const hydratedResults = results.map((result, index) => {
+      const markerIds = result.accepted ? createLosMarkersForArmyResult(result, index) : [];
+      return { ...result, markerIds, markerId: markerIds[0] || null };
+    });
+    layoutArmyGeneratedStaging();
     if (hydratedResults.some((result) => result.markerId)) {
       const first = state.current.losMarkers.find((marker) => marker.id === hydratedResults.find((result) => result.markerId)?.markerId);
       if (first) {
         setActiveLosId(first.id);
+        setActiveUnitSlot(first.groupingMode === "unit" ? first.unitSlot : null);
         setLosName(first.name);
         setBaseShape(first.baseShape);
         setBaseLengthMm(first.baseLengthMm);
         setBaseWidthMm(first.baseWidthMm);
         setBaseRotation(first.baseRotation || 0);
         setRangeInches(first.rangeInches ?? "unlimited");
+        setMarkerGroupingMode(first.groupingMode || "model");
+        setUnitModelCount(getMarkerTypeMembers(first).length || 1);
+        setSelectedUnitSlot(first.unitSlot || 1);
         state.current.light = { x: first.x, y: first.y };
       }
       setLosVersion((v) => v + 1);
@@ -2860,8 +3061,8 @@ export default function InteractiveLOSTool() {
     }
     setArmyResults(hydratedResults);
     setStatus(
-      warhammerAppUnits.length
-        ? `Warhammer app format detected. Matched ${hydratedResults.filter((r) => r.matched).length} of ${hydratedResults.length} unit entries and created LOS markers for them.`
+      structuredEntries.length
+        ? `Warhammer app format detected. Matched ${hydratedResults.filter((r) => r.matched).length} of ${hydratedResults.length} unit entries and created ${hydratedResults.reduce((sum, result) => sum + (result.markerIds?.length || 0), 0)} LOS markers in their declared units.`
         : `Matched ${hydratedResults.filter((r) => r.matched).length} of ${hydratedResults.length} army-list entries and created LOS markers for them.`
     );
   }
@@ -2873,14 +3074,16 @@ export default function InteractiveLOSTool() {
   function rematchArmyResult(id) {
     setArmyResults((current) => current.map((result, index) => {
       if (result.id !== id) return result;
-      removeArmyGeneratedMarker(result.markerId);
+      removeArmyGeneratedMarkersForResult(result);
       const match = findBestBaseMatch(result.unit || result.original || "");
       const updated = {
         ...result,
         ...resultBaseFromMatch(match, result.unit || result.original || ""),
       };
-      updated.markerId = updated.accepted ? createLosMarkerForArmyResult(updated, index) : null;
-      setStatus(updated.matched ? `${updated.unit} rematched and added as an LOS marker.` : `${result.unit || result.original} still needs manual base details.`);
+      updated.markerIds = updated.accepted ? createLosMarkersForArmyResult(updated, index) : [];
+      updated.markerId = updated.markerIds[0] || null;
+      layoutArmyGeneratedStaging();
+      setStatus(updated.matched ? `${updated.unit} rematched and added with ${updated.markerIds.length} LOS marker${updated.markerIds.length === 1 ? "" : "s"}.` : `${result.unit || result.original} still needs manual base details.`);
       return updated;
     }));
     setLosVersion((v) => v + 1);
@@ -2898,9 +3101,10 @@ export default function InteractiveLOSTool() {
         editing: false,
         matched: result.matched || false,
       };
-      const markerId = createLosMarkerForArmyResult(accepted, index);
-      setStatus(`${accepted.unit || accepted.original} added as an LOS marker.`);
-      return { ...accepted, markerId };
+      const markerIds = createLosMarkersForArmyResult(accepted, index);
+      layoutArmyGeneratedStaging();
+      setStatus(`${accepted.unit || accepted.original} added with ${markerIds.length} LOS marker${markerIds.length === 1 ? "" : "s"}.`);
+      return { ...accepted, markerIds, markerId: markerIds[0] || null };
     }));
     setLosVersion((v) => v + 1);
     updateVisibility();
@@ -2911,7 +3115,7 @@ export default function InteractiveLOSTool() {
   function deleteArmyResult(id) {
     setArmyResults((current) => {
       const result = current.find((item) => item.id === id);
-      if (result?.markerId) removeArmyGeneratedMarker(result.markerId);
+      if (result?.markerId) removeArmyGeneratedMarkersForResult(result);
       return current.filter((item) => item.id !== id);
     });
     setLosVersion((v) => v + 1);
@@ -2931,10 +3135,11 @@ export default function InteractiveLOSTool() {
     let createdCount = 0;
     setArmyResults((current) => current.map((result, index) => {
       if (!result.accepted || result.markerId) return result;
-      const markerId = createLosMarkerForArmyResult(result, index);
-      if (!first) first = state.current.losMarkers.find((marker) => marker.id === markerId);
-      createdCount += 1;
-      return { ...result, markerId };
+      const markerIds = createLosMarkersForArmyResult(result, index);
+      layoutArmyGeneratedStaging();
+      if (!first) first = state.current.losMarkers.find((marker) => marker.id === markerIds[0]);
+      createdCount += markerIds.length;
+      return { ...result, markerIds, markerId: markerIds[0] || null };
     }));
     if (!first) return;
     setActiveLosId(first.id);
@@ -3013,6 +3218,70 @@ export default function InteractiveLOSTool() {
     return { x: (p.x - cam.x) / cam.scale, y: (p.y - cam.y) / cam.scale };
   }
 
+  function normalizedSelectionRect(start, current) {
+    return {
+      left: Math.min(start.x, current.x),
+      right: Math.max(start.x, current.x),
+      top: Math.min(start.y, current.y),
+      bottom: Math.max(start.y, current.y),
+    };
+  }
+
+  function markerIntersectsSelection(marker, rect) {
+    const base = getBaseRadii(state.current.camera.scale, marker);
+    const rotation = marker.baseRotation || 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const halfWidth = Math.abs(base.rx * cos) + Math.abs(base.ry * sin);
+    const halfHeight = Math.abs(base.rx * sin) + Math.abs(base.ry * cos);
+    return marker.x + halfWidth >= rect.left
+      && marker.x - halfWidth <= rect.right
+      && marker.y + halfHeight >= rect.top
+      && marker.y - halfHeight <= rect.bottom;
+  }
+
+  function selectedMarkers() {
+    const selectedIds = multiSelectedMarkerIdsRef.current;
+    return state.current.losMarkers.filter((marker) => selectedIds.has(marker.id));
+  }
+
+  function selectedMovementMeasureGroups() {
+    const groups = [];
+    const unitSlots = new Set();
+    selectedMarkers().forEach((marker) => {
+      if (marker.groupingMode === "unit") {
+        if (unitSlots.has(marker.unitSlot)) return;
+        unitSlots.add(marker.unitSlot);
+        groups.push({ kind: "unit", slot: marker.unitSlot, start: unitCoherencyCircleCenter(getUnitMembers(marker.unitSlot)) });
+      } else {
+        groups.push({ kind: "model", id: marker.id, start: { x: marker.x, y: marker.y } });
+      }
+    });
+    return groups;
+  }
+
+  function completeMarqueeSelection() {
+    const marquee = marqueeSelectionRef.current;
+    marqueeSelectionRef.current = null;
+    if (!marquee) return;
+    const rect = normalizedSelectionRect(marquee.start, marquee.current);
+    const selectedIds = new Set();
+    state.current.losMarkers.forEach((marker) => {
+      if (!markerIntersectsSelection(marker, rect)) return;
+      if (marker.groupingMode === "unit") {
+        getUnitMembers(marker.unitSlot).forEach((member) => selectedIds.add(member.id));
+      } else {
+        selectedIds.add(marker.id);
+      }
+    });
+    multiSelectedMarkerIdsRef.current = selectedIds;
+    const groupCount = selectedMovementMeasureGroups().length;
+    setStatus(groupCount
+      ? `${groupCount} model${groupCount === 1 ? "/unit selected" : "s/units selected"}. Drag any selected model to move them together.`
+      : "No models or units selected.");
+    draw();
+  }
+
   function isDeploymentMode() {
     return mode === "deployHome" || mode === "deployEnemy";
   }
@@ -3028,6 +3297,15 @@ export default function InteractiveLOSTool() {
 
   function pointerDown(e) {
     const p = screenToWorld(e);
+
+    if (e.button === 2) {
+      e.preventDefault();
+      marqueeSelectionRef.current = { start: p, current: p };
+      canvasRef.current?.setPointerCapture?.(e.pointerId);
+      setStatus("Drag the selection box over models or units, then release.");
+      draw();
+      return;
+    }
 
     const wallFloorChoice = selectedLayoutWallId ? findLayoutWallFloorButton(p) : null;
     if (wallFloorChoice) {
@@ -3196,14 +3474,30 @@ export default function InteractiveLOSTool() {
     const draggable = findDraggableObject(p);
     if (draggable && mode !== "erase" && mode !== "block" && mode !== "wall" && mode !== "denseTF" && mode !== "lightTF" && mode !== "scale" && mode !== "ruler" && mode !== "stickyRuler") {
       const draggedMarker = draggable.type === "light" ? state.current.losMarkers.find((marker) => marker.id === draggable.id) : null;
+      const moveMultiSelection = draggable.type === "light"
+        && multiSelectedMarkerIdsRef.current.has(draggable.id)
+        && multiSelectedMarkerIdsRef.current.size > 1;
       if (draggable.type === "light") {
         losWorkerRef.current?.postMessage({ type: "cancelVisibility" });
         losPreviewWorkerRef.current?.postMessage({ type: "cancelVisibility" });
         enemyLosWorkerRef.current?.postMessage({ type: "cancelEnemyLos" });
       }
       const moveSelectedUnit = draggedMarker?.groupingMode === "unit" && draggedMarker.unitSlot === activeUnitSlot;
-      if (draggable.type === "light" && !moveSelectedUnit) selectLosMarker(draggable.id);
-      objectDragRef.current = moveSelectedUnit
+      if (draggable.type === "light" && !moveSelectedUnit && !moveMultiSelection) {
+        multiSelectedMarkerIdsRef.current.clear();
+        selectLosMarker(draggable.id);
+      }
+      objectDragRef.current = moveMultiSelection
+        ? {
+          ...draggable,
+          multiSelection: true,
+          startPoint: p,
+          memberStarts: selectedMarkers().map((member) => ({ id: member.id, x: member.x, y: member.y })),
+          movementMeasureGroups: selectedMovementMeasureGroups(),
+          lastLosUpdate: 0,
+          previewMemberIndex: 0,
+        }
+        : moveSelectedUnit
         ? {
           ...draggable,
           unitSlot: activeUnitSlot,
@@ -3221,7 +3515,9 @@ export default function InteractiveLOSTool() {
             : null,
         };
       if (draggable.type === "light") {
-        const activeMarkerIds = moveSelectedUnit
+        const activeMarkerIds = moveMultiSelection
+          ? selectedMarkers().filter((marker) => marker.visible !== false).map((marker) => marker.id)
+          : moveSelectedUnit
           ? getUnitMembers(activeUnitSlot).filter((marker) => marker.visible !== false).map((marker) => marker.id)
           : [draggable.id];
         rebuildCombinedVisibility(true, activeMarkerIds);
@@ -3229,7 +3525,9 @@ export default function InteractiveLOSTool() {
       }
       if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
       const active = draggable.type === "light" ? state.current.losMarkers.find((m) => m.id === draggable.id) : null;
-      setStatus(moveSelectedUnit
+      setStatus(moveMultiSelection
+        ? `Moving ${selectedMovementMeasureGroups().length} selected models/units. Release to drop.`
+        : moveSelectedUnit
         ? `Moving ${getUnitDisplayName(activeUnitSlot)}. Release to drop.`
         : draggable.type === "light" ? `Moving ${active?.name || "LOS marker"}. Release to drop.` : "Moving enemy. Release to drop.");
       return;
@@ -3489,6 +3787,12 @@ export default function InteractiveLOSTool() {
   function pointerMove(e) {
     const p = screenToWorld(e);
 
+    if (marqueeSelectionRef.current) {
+      marqueeSelectionRef.current.current = p;
+      draw();
+      return;
+    }
+
     if (objectDragRef.current) {
       pendingDragPointRef.current = p;
       if (!dragFrameRef.current) {
@@ -3658,7 +3962,24 @@ export default function InteractiveLOSTool() {
         window.clearTimeout(pendingEnemyLosTimerRef.current);
         pendingEnemyLosTimerRef.current = null;
       }
-      if (dragged.unitSlot && dragged.startPoint && dragged.memberStarts) {
+      if (dragged.multiSelection && dragged.startPoint && dragged.memberStarts) {
+        const dx = p.x - dragged.startPoint.x;
+        const dy = p.y - dragged.startPoint.y;
+        dragged.memberStarts.forEach((start) => {
+          const marker = state.current.losMarkers.find((item) => item.id === start.id);
+          if (!marker) return;
+          marker.x = start.x + dx;
+          marker.y = start.y + dy;
+          if (marker.visible === false) state.current.losVisibilityCache.delete(marker.id);
+          if (marker.id === activeLosId) state.current.light = { x: marker.x, y: marker.y };
+        });
+        if (shouldRunInteractiveLos(dragged, p)) {
+          const visibleMembers = selectedMarkers().filter((marker) => marker.visible !== false);
+          const activeMarkerIds = visibleMembers.map((marker) => marker.id);
+          const previewMarker = interactiveUnitPreviewMarker(visibleMembers, dragged.id);
+          queueInteractivePreview(previewMarker, activeMarkerIds, dragRevision);
+        }
+      } else if (dragged.unitSlot && dragged.startPoint && dragged.memberStarts) {
         const dx = p.x - dragged.startPoint.x;
         const dy = p.y - dragged.startPoint.y;
         dragged.memberStarts.forEach((start) => {
@@ -3740,7 +4061,13 @@ export default function InteractiveLOSTool() {
     draw();
   }
 
-  function pointerUp() {
+  function pointerUp(e) {
+    if (marqueeSelectionRef.current) {
+      completeMarqueeSelection();
+      if (e?.pointerId !== undefined) canvasRef.current?.releasePointerCapture?.(e.pointerId);
+      return;
+    }
+
     if (objectDragRef.current) {
       if (dragFrameRef.current) {
         cancelAnimationFrame(dragFrameRef.current);
@@ -3757,7 +4084,16 @@ export default function InteractiveLOSTool() {
       panLastRef.current = null;
       if (canvasRef.current) canvasRef.current.style.cursor = "grab";
       if (dragged.type === "light") {
-        if (dragged.unitSlot) {
+        if (dragged.multiSelection) {
+          const visibleMembers = selectedMarkers().filter((marker) => marker.visible !== false);
+          if (!requestDetailedMarkerVisibilityBatch(visibleMembers)) {
+            const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
+            visibleMembers.forEach((marker) => cacheMarkerVisibility(marker.id, calculateMarkerVisibility(marker, false, preparedGeometry)));
+            rebuildCombinedVisibility();
+          }
+          updateEnemyLosStates(false, { forceImmediate: true });
+        }
+        else if (dragged.unitSlot) {
           const visibleMembers = getUnitMembers(dragged.unitSlot).filter((marker) => marker.visible !== false);
           if (!requestDetailedMarkerVisibilityBatch(visibleMembers)) {
             const preparedGeometry = getPreparedVisibilityGeometry(state.current.blockers, state.current.walls, state.current.W, state.current.H);
@@ -3825,6 +4161,7 @@ export default function InteractiveLOSTool() {
       dragFrameRef.current = null;
     }
     objectDragRef.current = null;
+    marqueeSelectionRef.current = null;
     pendingDragPointRef.current = null;
     draggingRef.current = false;
     panningRef.current = false;
@@ -4473,19 +4810,74 @@ export default function InteractiveLOSTool() {
     if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
 
     const key = e.key.toLowerCase();
-    if (["l", "p", "f", "w", "e", "x", "z", "d", "q", "+", "=", "-"].includes(key)) e.preventDefault();
+    if (["l", "p", "f", "r", "e", "x", "z", "q", "w", "a", "s", "d", "+", "=", "-"].includes(key) || /^[0-9]$/.test(key)) e.preventDefault();
+
+    if (/^[0-9]$/.test(key)) {
+      if (!e.repeat) selectUnit(key === "0" ? 10 : Number(key));
+      return;
+    }
+
+    if (["w", "a", "s", "d"].includes(key)) {
+      panKeysRef.current.add(key);
+      startKeyboardPan();
+      return;
+    }
 
     if (key === "p") setMode("pan");
     else if (key === "f") setMode("block");
-    else if (key === "w") setMode("wall");
+    else if (key === "r") setMode("wall");
     else if (key === "e") setMode("enemy");
-    else if (key === "d") setMode("deployHome");
     else if (key === "q") setMode("deployEnemy");
     else if (key === "x") setMode("erase");
     else if (key === "z") undo();
     else if (key === "+" || key === "=") zoomBy(1.25);
     else if (key === "-") zoomBy(0.8);
     
+  }
+
+  function handleKeyUp(e) {
+    const key = e.key.toLowerCase();
+    if (!["w", "a", "s", "d"].includes(key)) return;
+    panKeysRef.current.delete(key);
+    if (!panKeysRef.current.size) stopKeyboardPan();
+  }
+
+  function startKeyboardPan() {
+    if (keyboardPanFrameRef.current) return;
+    keyboardPanLastTimeRef.current = performance.now();
+
+    const step = (now) => {
+      const keys = panKeysRef.current;
+      if (!keys.size) {
+        stopKeyboardPan();
+        return;
+      }
+
+      let x = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0);
+      let y = (keys.has("s") ? 1 : 0) - (keys.has("w") ? 1 : 0);
+      const magnitude = Math.hypot(x, y);
+      if (magnitude) {
+        x /= magnitude;
+        y /= magnitude;
+        const elapsed = Math.min(32, now - (keyboardPanLastTimeRef.current ?? now));
+        const pixelsPerSecond = 1040;
+        state.current.camera.x -= x * pixelsPerSecond * elapsed / 1000;
+        state.current.camera.y -= y * pixelsPerSecond * elapsed / 1000;
+        draw();
+      }
+
+      keyboardPanLastTimeRef.current = now;
+      keyboardPanFrameRef.current = requestAnimationFrame(step);
+    };
+
+    keyboardPanFrameRef.current = requestAnimationFrame(step);
+  }
+
+  function stopKeyboardPan() {
+    panKeysRef.current.clear();
+    keyboardPanLastTimeRef.current = null;
+    if (keyboardPanFrameRef.current) cancelAnimationFrame(keyboardPanFrameRef.current);
+    keyboardPanFrameRef.current = null;
   }
 
   function resetZoom() {
@@ -5531,7 +5923,17 @@ export default function InteractiveLOSTool() {
       if (geometry) drawStickyRulerLine(ctx, geometry.a, geometry.b, pixelsPerInch, camera.scale);
     });
     const movementDrag = objectDragRef.current;
-    if (movementDrag?.type === "light" && movementDrag.movementMeasureStart) {
+    if (movementDrag?.type === "light" && movementDrag.multiSelection) {
+      movementDrag.movementMeasureGroups?.forEach((group) => {
+        const currentPoint = group.kind === "unit"
+          ? unitCoherencyCircleCenter(getUnitMembers(group.slot))
+          : (() => {
+            const marker = state.current.losMarkers.find((item) => item.id === group.id);
+            return marker ? { x: marker.x, y: marker.y } : null;
+          })();
+        if (currentPoint) drawRulerLine(ctx, group.start, currentPoint, pixelsPerInch, camera.scale, true);
+      });
+    } else if (movementDrag?.type === "light" && movementDrag.movementMeasureStart) {
       const currentPoint = movementDrag.unitSlot
         ? unitCoherencyCircleCenter(getUnitMembers(movementDrag.unitSlot))
         : (() => {
@@ -5577,7 +5979,8 @@ export default function InteractiveLOSTool() {
       const base = getBaseRadii(camera.scale, marker);
       const isPrimaryActive = marker.id === activeLosId;
       const isActiveUnitMember = activeUnitSlot && marker.groupingMode === "unit" && marker.unitSlot === activeUnitSlot;
-      const isActive = isPrimaryActive || isActiveUnitMember;
+      const isMultiSelected = multiSelectedMarkerIdsRef.current.has(marker.id);
+      const isActive = isPrimaryActive || isActiveUnitMember || isMultiSelected;
       const isStickyStart = sameStickyTarget(state.current.stickyRulerStart, { type: "los", id: marker.id });
       const isUnitStickyStart = marker.groupingMode === "unit" && sameStickyTarget(state.current.stickyRulerStart, { type: "unit", id: String(marker.unitSlot) });
       const coherency = marker.groupingMode === "unit" ? unitCoherency.get(marker.unitSlot) : null;
@@ -5604,7 +6007,7 @@ export default function InteractiveLOSTool() {
       if (markerIdsInRange.has(marker.id)) drawMarkerRangeTick(ctx, marker, base, camera.scale);
 
       const unitMembers = marker.groupingMode === "unit" ? getUnitMembers(marker.unitSlot) : [];
-      if (unitMembers.length <= 2) drawLosMarkerLabel(ctx, marker, base, camera.scale);
+      drawLosMarkerLabel(ctx, marker, base, camera.scale, unitMembers.length > 2);
 
       if (isPrimaryActive && !activeUnitSlot) {
         ctx.setLineDash([]);
@@ -5639,17 +6042,16 @@ export default function InteractiveLOSTool() {
       ctx.restore();
     });
 
-    for (let slot = 1; slot <= 20; slot++) {
-      const members = getUnitMembers(slot);
-      if (members.length <= 2) continue;
-      const lowest = members.reduce((best, marker) => {
-        const bottom = marker.y + getBaseRadii(1, marker).ry;
-        const bestBottom = best.y + getBaseRadii(1, best).ry;
-        return bottom > bestBottom ? marker : best;
-      });
-      const label = getUnitDisplayName(slot, members);
-      const labelY = lowest.y + getBaseRadii(1, lowest).ry + 12 / camera.scale;
-      drawMapCaption(ctx, label, lowest.x, labelY, camera.scale);
+    if (marqueeSelectionRef.current) {
+      const rect = normalizedSelectionRect(marqueeSelectionRef.current.start, marqueeSelectionRef.current.current);
+      ctx.save();
+      ctx.fillStyle = "rgba(59,130,246,.16)";
+      ctx.strokeStyle = "rgba(96,165,250,.95)";
+      ctx.lineWidth = 1.5 / camera.scale;
+      ctx.setLineDash([6 / camera.scale, 4 / camera.scale]);
+      ctx.fillRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+      ctx.strokeRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+      ctx.restore();
     }
 
     if (activeUnitSlot && pixelsPerInch) {
@@ -7473,7 +7875,7 @@ export default function InteractiveLOSTool() {
                   </EditControlSection>
                   <EditControlSection title="Free draw" open={editSubsectionOpen.freeDraw} onToggle={() => toggleEditSubsection("freeDraw")}>
                     <div style={styles.layoutEditorControls}>
-                      <ToolButton active={mode === "wall"} onClick={() => { setLayoutEditMode(true); setMode("wall"); }}>Draw Wall (W)</ToolButton>
+                      <ToolButton active={mode === "wall"} onClick={() => { setLayoutEditMode(true); setMode("wall"); }}>Draw Wall (R)</ToolButton>
                       <ToolButton active={mode === "block"} onClick={() => { setLayoutEditMode(true); setMode("block"); }}>Draw Footprint (F)</ToolButton>
                       <ToolButton onClick={clearBlockers}>Clear footprints</ToolButton>
                       <ToolButton onClick={clearWalls}>Clear walls</ToolButton>
@@ -7660,8 +8062,8 @@ export default function InteractiveLOSTool() {
                           <button
                             type="button"
                             onClick={() => {
-                              removeArmyGeneratedMarker(result.markerId);
-                              updateArmyResult(result.id, { accepted: false, editing: true, markerId: null });
+                              removeArmyGeneratedMarkersForResult(result);
+                              updateArmyResult(result.id, { accepted: false, editing: true, markerId: null, markerIds: [] });
                               setLosVersion((v) => v + 1);
                               updateVisibility();
                               draw();
@@ -7914,21 +8316,17 @@ export default function InteractiveLOSTool() {
                   <ToolButton onClick={clearEnemies}>Clear enemies</ToolButton>
                 </div>
                 <DeploymentControlRow
-                  label="Draw Home Deploy LOS (D)"
-                  active={mode === "deployHome"}
+                  label="Home deployment line"
                   visible={state.current.deploymentVisible}
                   hasLine={Boolean(state.current.deploymentLine)}
-                  onDraw={() => setMode("deployHome")}
                   onVisibility={(visible) => setDeploymentVisibility("home", visible)}
                   rangeInches={homeDeploymentRangeInches}
                   onRangeChange={(value) => setHomeDeploymentRangeInches(value || "unlimited")}
                 />
                 <DeploymentControlRow
-                  label="Draw Enemy Deploy LOS (Q)"
-                  active={mode === "deployEnemy"}
+                  label="Enemy deployment line"
                   visible={state.current.enemyDeploymentVisible}
                   hasLine={Boolean(state.current.enemyDeploymentLine)}
-                  onDraw={() => setMode("deployEnemy")}
                   onVisibility={(visible) => setDeploymentVisibility("enemy", visible)}
                   rangeInches={enemyDeploymentRangeInches}
                   onRangeChange={(value) => setEnemyDeploymentRangeInches(value || "unlimited")}
@@ -8095,7 +8493,7 @@ export default function InteractiveLOSTool() {
                 </div>
               </div>
             </div>
-            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} />
+            <canvas ref={canvasRef} style={styles.canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onDoubleClick={handleCanvasDoubleClick} onWheel={handleWheel} onContextMenu={(event) => event.preventDefault()} />
           </div>
         </main>
       </div>
@@ -8791,6 +9189,17 @@ const styles = {
     lineHeight: 1.15,
     cursor: "pointer",
   },
+  deploymentLineLabel: {
+    minHeight: 34,
+    display: "flex",
+    alignItems: "center",
+    padding: "5px 6px",
+    boxSizing: "border-box",
+    color: "#e5e7eb",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.15,
+  },
   sidebarHeaderRow: {
     display: "flex",
     alignItems: "center",
@@ -9430,29 +9839,21 @@ function SidebarSectionHeader({ title, open, onToggle, onHelp, helpOpen }) {
   );
 }
 
-function DeploymentControlRow({ label, active, visible, hasLine, onDraw, onVisibility, rangeInches, onRangeChange }) {
+function DeploymentControlRow({ label, visible, hasLine, onVisibility, rangeInches, onRangeChange }) {
   return (
     <div style={styles.deploymentControlGroup}>
       <div style={styles.deploymentRow}>
-        <button
-          type="button"
-          onClick={onDraw}
-          style={{
-            ...styles.deploymentDrawButton,
-            border: active ? "1px solid #60a5fa" : "1px solid rgba(255,255,255,.18)",
-            background: active ? "rgba(37,99,235,.35)" : "rgba(255,255,255,.08)",
-          }}
-        >{label}</button>
+        <div style={styles.deploymentLineLabel}>{label}</div>
         <MarkerVisibilityButton
           active={hasLine && visible}
           kind="show"
-          label={`Enable ${label.replace("Draw ", "")}`}
+          label={`Enable ${label}`}
           onClick={() => onVisibility(true)}
         />
         <MarkerVisibilityButton
           active={hasLine && !visible}
           kind="hide"
-          label={`Disable ${label.replace("Draw ", "")}`}
+          label={`Disable ${label}`}
           onClick={() => onVisibility(false)}
         />
       </div>
@@ -11636,7 +12037,7 @@ function drawMapCaption(ctx, label, x, y, scale = 1) {
   ctx.fillText(label, x, y);
 }
 
-function drawLosMarkerLabel(ctx, marker, base, scale = 1) {
+function drawLosMarkerLabel(ctx, marker, base, scale = 1, forceCaptionBelow = false) {
   const label = String(marker.name || "LOS").trim() || "LOS";
   const maxFontSize = 11;
   const minimumReadableFontSize = 10 / scale;
@@ -11652,7 +12053,7 @@ function drawLosMarkerLabel(ctx, marker, base, scale = 1) {
   const measuredWidth = Math.max(1, ctx.measureText(label).width);
   const fittedFontSize = Math.min(maxFontSize, maxFontSize * availableWidth / measuredWidth, availableHeight);
 
-  if (fittedFontSize >= minimumReadableFontSize) {
+  if (!forceCaptionBelow && fittedFontSize >= minimumReadableFontSize) {
     ctx.fillStyle = "#111";
     ctx.font = `bold ${fittedFontSize}px system-ui`;
     ctx.fillText(label, marker.x, marker.y);
