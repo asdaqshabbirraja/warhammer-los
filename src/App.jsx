@@ -38,7 +38,7 @@ const SIDEBAR_HELP = {
     items: [
       "Select New army to create a new army-list slot.",
       "Edit the army name by double-clicking it or clicking Edit name.",
-      "Paste an army exported from the Warhammer 40,000 app into the large box, then click Match models. Matching entries automatically create models with the correct names, base shapes, and sizes.",
+      "Paste an army exported from the Warhammer 40,000 app into the large box. Then click Match models. Matching entries automatically create models with the correct names, base shapes, and sizes with the correct attached units.",
       "Unmatched entries appear below Remove generated LOS marker(s). You can correct their names, rematch them, or choose a base shape and size before adding them.",
     ],
   },
@@ -2828,14 +2828,14 @@ export default function InteractiveLOSTool() {
       const attachmentRole = /\bLeader\b/i.test(roleLine?.content || "")
         ? "leader"
         : /\bBodyguard\b/i.test(roleLine?.content || "") ? "bodyguard" : null;
-      const bulletIndents = entry.bullets.map((bullet) => bullet.indent);
-      const topIndent = bulletIndents.length ? Math.min(...bulletIndents) : 0;
-      const hasNestedBullets = bulletIndents.some((indent) => indent > topIndent);
-      const topLevelCounts = entry.bullets
-        .filter((bullet) => bullet.indent === topIndent)
-        .map((bullet) => bullet.content.match(/^(\d+)\s*x\s+(.+)$/i))
-        .filter(Boolean)
-        .map((match) => Number(match[1]) || 0);
+      const quantityBullets = entry.bullets
+        .map((bullet) => ({ ...bullet, match: bullet.content.match(/^(\d+)\s*x\s+(.+)$/i) }))
+        .filter((bullet) => bullet.match);
+      const countIndent = quantityBullets.length ? Math.min(...quantityBullets.map((bullet) => bullet.indent)) : 0;
+      const hasNestedBullets = entry.bullets.some((bullet) => bullet.indent > countIndent);
+      const topLevelCounts = quantityBullets
+        .filter((bullet) => bullet.indent === countIndent)
+        .map((bullet) => Number(bullet.match[1]) || 0);
       const countedModels = Math.min(100, topLevelCounts.reduce((sum, count) => sum + count, 0));
       const isCharacter = entry.section === "CHARACTERS" || attachmentRole === "leader";
       const modelCount = isCharacter
